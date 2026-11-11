@@ -2,6 +2,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from garbage_intel.store import (
     INVESTIGATION_STATUSES,
@@ -71,6 +72,30 @@ class EvidenceLedgerTests(unittest.TestCase):
         timeline = build_timeline(self.database, self.investigation["id"])
         self.assertEqual(timeline["events"][-1]["type"], "status_changed")
         self.assertEqual(timeline["events"][-1]["status"], "closed")
+
+    def test_timeline_skips_indicator_analysis(self):
+        add_observation(
+            self.database,
+            self.investigation["id"],
+            "Indicator-rich note",
+            f"203.0.113.8 threat.example {'a' * 64}",
+            "https://example.test/notice",
+            "public",
+        )
+
+        with patch(
+            "garbage_intel.store.extract_indicators",
+            side_effect=AssertionError("timeline should not extract indicators"),
+        ), patch(
+            "garbage_intel.store.correlate_indicators",
+            side_effect=AssertionError("timeline should not correlate indicators"),
+        ):
+            timeline = build_timeline(self.database, self.investigation["id"])
+
+        self.assertEqual(
+            [event["type"] for event in timeline["events"]],
+            ["investigation_created", "observation"],
+        )
 
     def test_observation_requires_an_existing_investigation(self):
         with self.assertRaisesRegex(ValueError, "investigation not found"):

@@ -562,8 +562,31 @@ def build_report(database: str | Path, investigation_id: str) -> dict[str, Any]:
 
 
 def build_timeline(database: str | Path, investigation_id: str) -> dict[str, Any]:
-    report = build_report(database, investigation_id)
-    investigation = report["investigation"]
+    with _connection(database) as connection:
+        investigation = connection.execute(
+            """SELECT id, name, description, created_at, status
+               FROM investigations WHERE id = ?""",
+            (investigation_id,),
+        ).fetchone()
+        if investigation is None:
+            raise ValueError(f"investigation not found: {investigation_id}")
+        observations = connection.execute(
+            """SELECT id, title, source_reference, collection_basis,
+                      observed_at, recorded_at
+               FROM observations
+               WHERE investigation_id = ?
+               ORDER BY observed_at, recorded_at, id""",
+            (investigation_id,),
+        ).fetchall()
+        status_events = connection.execute(
+            """SELECT id, status, changed_at
+               FROM investigation_status_events
+               WHERE investigation_id = ?
+               ORDER BY changed_at, id""",
+            (investigation_id,),
+        ).fetchall()
+
+    investigation = dict(investigation)
     events: list[dict[str, Any]] = [
         {
             "type": "investigation_created",
@@ -583,16 +606,8 @@ def build_timeline(database: str | Path, investigation_id: str) -> dict[str, Any
             "collection_basis": observation["collection_basis"],
             "observation_id": observation["id"],
         }
-        for observation in report["observations"]
+        for observation in observations
     )
-    with _connection(database) as connection:
-        status_events = connection.execute(
-            """SELECT id, status, changed_at
-               FROM investigation_status_events
-               WHERE investigation_id = ?
-               ORDER BY changed_at, id""",
-            (investigation_id,),
-        ).fetchall()
     events.extend(
         {
             "type": "status_changed",
