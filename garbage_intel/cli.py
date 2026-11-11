@@ -32,6 +32,7 @@ from .modules.cisa_kev import (
     refresh_cisa_kev,
 )
 from .reporting import render_csv_report, render_html_report
+from .platform_support import runtime_diagnostics
 
 
 def _database_default() -> str:
@@ -54,6 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     commands.add_parser("init", help="initialize the local intelligence database")
+    commands.add_parser(
+        "doctor", help="show Python and operating-system compatibility"
+    )
     intelligence = commands.add_parser(
         "intel", help="read-only public intelligence connectors"
     )
@@ -185,6 +189,12 @@ def main(argv: list[str] | None = None) -> int:
             result = get_document_metadata(args.path)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
+        if args.command == "doctor":
+            result = runtime_diagnostics()
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0 if all(
+                item["supported"] for item in result.values()
+            ) else 2
         if args.command == "backup":
             if args.format == "sqlite":
                 result = backup_sqlite_database(args.database, args.output)

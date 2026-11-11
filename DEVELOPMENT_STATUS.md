@@ -46,8 +46,16 @@
   the investigation archive.
 - Loopback-only HTTP API and vanilla HTML/CSS/JavaScript interface, including
   escaped printable HTML reports and status lifecycle actions.
+- PowerShell and POSIX shell launchers with Python 3.10+ checks; `doctor`
+  reports Python and OS/distribution compatibility without initializing data.
+- Standard-library zipapp builder that bundles the CLI and web assets, refuses
+  to overwrite its output, and runs with Python on Windows, macOS, and Linux.
+- GitHub Actions test matrix for Windows, macOS, and Ubuntu on Python 3.10 and
+  3.14, including a launcher smoke test for PowerShell or POSIX. The matrix is
+  configured but has not been observed running from this worktree.
 - Focused standard-library tests for storage, API/CLI flows, provenance,
-  timestamp handling, indicator extraction, and injection/host-origin guards.
+  timestamp handling, indicator extraction, injection/host-origin guards,
+  platform diagnostics, and zipapp builds.
 
 ## Not yet implemented
 
@@ -67,7 +75,20 @@
   supported spreadsheet reproduction.
 - Authentication, authorization roles, TLS, and safe remote/production
   deployment. The current HTTP server is deliberately local-only.
-- Broader UI accessibility/e2e coverage, packaging, and deployment automation.
+- Signed native installers and release automation. The current distributable
+  is a Python zipapp and still requires Python 3.10+ on the target machine.
+- Broader UI accessibility/e2e coverage and deployment automation.
+
+## Platform support status
+
+- **Tested here:** Kali GNU/Linux Rolling, Python 3.14.8, SQLite 3.53.4. The
+  full standard-library suite and zipapp build/run checks were executed here.
+- **Supported by design, not tested here:** Windows, macOS, Debian, Ubuntu,
+  Arch Linux, and NixOS. They use the same Python-standard-library code; the
+  Windows/macOS/Ubuntu CI matrix is configured but not yet verified by a
+  completed CI run. Other Linux distributions are expected to work with Python
+  3.10+ and its SQLite module.
+- No system packages, Python dependencies, or external tools were installed.
 
 ## Installation preflight
 
@@ -76,7 +97,8 @@
   inspected environment, but the project has no dependency manifest and does
   not rely on them.
 - This implementation uses only Python's standard library and browser-native
-  APIs; no dependencies or system tools were installed.
+  APIs. The source launchers and zipapp builder need no dependencies or system
+  tools; none were installed.
 - Connector assessment:
   [CISA's KEV catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
   publishes a versioned JSON feed and schema without authentication. Its
@@ -95,8 +117,9 @@
 
 ## Validation
 
-- `python3 -m unittest discover -s tests -v` — 38 tests passed, including
-  archive rollback and connector/API/CLI integration coverage.
+- `python3 -m unittest discover -s tests -v` — 47 tests passed, including
+  archive rollback, connector/API/CLI integration, platform diagnostics, and
+  zipapp build/run coverage.
 - `python3 -m unittest discover -s tests -p 'test_cisa_kev.py' -v` — 6 offline
   connector tests passed (fixture parsing, bounds, cache interval, validators,
   rate-limit response, and redirect restriction).
@@ -110,5 +133,6 @@
 - `python3 -m compileall -q garbage_intel tests` — passed.
 - `git diff --check` — passed.
 
-All checks ran in the inspected Python 3.14/SQLite environment. No third-party
-dependencies or system tools were installed.
+All checks ran on Kali GNU/Linux Rolling with Python 3.14.8 and SQLite 3.53.4.
+Windows and macOS support remains unverified until the configured CI matrix
+runs. No third-party dependencies or system tools were installed.
