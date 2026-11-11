@@ -47,6 +47,8 @@ class DocumentMetadataTests(unittest.TestCase):
             link.symlink_to(document)
         except (NotImplementedError, OSError) as error:
             self.skipTest(f"symbolic links are not supported: {error}")
+        if not link.is_symlink():
+            self.skipTest("the platform did not create a symbolic link")
 
         with self.assertRaisesRegex(ValueError, "symbolic links"):
             get_document_metadata(link)

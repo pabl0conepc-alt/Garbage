@@ -25,14 +25,24 @@ class ForensicHashTests(unittest.TestCase):
         self.assertEqual(result["file_name"], "evidence.bin")
         self.assertNotIn("contents", result)
 
-    def test_rejects_directories_and_symbolic_links(self):
+    def test_rejects_directories(self):
         evidence = self.directory / "evidence.bin"
         evidence.write_text("data")
-        link = self.directory / "link.bin"
-        link.symlink_to(evidence)
 
         with self.assertRaisesRegex(ValueError, "regular file"):
             hash_file(self.directory)
+
+    def test_rejects_symbolic_links(self):
+        evidence = self.directory / "evidence.bin"
+        evidence.write_text("data")
+        link = self.directory / "link.bin"
+        try:
+            link.symlink_to(evidence)
+        except (NotImplementedError, OSError) as error:
+            self.skipTest(f"symbolic links are not supported: {error}")
+        if not link.is_symlink():
+            self.skipTest("the platform did not create a symbolic link")
+
         with self.assertRaisesRegex(ValueError, "symbolic links"):
             hash_file(link)
 

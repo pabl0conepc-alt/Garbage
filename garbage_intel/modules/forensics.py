@@ -4,25 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import os
-import stat
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from .file_access import open_regular_file
 
 
 def hash_file(path: str | Path) -> dict[str, Any]:
     """Hash one explicitly named regular file without following symlinks."""
     requested_path = Path(path)
-    if requested_path.is_symlink():
-        raise ValueError("symbolic links are not accepted")
-    resolved_path = requested_path.resolve(strict=True)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(resolved_path, flags)
+    descriptor, before = open_regular_file(requested_path)
     try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode):
-            raise ValueError("path must identify a regular file")
-
         with os.fdopen(descriptor, "rb") as source:
             descriptor = -1
             digest = hashlib.sha256()
@@ -33,7 +26,8 @@ def hash_file(path: str | Path) -> dict[str, Any]:
 
             after = os.fstat(source.fileno())
             if (
-                before.st_ino != after.st_ino
+                before.st_dev != after.st_dev
+                or before.st_ino != after.st_ino
                 or before.st_size != after.st_size
                 or before.st_mtime_ns != after.st_mtime_ns
                 or size_bytes != after.st_size
@@ -43,6 +37,7 @@ def hash_file(path: str | Path) -> dict[str, Any]:
         if descriptor >= 0:
             os.close(descriptor)
 
+    resolved_path = requested_path.absolute()
     modified_at = datetime.fromtimestamp(
         after.st_mtime, timezone.utc
     ).isoformat().replace("+00:00", "Z")

@@ -117,7 +117,7 @@
 
 ## Validation
 
-- `python3 -m unittest discover -s tests -v` — 44 tests passed, including
+- `python3 -m unittest discover -s tests -v` — 47 tests passed, including
   archive rollback, connector/API/CLI integration, platform diagnostics, and
   zipapp build/run coverage.
 - `python3 -m unittest discover -s tests -p 'test_cisa_kev.py' -v` — 6 offline

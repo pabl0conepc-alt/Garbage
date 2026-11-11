@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -131,18 +132,19 @@ class EvidenceLedgerTests(unittest.TestCase):
 
     def test_initialize_migrates_existing_database_to_open_status(self):
         legacy_database = Path(self.temp_dir.name) / "legacy.sqlite3"
-        with sqlite3.connect(legacy_database) as connection:
-            connection.execute(
-                """CREATE TABLE investigations (
-                       id TEXT PRIMARY KEY,
-                       name TEXT NOT NULL,
-                       description TEXT NOT NULL DEFAULT '',
-                       created_at TEXT NOT NULL
-                   )"""
-            )
-            connection.execute(
-                "INSERT INTO investigations VALUES ('old-id', 'Legacy', '', '2025-01-01T00:00:00Z')"
-            )
+        with closing(sqlite3.connect(legacy_database)) as connection:
+            with connection:
+                connection.execute(
+                    """CREATE TABLE investigations (
+                           id TEXT PRIMARY KEY,
+                           name TEXT NOT NULL,
+                           description TEXT NOT NULL DEFAULT '',
+                           created_at TEXT NOT NULL
+                       )"""
+                )
+                connection.execute(
+                    "INSERT INTO investigations VALUES ('old-id', 'Legacy', '', '2025-01-01T00:00:00Z')"
+                )
 
         initialize(legacy_database)
         legacy = list_investigations(legacy_database)[0]
