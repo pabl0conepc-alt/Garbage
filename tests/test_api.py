@@ -3,10 +3,11 @@ import json
 import tempfile
 import threading
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from garbage_intel.api import create_server
+from garbage_intel.api import _read_web_asset, create_server
 from garbage_intel.store import initialize
 
 
@@ -113,6 +114,17 @@ class LocalApiTests(unittest.TestCase):
         self.assertIn("default-src 'self'", response.getheader("Content-Security-Policy"))
         self.assertEqual(response.getheader("X-Content-Type-Options"), "nosniff")
         connection.close()
+
+    def test_reads_web_assets_from_zipapp(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive_path = Path(temp_dir) / "garbage.pyz"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("web/index.html", b"<html>bundled</html>")
+
+            with patch("garbage_intel.api.sys.argv", [str(archive_path)]):
+                self.assertEqual(
+                    _read_web_asset("index.html"), b"<html>bundled</html>"
+                )
 
     def test_rejects_non_local_origin(self):
         status, result = self.request(

@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import sys
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -25,6 +26,14 @@ from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 MAX_BODY_BYTES = 1024 * 1024
 _INVESTIGATION_ID = re.compile(r"[0-9a-fA-F-]{36}")
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+
+def _read_web_asset(filename: str) -> bytes:
+    executable = Path(sys.argv[0])
+    if zipfile.is_zipfile(executable):
+        with zipfile.ZipFile(executable) as archive:
+            return archive.read(f"web/{filename}")
+    return (_WEB_DIR / filename).read_bytes()
 
 
 def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer:
@@ -317,8 +326,8 @@ def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer
 
         def _static(self, filename: str, content_type: str) -> None:
             try:
-                body = (_WEB_DIR / filename).read_bytes()
-            except OSError:
+                body = _read_web_asset(filename)
+            except (OSError, KeyError, zipfile.BadZipFile):
                 self._error(500, "Web interface asset is unavailable")
                 return
             self._send(200, content_type, body)

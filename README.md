@@ -2,6 +2,51 @@
 GARBAGE is an open-source intelligence platform combining OSINT, Cyber Threat
 Intelligence, SOCMINT and digital forensics into a unified ecosystem.
 
+## Platforms and quick start
+
+GARBAGE runs on Python 3.10 or newer and uses only the Python standard library.
+The source launchers and zipapp work on Windows, macOS, and Linux, including
+Kali, Debian, Ubuntu, Arch, and NixOS. This is support by design; see
+`DEVELOPMENT_STATUS.md` for the platforms actually tested.
+
+Clone or download the repository, then run commands from PowerShell on Windows:
+
+```powershell
+.\scripts\run.ps1 doctor
+.\scripts\run.ps1 serve --port 8000
+```
+
+On macOS or Linux:
+
+```sh
+./scripts/run.sh doctor
+./scripts/run.sh serve --port 8000
+```
+
+The launchers select a Python 3 interpreter, require version 3.10+, and run
+from the repository directory. You can also use `py -3 -m garbage_intel` on
+Windows or `python3 -m garbage_intel` on macOS/Linux. If Python is missing:
+
+- Windows/macOS: install Python 3.10+ from [python.org](https://www.python.org/downloads/).
+- Kali, Debian, or Ubuntu: `sudo apt install python3`.
+- Arch Linux: `sudo pacman -S python`.
+- NixOS: run `nix-shell -p python3 --run "python -m garbage_intel doctor"`.
+
+Build a self-contained zipapp (Python standard library only):
+
+```sh
+python3 tools/build_zipapp.py
+python3 dist/garbage.pyz doctor
+python3 dist/garbage.pyz serve --port 8000
+```
+
+On Windows, use `py -3 tools\build_zipapp.py` and
+`py -3 dist\garbage.pyz doctor`. The build refuses to overwrite an existing
+output; choose another path with `--output PATH` or remove the old artifact
+yourself. It bundles the CLI and web assets, but not Python itself. Database
+paths are relative to the current directory unless `--database` or
+`GARBAGE_DATABASE` is set. The development server remains loopback-only.
+
 ## Current implementation
 
 The first working slice is a local evidence ledger built with Python's standard
@@ -98,7 +143,10 @@ HTTPS redirects, ETag/Last-Modified conditional requests, and surfaces
 `Retry-After` on rate limiting without retrying. It never checks assets,
 correlates CVEs to targets, or performs automated actions.
 
-Run the focused tests with `python3 -m unittest discover -s tests`.
+Run the focused tests with `python3 -m unittest discover -s tests`. The GitHub
+Actions workflow runs the standard-library test suite on Windows, macOS, and
+Ubuntu with Python 3.10 and 3.14, and smoke-tests the matching PowerShell or
+POSIX launcher on each runner.
 
 ## Local web interface and API
 
