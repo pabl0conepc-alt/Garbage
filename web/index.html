@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GARBAGE | Evidence ledger</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <h1>GARBAGE</h1>
+      <p class="note">Local evidence ledger · recorded observations are not independently verified.</p>
+    </header>
+    <p id="status" role="status" aria-live="polite"></p>
+
+    <section>
+      <h2>Investigations</h2>
+      <form id="investigation-form">
+        <label>Name <input name="name" required maxlength="200"></label>
+        <label>Description <textarea name="description"></textarea></label>
+        <button type="submit">Create investigation</button>
+      </form>
+      <label>Active investigation
+        <select id="investigation-select"></select>
+      </label>
+      <button id="report-button" type="button">View report</button>
+      <button id="timeline-button" type="button">View timeline</button>
+      <button id="status-toggle" type="button" disabled>Close investigation</button>
+      <a id="html-report-link" target="_blank" rel="noopener">Open printable HTML report</a>
+    </section>
+
+    <section>
+      <h2>CISA Known Exploited Vulnerabilities</h2>
+      <p class="note">
+        Public catalog metadata only. Refresh is manual; no target checks or
+        automated actions are performed.
+      </p>
+      <button id="kev-refresh-button" type="button">Refresh CISA KEV</button>
+      <form id="kev-search-form">
+        <label>Search cached catalog
+          <input id="kev-search" name="search" type="search">
+        </label>
+        <button type="submit">Search</button>
+      </form>
+      <pre id="kev-output">No cached catalog. Choose “Refresh CISA KEV” to fetch it.</pre>
+    </section>
+
+    <section>
+      <h2>Record observation</h2>
+      <p class="note">Closed investigations are read-only. Reopen to record more evidence.</p>
+      <form id="observation-form">
+        <label>Title <input name="title" required maxlength="300"></label>
+        <label>Details <textarea name="content" required></textarea></label>
+        <label>Source reference <input name="source_reference" required></label>
+        <label>Collection basis
+          <select name="collection_basis" required>
+            <option value="public">Public</option>
+            <option value="authorized">Authorized</option>
+            <option value="user-provided">User-provided</option>
+          </select>
+        </label>
+        <label>Observed at (ISO 8601 with timezone)
+          <input name="observed_at" placeholder="Optional; defaults to now">
+        </label>
+        <button type="submit">Save observation</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Report or timeline</h2>
+      <pre id="report">Select an investigation to view its report.</pre>
+    </section>
+  </body>
+</html>
