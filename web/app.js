@@ -494,7 +494,7 @@ const STATUS_LABELS = {
   evidence_records: "Evidências", file_analyses: "Análises de arquivos", indicators: "Indicadores",
   modules: "Módulos", status_events: "Eventos de status",
   create: "Criação", update: "Atualização", delete: "Exclusão", link: "Vínculo", unlink: "Desvínculo",
-  verify: "Verificação", import: "Importação", assessment: "Avaliação", analysis: "Análise",
+  verify: "Verificação", import: "Importação", "intel-run": "Consulta multifonte", assessment: "Avaliação", analysis: "Análise",
   high: "Alta", medium: "Média", low: "Baixa",
 };
 
@@ -645,6 +645,7 @@ const ACTIVITY_PATTERNS = [
   [/^Settings updated: (.+)$/, "Configurações atualizadas: $1"],
   [/^Indicator assessment set to (.+)$/, (m) => `Avaliação do indicador definida como ${statusLabel(m[1]).toLowerCase()}`],
   [/^File analysed: (.+)$/, "Arquivo analisado: $1"],
+  [/^Multi-source query: (\S+) (.+)$/, "Consulta multifonte: $1 $2"],
 ];
 
 function translateActivity(summary) {
@@ -742,6 +743,7 @@ const MODULE_TEXT = {
   "file-intelligence": ["Análise de arquivos", "Inspeção estática limitada de documentos, pacotes, imagens e executáveis, com histórico persistente."],
   "source-manager": ["Gerenciador de fontes", "Fontes reutilizáveis vinculadas a investigações e entidades."],
   "indicator-engine": ["Motor de indicadores", "Extração de padrões e correlação por valor exato com proveniência."],
+  "intel-orchestrator": ["Inteligência multifonte", "Consulta explícita de um artefato em todos os conectores registrados, com cache, limites de taxa, status das fontes e proveniência."],
   "cisa-kev": ["Conector CISA KEV", "Atualização explícita e somente leitura do catálogo público CISA KEV."],
   "report-center": ["Central de relatórios", "Relatórios estruturados em JSON, HTML, CSV e Markdown a partir de registros reais."],
   "global-search": ["Pesquisa global", "Pesquisa unificada em casos, entidades, evidências e fontes."],
@@ -772,6 +774,8 @@ const SETTING_TEXT = {
   "board.autosave_delay_ms": ["Atraso do salvamento automático do quadro", "Milissegundos de inatividade antes de salvar o estado do quadro."],
   "search.result_limit": ["Limite de resultados da pesquisa global", "Número máximo de resultados por grupo na pesquisa global."],
   "report.include_limitations": ["Incluir limitações nos relatórios", "Acrescenta limitações analíticas explícitas aos relatórios gerados."],
+  "intel.allow_network": ["Permitir que conectores de inteligência usem a rede", "Quando desativado, conectores que acessam serviços externos são ignorados; os conectores locais continuam funcionando."],
+  "intel.max_workers": ["Conectores em paralelo", "Número máximo de conectores consultados ao mesmo tempo para um artefato."],
   "report.include_raw_observations": ["Incluir observações completas", "Inclui o texto completo das observações nos relatórios HTML gerados."],
 };
 
