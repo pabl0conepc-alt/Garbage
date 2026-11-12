@@ -204,6 +204,7 @@ def fetch(
     allowed_hosts: Iterable[str] | None = None,
     allow_http: bool = False,
     max_redirects: int = MAX_REDIRECTS,
+    keep_all_headers: bool = False,
     resolver: Resolver | None = None,
     connection_factory: ConnectionFactory | None = None,
 ) -> FetchResult:
@@ -242,13 +243,16 @@ def fetch(
             connection.request(method, target, body=body, headers=request_headers)
             response = connection.getresponse()
             status = response.status
-            kept = {
-                name: value
-                for name, value in (
-                    (key.lower(), val) for key, val in response.getheaders()
-                )
-                if name in _KEPT_HEADERS or name == "location"
-            }
+            kept: dict[str, str] = {}
+            for key, value in response.getheaders():
+                name = key.lower()
+                if not (keep_all_headers or name in _KEPT_HEADERS or name == "location"):
+                    continue
+                if len(kept) >= 100 and name not in kept:
+                    continue
+                value = value[:4096]
+                # Repeated headers (Set-Cookie) are kept line by line.
+                kept[name] = f"{kept[name]}\n{value}" if name in kept else value
             if status in _REDIRECT_STATUSES and "location" in kept:
                 response.read(64 * 1024)
                 if len(redirects) >= max_redirects:
@@ -287,3 +291,77 @@ def fetch(
             elapsed_ms=int((time.monotonic() - started) * 1000),
             redirects=redirects,
         )
+
+
+@dataclass(frozen=True)
+class TlsPeer:
+    host: str
+    address: str
+    der: bytes
+    verified: bool
+    verification_error: str
+    protocol: str
+    cipher: str
+    elapsed_ms: int
+
+
+def tls_peer_certificate(
+    host: str,
+    *,
+    port: int = 443,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    resolver: Resolver | None = None,
+) -> TlsPeer:
+    """Complete one TLS handshake with a public host and return its leaf
+    certificate. Nothing is sent after the handshake.
+
+    The handshake is verified first. When verification fails, a second
+    handshake without verification retrieves the certificate so it can be
+    analysed; the result records that it was not trusted.
+    """
+    if port != 443:
+        raise NetworkPolicyError("only port 443 is allowed for certificate retrieval")
+    _, clean_host, _, _ = validate_url(f"https://{host}/")
+    address = _resolve_public(clean_host, port, resolver or _system_resolver)
+    started = time.monotonic()
+
+    def handshake(context: ssl.SSLContext) -> tuple[bytes, str, str]:
+        raw = socket.create_connection((address, port), timeout)
+        try:
+            with context.wrap_socket(raw, server_hostname=clean_host) as tls:
+                der = tls.getpeercert(binary_form=True) or b""
+                cipher = tls.cipher()
+                return der, tls.version() or "", cipher[0] if cipher else ""
+        finally:
+            raw.close()
+
+    verification_error = ""
+    try:
+        der, protocol, cipher = handshake(tls_context())
+        verified = True
+    except ssl.SSLCertVerificationError as exc:
+        verification_error = str(exc.verify_message or exc.reason or "verification failed")
+        unverified = ssl.create_default_context()
+        unverified.check_hostname = False
+        unverified.verify_mode = ssl.CERT_NONE
+        try:
+            der, protocol, cipher = handshake(unverified)
+        except (OSError, ssl.SSLError) as inner:
+            raise NetworkError(f"TLS handshake with {clean_host} failed") from inner
+        verified = False
+    except (socket.timeout, TimeoutError) as exc:
+        raise NetworkError("TLS handshake timed out") from exc
+    except (OSError, ssl.SSLError) as exc:
+        raise NetworkError(f"TLS handshake with {clean_host} failed") from exc
+    if not der:
+        raise NetworkError(f"{clean_host} did not present a certificate")
+    return TlsPeer(
+        host=clean_host,
+        address=address,
+        der=der,
+        verified=verified,
+        verification_error=verification_error,
+        protocol=protocol,
+        cipher=cipher,
+        elapsed_ms=int((time.monotonic() - started) * 1000),
+    )

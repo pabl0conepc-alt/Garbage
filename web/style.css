@@ -4894,3 +4894,5 @@ dialog:focus-visible,
 .result-row-actions { display: flex; justify-content: flex-end; gap: 4px; }
 .source-row-meta { flex-wrap: wrap; column-gap: 8px; row-gap: 0; }
 .source-row-meta > span { white-space: nowrap; }
+.chip-flag.is-target { color: var(--warning); }
+.notice-bar.is-quiet { border-color: var(--border-subtle); border-left-color: var(--info); }
