@@ -26,7 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # macos-latest is arm64 and has repeated capacity queues; the Intel
+        # image is available until 2027 and keeps the macOS coverage runnable.
+        os: [ubuntu-latest, windows-latest, macos-15-intel]
         python-version: ["3.10", "3.14"]
     runs-on: ${{ matrix.os }}
     steps:
