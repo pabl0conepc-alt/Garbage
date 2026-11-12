@@ -30,6 +30,7 @@ from .db import (
     utc_now,
 )
 from .errors import ConflictError, NotFoundError, ValidationError
+from .modules.indicators import canonical_ip_address
 from .validation import (
     choice,
     clean_text,
@@ -76,8 +77,8 @@ def _normalize_identifier(entity_type: str, identifier: str) -> str:
             raise ValidationError("identifier must be a valid IPv4 address") from exc
     elif entity_type == "ipv6":
         try:
-            value = str(ipaddress.IPv6Address(value))
-        except ipaddress.AddressValueError as exc:
+            value = canonical_ip_address(value)
+        except ValueError as exc:
             raise ValidationError("identifier must be a valid IPv6 address") from exc
     elif entity_type == "email":
         value = value.lower()

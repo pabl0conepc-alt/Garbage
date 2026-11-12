@@ -16,6 +16,8 @@ from urllib.parse import parse_qsl, urlsplit
 from .indicators import (
     FILE_SUFFIXES,
     canonical_indicator,
+    canonical_ip_address,
+    canonical_network,
     extract_indicators,
     refang_text,
 )
@@ -75,7 +77,7 @@ def _address_facts(value: str) -> dict[str, Any]:
     if address.version == 6:
         facts.extend(
             [
-                _fact("Compressed", base.compressed),
+                _fact("Compressed", canonical_ip_address(str(base))),
                 _fact("Expanded", base.exploded),
             ]
         )
@@ -111,7 +113,7 @@ def _address_facts(value: str) -> dict[str, Any]:
     return {
         "kind": f"ipv{address.version}",
         "label": f"IPv{address.version} address",
-        "canonical": str(address),
+        "canonical": canonical_ip_address(value),
         "facts": facts,
         "warnings": warnings,
     }
@@ -121,11 +123,17 @@ def _network_facts(value: str) -> dict[str, Any]:
     network = ipaddress.ip_network(value, strict=False)
     facts = [
         _fact("Version", f"IPv{network.version}"),
-        _fact("Network", str(network)),
+        _fact("Network", canonical_network(value)),
         _fact("Prefix length", f"/{network.prefixlen}"),
         _fact("Address count", network.num_addresses),
-        _fact("First address", network.network_address),
-        _fact("Last address", network.broadcast_address),
+        _fact(
+            "First address",
+            canonical_ip_address(str(network.network_address)),
+        ),
+        _fact(
+            "Last address",
+            canonical_ip_address(str(network.broadcast_address)),
+        ),
         _fact("Private range", "yes" if network.is_private else "no"),
     ]
     if network.version == 6:

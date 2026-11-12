@@ -93,6 +93,61 @@ def _canonical_domain(value: str) -> str:
     return value.rstrip(".").lower()
 
 
+def _format_ipv6(address: ipaddress.IPv6Address) -> str:
+    """Format IPv6 as compressed hexadecimal, independent of Python version.
+
+    Python 3.14 preserves a dotted-quad tail when an IPv6 value is constructed
+    from ``::ffff:192.0.2.1``, while older versions return ``::ffff:c000:201``.
+    Comparison values must not change when the interpreter changes, so build
+    the RFC 5952 form from the packed bytes ourselves. A zone identifier is
+    retained because it is part of a scoped link-local value.
+    """
+    groups = [
+        int.from_bytes(address.packed[index : index + 2], "big")
+        for index in range(0, 16, 2)
+    ]
+    best_start = -1
+    best_length = 0
+    index = 0
+    while index < len(groups):
+        if groups[index] != 0:
+            index += 1
+            continue
+        end = index
+        while end < len(groups) and groups[end] == 0:
+            end += 1
+        length = end - index
+        if length > best_length and length >= 2:
+            best_start, best_length = index, length
+        index = end
+
+    if best_length >= 2:
+        before = ":".join(f"{group:x}" for group in groups[:best_start])
+        after = ":".join(f"{group:x}" for group in groups[best_start + best_length :])
+        text = f"{before}::{after}"
+    else:
+        text = ":".join(f"{group:x}" for group in groups)
+    if address.scope_id:
+        text += f"%{address.scope_id}"
+    return text
+
+
+def canonical_ip_address(value: str) -> str:
+    """Return a version-independent comparison form for an IP address."""
+    address = ipaddress.ip_address(str(value).strip("[]"))
+    if address.version == 4:
+        return str(address)
+    return _format_ipv6(address)
+
+
+def canonical_network(value: str) -> str:
+    """Return a version-independent comparison form for an IP network."""
+    network = ipaddress.ip_network(value, strict=False)
+    if network.version == 4:
+        return str(network)
+    return f"{_format_ipv6(network.network_address)}/{network.prefixlen}"
+
+
 def canonical_indicator(kind: str, value: str) -> str:
     """Return a stable comparison form without changing display semantics."""
     raw = str(value).strip()
@@ -105,12 +160,12 @@ def canonical_indicator(kind: str, value: str) -> str:
     if kind in {"ipv4", "ipv6"}:
         candidate = raw.strip("[]")
         try:
-            return str(ipaddress.ip_address(candidate))
+            return canonical_ip_address(candidate)
         except ValueError:
             return candidate
     if kind == "cidr":
         try:
-            return str(ipaddress.ip_network(raw, strict=False))
+            return canonical_network(raw)
         except ValueError:
             return raw
     if kind == "url":
@@ -174,14 +229,14 @@ def _url_value(raw: str) -> str | None:
 def _ipv6_value(raw: str) -> str | None:
     candidate = raw.strip("[]")
     try:
-        return str(ipaddress.IPv6Address(candidate))
-    except ipaddress.AddressValueError:
+        return canonical_ip_address(candidate)
+    except ValueError:
         return None
 
 
 def _cidr_value(raw: str) -> str | None:
     try:
-        return str(ipaddress.ip_network(raw, strict=False))
+        return canonical_network(raw)
     except ValueError:
         return None
 
