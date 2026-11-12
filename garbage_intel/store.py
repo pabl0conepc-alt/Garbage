@@ -1,4 +1,9 @@
-"""Local SQLite storage for investigations and sourced observations."""
+"""Investigation ledger, provenance records, timelines and archives.
+
+Existing functions keep their original contracts. The canonical workspace
+records (entities, relationships, evidence, sources, boards) live in sibling
+modules but are read here to build one integrated investigation report.
+"""
 
 from __future__ import annotations
 
@@ -6,110 +11,30 @@ import json
 import os
 import sqlite3
 import tempfile
-import uuid
-from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
-from .modules.indicators import extract_indicators
+from .db import (
+    COLLECTION_BASES,
+    INVESTIGATION_STATUSES,
+    MAX_ARCHIVE_BYTES,
+    _connection,
+    initialize,
+    module_enabled,
+    new_id,
+    normalize_timestamp,
+    record_activity,
+    required_text,
+    setting_bool,
+    utc_now,
+)
+from .errors import ConflictError, NotFoundError, ValidationError
 from .modules.correlation import correlate_indicators
-
-
-SCHEMA = """
-PRAGMA foreign_keys = ON;
-
-CREATE TABLE IF NOT EXISTS investigations (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'open'
-);
-
-CREATE TABLE IF NOT EXISTS observations (
-    id TEXT PRIMARY KEY,
-    investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    source_reference TEXT NOT NULL,
-    collection_basis TEXT NOT NULL CHECK (
-        collection_basis IN ('public', 'authorized', 'user-provided')
-    ),
-    observed_at TEXT NOT NULL,
-    recorded_at TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS observations_investigation_time
-    ON observations(investigation_id, observed_at, recorded_at);
-
-CREATE TABLE IF NOT EXISTS investigation_status_events (
-    id TEXT PRIMARY KEY,
-    investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
-    status TEXT NOT NULL CHECK (status IN ('open', 'closed', 'cancelled')),
-    changed_at TEXT NOT NULL
-);
-"""
-
-COLLECTION_BASES = ("public", "authorized", "user-provided")
-INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
-MAX_ARCHIVE_BYTES = 10 * 1024 * 1024
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def normalize_timestamp(value: str | None) -> str:
-    if value is None:
-        return utc_now()
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise ValueError("timestamp must be ISO 8601") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError("timestamp must include a timezone")
-    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+from .modules.indicators import extract_indicators
 
 
 def _required_text(value: str, field: str) -> str:
-    if not value.strip():
-        raise ValueError(f"{field} must not be empty")
-    return value.strip()
-
-
-def connect(database: str | Path) -> sqlite3.Connection:
-    path = Path(database)
-    if str(database) != ":memory:":
-        path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    return connection
-
-
-@contextmanager
-def _connection(database: str | Path) -> Iterator[sqlite3.Connection]:
-    connection = connect(database)
-    try:
-        with connection:
-            yield connection
-    finally:
-        connection.close()
-
-
-def initialize(database: str | Path) -> None:
-    with _connection(database) as connection:
-        connection.executescript(SCHEMA)
-        columns = {
-            row["name"]
-            for row in connection.execute("PRAGMA table_info(investigations)")
-        }
-        if "status" not in columns:
-            connection.execute(
-                """ALTER TABLE investigations
-                   ADD COLUMN status TEXT NOT NULL DEFAULT 'open'"""
-            )
+    return required_text(value, field)
 
 
 def backup_sqlite_database(
@@ -376,8 +301,9 @@ def import_archive(database: str | Path, archive: object) -> dict[str, Any]:
         with _connection(database) as connection:
             connection.executemany(
                 """INSERT INTO investigations
-                   (id, name, description, created_at, status)
-                   VALUES (:id, :name, :description, :created_at, :status)""",
+                   (id, name, description, created_at, status, updated_at)
+                   VALUES (:id, :name, :description, :created_at, :status,
+                           :created_at)""",
                 clean_investigations,
             )
             connection.executemany(
@@ -395,6 +321,15 @@ def import_archive(database: str | Path, archive: object) -> dict[str, Any]:
                    VALUES (:id, :investigation_id, :status, :changed_at)""",
                 clean_status_events,
             )
+            for item in clean_investigations:
+                record_activity(
+                    connection,
+                    action="import",
+                    target_type="investigation",
+                    target_id=item["id"],
+                    investigation_id=item["id"],
+                    summary=f"Investigation imported from archive: {item['name']}",
+                )
     except sqlite3.IntegrityError as exc:
         raise ValueError(f"archive conflicts with existing records: {exc}") from exc
     return {
@@ -410,24 +345,34 @@ def create_investigation(
 ) -> dict[str, Any]:
     name = _required_text(name, "name")
     investigation = {
-        "id": str(uuid.uuid4()),
+        "id": new_id(),
         "name": name,
         "description": description.strip(),
         "created_at": utc_now(),
         "status": "open",
+        "updated_at": utc_now(),
     }
     with _connection(database) as connection:
         connection.execute(
             """INSERT INTO investigations
-               (id, name, description, created_at, status)
-               VALUES (?, ?, ?, ?, ?)""",
+               (id, name, description, created_at, status, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 investigation["id"],
                 investigation["name"],
                 investigation["description"],
                 investigation["created_at"],
                 investigation["status"],
+                investigation["updated_at"],
             ),
+        )
+        record_activity(
+            connection,
+            action="create",
+            target_type="investigation",
+            target_id=investigation["id"],
+            investigation_id=investigation["id"],
+            summary=f"Investigation created: {investigation['name']}",
         )
     return investigation
 
@@ -435,17 +380,186 @@ def create_investigation(
 def list_investigations(database: str | Path) -> list[dict[str, Any]]:
     with _connection(database) as connection:
         rows = connection.execute(
-            """SELECT id, name, description, created_at, status
-               FROM investigations ORDER BY created_at, id"""
+            """SELECT i.id, i.name, i.description, i.created_at, i.updated_at,
+                      i.status,
+                      (SELECT COUNT(*) FROM observations o
+                       WHERE o.investigation_id = i.id) AS observation_count,
+                      (SELECT COUNT(*) FROM investigation_entities ie
+                       WHERE ie.investigation_id = i.id) AS entity_count,
+                      (SELECT COUNT(*) FROM evidence e
+                       WHERE e.investigation_id = i.id) AS evidence_count,
+                      (SELECT COUNT(*) FROM investigation_sources ins
+                       WHERE ins.investigation_id = i.id) AS source_count
+               FROM investigations i ORDER BY i.created_at, i.id"""
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_investigation(database: str | Path, investigation_id: str) -> dict[str, Any]:
+    with _connection(database) as connection:
+        row = connection.execute(
+            """SELECT id, name, description, created_at, updated_at, status
+               FROM investigations WHERE id = ?""",
+            (investigation_id,),
+        ).fetchone()
+    if row is None:
+        raise NotFoundError(f"investigation not found: {investigation_id}")
+    return dict(row)
+
+
+def update_investigation(
+    database: str | Path,
+    investigation_id: str,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    if name is None and description is None and status is None:
+        raise ValidationError("at least one of name, description or status is required")
+    if name is not None:
+        name = _required_text(name, "name")
+    if status is not None and status not in INVESTIGATION_STATUSES:
+        raise ValidationError(
+            f"status must be one of: {', '.join(INVESTIGATION_STATUSES)}"
+        )
+    with _connection(database) as connection:
+        current = connection.execute(
+            "SELECT id, name, status FROM investigations WHERE id = ?",
+            (investigation_id,),
+        ).fetchone()
+        if current is None:
+            raise NotFoundError(f"investigation not found: {investigation_id}")
+        now = utc_now()
+        next_name = name if name is not None else current["name"]
+        next_status = status if status is not None else current["status"]
+        if description is None:
+            connection.execute(
+                """UPDATE investigations
+                   SET name = ?, status = ?, updated_at = ?
+                   WHERE id = ?""",
+                (next_name, next_status, now, investigation_id),
+            )
+        else:
+            connection.execute(
+                """UPDATE investigations
+                   SET name = ?, description = ?, status = ?, updated_at = ?
+                   WHERE id = ?""",
+                (next_name, description.strip(), next_status, now, investigation_id),
+            )
+        if status is not None and status != current["status"]:
+            connection.execute(
+                """INSERT INTO investigation_status_events
+                   (id, investigation_id, status, changed_at)
+                   VALUES (?, ?, ?, ?)""",
+                (new_id(), investigation_id, status, now),
+            )
+            record_activity(
+                connection,
+                action="status",
+                target_type="investigation",
+                target_id=investigation_id,
+                investigation_id=investigation_id,
+                summary=f"Investigation status changed to {status}",
+            )
+        elif name is not None or description is not None:
+            record_activity(
+                connection,
+                action="update",
+                target_type="investigation",
+                target_id=investigation_id,
+                investigation_id=investigation_id,
+                summary=f"Investigation details updated: {next_name}",
+            )
+        row = connection.execute(
+            """SELECT id, name, description, created_at, updated_at, status
+               FROM investigations WHERE id = ?""",
+            (investigation_id,),
+        ).fetchone()
+    return dict(row)
+
+
+def delete_investigation(
+    database: str | Path, investigation_id: str, *, force: bool = False
+) -> dict[str, Any]:
+    with _connection(database) as connection:
+        investigation = connection.execute(
+            "SELECT id, name FROM investigations WHERE id = ?", (investigation_id,)
+        ).fetchone()
+        if investigation is None:
+            raise NotFoundError(f"investigation not found: {investigation_id}")
+        counts = {
+            "observations": connection.execute(
+                "SELECT COUNT(*) FROM observations WHERE investigation_id = ?",
+                (investigation_id,),
+            ).fetchone()[0],
+            "evidence": connection.execute(
+                "SELECT COUNT(*) FROM evidence WHERE investigation_id = ?",
+                (investigation_id,),
+            ).fetchone()[0],
+            "relationships": connection.execute(
+                "SELECT COUNT(*) FROM relationships WHERE investigation_id = ?",
+                (investigation_id,),
+            ).fetchone()[0],
+            "entities": connection.execute(
+                """SELECT COUNT(*) FROM investigation_entities
+                   WHERE investigation_id = ?""",
+                (investigation_id,),
+            ).fetchone()[0],
+            "sources": connection.execute(
+                """SELECT COUNT(*) FROM investigation_sources
+                   WHERE investigation_id = ?""",
+                (investigation_id,),
+            ).fetchone()[0],
+        }
+        if not force and (counts["evidence"] or counts["relationships"]):
+            raise ConflictError(
+                "investigation has dependent records "
+                f"({counts['evidence']} evidence, {counts['relationships']} "
+                "relationships); pass force=true to delete the investigation with "
+                "its own records. Shared entities and sources are never deleted."
+            )
+        stored_names = [
+            row["stored_name"]
+            for row in connection.execute(
+                """SELECT stored_name FROM evidence
+                   WHERE investigation_id = ? AND stored_name <> ''""",
+                (investigation_id,),
+            )
+        ]
+        name = investigation["name"]
+        connection.execute(
+            "DELETE FROM investigations WHERE id = ?", (investigation_id,)
+        )
+        record_activity(
+            connection,
+            action="delete",
+            target_type="investigation",
+            target_id=investigation_id,
+            investigation_id=investigation_id,
+            summary=f"Investigation deleted: {name}",
+        )
+    removed_files = 0
+    if stored_names:
+        from .evidence import remove_stored_files
+
+        removed_files = remove_stored_files(database, stored_names)
+    return {
+        "deleted": True,
+        "investigation_id": investigation_id,
+        "name": name,
+        "removed": counts,
+        "removed_files": removed_files,
+        "shared_entities_preserved": True,
+        "shared_sources_preserved": True,
+    }
 
 
 def set_investigation_status(
     database: str | Path, investigation_id: str, status: str
 ) -> dict[str, Any]:
     if status not in INVESTIGATION_STATUSES:
-        raise ValueError(
+        raise ValidationError(
             f"status must be one of: {', '.join(INVESTIGATION_STATUSES)}"
         )
     with _connection(database) as connection:
@@ -454,21 +568,30 @@ def set_investigation_status(
             (investigation_id,),
         ).fetchone()
         if current is None:
-            raise ValueError(f"investigation not found: {investigation_id}")
+            raise NotFoundError(f"investigation not found: {investigation_id}")
         if current["status"] != status:
             changed_at = utc_now()
             connection.execute(
-                "UPDATE investigations SET status = ? WHERE id = ?",
-                (status, investigation_id),
+                """UPDATE investigations
+                   SET status = ?, updated_at = ? WHERE id = ?""",
+                (status, changed_at, investigation_id),
             )
             connection.execute(
                 """INSERT INTO investigation_status_events
                    (id, investigation_id, status, changed_at)
                    VALUES (?, ?, ?, ?)""",
-                (str(uuid.uuid4()), investigation_id, status, changed_at),
+                (new_id(), investigation_id, status, changed_at),
+            )
+            record_activity(
+                connection,
+                action="status",
+                target_type="investigation",
+                target_id=investigation_id,
+                investigation_id=investigation_id,
+                summary=f"Investigation status changed to {status}",
             )
         row = connection.execute(
-            """SELECT id, name, description, created_at, status
+            """SELECT id, name, description, created_at, updated_at, status
                FROM investigations WHERE id = ?""",
             (investigation_id,),
         ).fetchone()
@@ -488,12 +611,12 @@ def add_observation(
     content = _required_text(content, "content")
     source_reference = _required_text(source_reference, "source reference")
     if collection_basis not in COLLECTION_BASES:
-        raise ValueError(
+        raise ValidationError(
             f"collection basis must be one of: {', '.join(COLLECTION_BASES)}"
         )
 
     observation = {
-        "id": str(uuid.uuid4()),
+        "id": new_id(),
         "investigation_id": _required_text(investigation_id, "investigation id"),
         "title": title,
         "content": content,
@@ -519,25 +642,115 @@ def add_observation(
                 (observation["investigation_id"],),
             ).fetchone()
             if investigation is None:
-                raise ValueError(
+                raise NotFoundError(
                     f"investigation not found: {observation['investigation_id']}"
                 )
-            raise ValueError(
+            raise ConflictError(
                 f"investigation is {investigation['status']}; "
                 "reopen it before adding evidence"
             )
+        connection.execute(
+            """UPDATE investigations SET updated_at = ? WHERE id = ?""",
+            (observation["recorded_at"], observation["investigation_id"]),
+        )
+        record_activity(
+            connection,
+            action="observation",
+            target_type="observation",
+            target_id=observation["id"],
+            investigation_id=observation["investigation_id"],
+            summary=f"Observation recorded: {observation['title']}",
+        )
     return observation
+
+
+def _linked_entities(
+    connection: sqlite3.Connection, investigation_id: str
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """SELECT e.id, e.entity_type, e.name, e.identifier, e.description,
+                  e.source_reference, e.collection_basis, e.confidence,
+                  e.verification_status, e.created_at, e.updated_at,
+                  ie.added_at AS linked_at
+           FROM entities e
+           JOIN investigation_entities ie ON ie.entity_id = e.id
+           WHERE ie.investigation_id = ?
+           ORDER BY e.entity_type, e.name, e.id""",
+        (investigation_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _linked_relationships(
+    connection: sqlite3.Connection, investigation_id: str
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """SELECT r.id, r.investigation_id, r.source_entity_id,
+                  r.target_entity_id, r.relationship_type, r.description,
+                  r.source_reference, r.confidence, r.verification_status,
+                  r.created_at, r.updated_at,
+                  source.name AS source_name, source.entity_type AS source_type,
+                  target.name AS target_name, target.entity_type AS target_type
+           FROM relationships r
+           JOIN entities source ON source.id = r.source_entity_id
+           JOIN entities target ON target.id = r.target_entity_id
+           WHERE r.investigation_id = ?
+              OR (
+                r.source_entity_id IN (
+                    SELECT entity_id FROM investigation_entities
+                    WHERE investigation_id = ?
+                )
+                AND r.target_entity_id IN (
+                    SELECT entity_id FROM investigation_entities
+                    WHERE investigation_id = ?
+                )
+              )
+           ORDER BY r.created_at, r.id""",
+        (investigation_id, investigation_id, investigation_id),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _linked_evidence(
+    connection: sqlite3.Connection, investigation_id: str
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """SELECT id, investigation_id, title, evidence_type, description,
+                  source_reference, original_name, media_type, size_bytes, sha256,
+                  acquired_at, recorded_at, integrity_status, image_format,
+                  image_width, image_height
+           FROM evidence WHERE investigation_id = ?
+           ORDER BY recorded_at, id""",
+        (investigation_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _linked_sources(
+    connection: sqlite3.Connection, investigation_id: str
+) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """SELECT s.id, s.title, s.reference, s.category, s.description,
+                  s.accessed_at, s.verification_status, s.created_at,
+                  s.updated_at, ins.added_at AS linked_at
+           FROM sources s
+           JOIN investigation_sources ins ON ins.source_id = s.id
+           WHERE ins.investigation_id = ?
+           ORDER BY s.category, s.title, s.id""",
+        (investigation_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def build_report(database: str | Path, investigation_id: str) -> dict[str, Any]:
     with _connection(database) as connection:
         investigation = connection.execute(
-            """SELECT id, name, description, created_at, status
+            """SELECT id, name, description, created_at, updated_at, status
                FROM investigations WHERE id = ?""",
             (investigation_id,),
         ).fetchone()
         if investigation is None:
-            raise ValueError(f"investigation not found: {investigation_id}")
+            raise NotFoundError(f"investigation not found: {investigation_id}")
         observations = connection.execute(
             """SELECT id, title, content, source_reference, collection_basis,
                       observed_at, recorded_at
@@ -546,18 +759,72 @@ def build_report(database: str | Path, investigation_id: str) -> dict[str, Any]:
                ORDER BY observed_at, recorded_at, id""",
             (investigation_id,),
         ).fetchall()
+        entities = _linked_entities(connection, investigation_id)
+        relationships = _linked_relationships(connection, investigation_id)
+        evidence = _linked_evidence(connection, investigation_id)
+        sources = _linked_sources(connection, investigation_id)
+        indicator_engine = module_enabled(connection, "indicator-engine")
+        include_limitations = setting_bool(
+            connection, "report.include_limitations", True
+        )
+        include_raw_observations = setting_bool(
+            connection, "report.include_raw_observations", True
+        )
 
-    indicator_findings = extract_indicators(dict(row) for row in observations)
+    observation_records = [dict(row) for row in observations]
+    indicator_findings = (
+        extract_indicators(observation_records) if indicator_engine else []
+    )
+    correlations = (
+        correlate_indicators(indicator_findings) if indicator_engine else []
+    )
+    limitations = [
+        "Observations are user-entered and have not been independently verified.",
+        "This tool records evidence; it does not collect data from external services.",
+        "Indicator matches are pattern-based and have not been reputation-checked.",
+    ]
+    if not include_limitations:
+        limitations = []
+    if relationships:
+        limitations.append(
+            "Relationships are analyst-entered and keep the verification status "
+            "recorded for each link."
+        )
+    if evidence:
+        limitations.append(
+            "Evidence digests confirm file identity; they do not establish "
+            "authenticity, origin or intent."
+        )
+    if not indicator_engine:
+        limitations.append(
+            "The indicator engine is disabled in the module registry; indicators "
+            "and correlations were not computed."
+        )
     return {
         "investigation": dict(investigation),
-        "observations": [dict(row) for row in observations],
+        "observations": observation_records,
         "indicators": indicator_findings,
-        "correlations": correlate_indicators(indicator_findings),
-        "limitations": [
-            "Observations are user-entered and have not been independently verified.",
-            "This tool records evidence; it does not collect data from external services.",
-            "Indicator matches are pattern-based and have not been reputation-checked.",
-        ],
+        "correlations": correlations,
+        "entities": entities,
+        "relationships": relationships,
+        "evidence": evidence,
+        "sources": sources,
+        "limitations": limitations,
+        "options": {
+            "include_limitations": include_limitations,
+            "include_raw_observations": include_raw_observations,
+            "indicator_engine": indicator_engine,
+        },
+        "metadata": {
+            "generated_at": utc_now(),
+            "schema_version": 2,
+            "record_classes": {
+                "observations": "Analyst-recorded observation, not independently verified",
+                "evidence": "Hashed file or reference provided by the analyst",
+                "relationships": "Analyst-entered link with a verification status",
+                "sources": "Consulted source with an access timestamp",
+            },
+        },
     }
 
 
@@ -569,7 +836,7 @@ def build_timeline(database: str | Path, investigation_id: str) -> dict[str, Any
             (investigation_id,),
         ).fetchone()
         if investigation is None:
-            raise ValueError(f"investigation not found: {investigation_id}")
+            raise NotFoundError(f"investigation not found: {investigation_id}")
         observations = connection.execute(
             """SELECT id, title, source_reference, collection_basis,
                       observed_at, recorded_at
@@ -583,6 +850,30 @@ def build_timeline(database: str | Path, investigation_id: str) -> dict[str, Any
                FROM investigation_status_events
                WHERE investigation_id = ?
                ORDER BY changed_at, id""",
+            (investigation_id,),
+        ).fetchall()
+        entity_links = connection.execute(
+            """SELECT ie.entity_id, ie.added_at, e.name, e.entity_type
+               FROM investigation_entities ie
+               JOIN entities e ON e.id = ie.entity_id
+               WHERE ie.investigation_id = ?""",
+            (investigation_id,),
+        ).fetchall()
+        evidence_records = connection.execute(
+            """SELECT id, title, recorded_at FROM evidence
+               WHERE investigation_id = ?""",
+            (investigation_id,),
+        ).fetchall()
+        source_links = connection.execute(
+            """SELECT ins.source_id, ins.added_at, s.title
+               FROM investigation_sources ins
+               JOIN sources s ON s.id = ins.source_id
+               WHERE ins.investigation_id = ?""",
+            (investigation_id,),
+        ).fetchall()
+        relationship_records = connection.execute(
+            """SELECT id, relationship_type, created_at FROM relationships
+               WHERE investigation_id = ?""",
             (investigation_id,),
         ).fetchall()
 
@@ -619,7 +910,50 @@ def build_timeline(database: str | Path, investigation_id: str) -> dict[str, Any
         }
         for event in status_events
     )
-    events.sort(key=lambda event: (event["occurred_at"], event["recorded_at"], event["type"]))
+    events.extend(
+        {
+            "type": "entity_linked",
+            "occurred_at": link["added_at"],
+            "recorded_at": link["added_at"],
+            "title": f"Entity linked: {link['name']}",
+            "entity_id": link["entity_id"],
+            "entity_type": link["entity_type"],
+        }
+        for link in entity_links
+    )
+    events.extend(
+        {
+            "type": "evidence_added",
+            "occurred_at": record["recorded_at"],
+            "recorded_at": record["recorded_at"],
+            "title": f"Evidence added: {record['title']}",
+            "evidence_id": record["id"],
+        }
+        for record in evidence_records
+    )
+    events.extend(
+        {
+            "type": "source_linked",
+            "occurred_at": link["added_at"],
+            "recorded_at": link["added_at"],
+            "title": f"Source linked: {link['title']}",
+            "source_id": link["source_id"],
+        }
+        for link in source_links
+    )
+    events.extend(
+        {
+            "type": "relationship_recorded",
+            "occurred_at": record["created_at"],
+            "recorded_at": record["created_at"],
+            "title": f"Relationship recorded: {record['relationship_type']}",
+            "relationship_id": record["id"],
+        }
+        for record in relationship_records
+    )
+    events.sort(
+        key=lambda event: (event["occurred_at"], event["recorded_at"], event["type"])
+    )
     return {"investigation": investigation, "events": events}
 
 

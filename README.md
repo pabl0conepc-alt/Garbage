@@ -1,134 +1,153 @@
-# Garbage
-GARBAGE is an open-source intelligence platform combining OSINT, Cyber Threat
-Intelligence, SOCMINT and digital forensics into a unified ecosystem.
+# GARBAGE
 
-## Platforms and quick start
+GARBAGE is a local-first investigation workstation for structured case work:
+sources, evidence, entities, relationships, timelines, boards, graph analysis,
+indicator extraction and bounded static file intelligence, in one SQLite-backed
+application.
 
-GARBAGE runs on Python 3.10 or newer and uses only the Python standard library.
-The source launchers and zipapp work on Windows, macOS, and Linux, including
-Kali, Debian, Ubuntu, Arch, and NixOS. This is support by design; see
-`DEVELOPMENT_STATUS.md` for the platforms actually tested.
+It runs on Python 3.10+ with **no third-party Python dependencies**, serves a
+vanilla HTML/CSS/JavaScript interface on loopback, and can be packaged as a
+zipapp. There is no telemetry, no cloud account and no hidden collection.
 
-Clone or download the repository, then run commands from PowerShell on Windows:
+> GARBAGE is for lawful, authorized analysis. It does not exploit systems,
+> bypass authentication, execute submitted files or perform covert collection.
+> It is not a multi-user service and must not be exposed to a network.
 
-```powershell
-.\scripts\run.ps1 doctor
-.\scripts\run.ps1 serve --port 8000
-```
+## What is implemented
 
-On macOS or Linux:
+| Area | Capability |
+| --- | --- |
+| Cases | Investigation lifecycle, observations, status timeline, report and JSON/CSV/Markdown/HTML export |
+| Sources | Source registry with references, categories, access time and verification state; links to cases and entities |
+| Entities | Canonical entity registry with aliases, confidence, verification and relationships |
+| Analysis | Exact-value indicator extraction and correlation with provenance; manual indicator assessment |
+| Evidence | Upload, SHA-256 integrity record, verification, download and safe image preview |
+| File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; hashes, entropy, strings, metadata, archive listing, findings and history |
+| Board | Persisted investigation board with cards, notes, groups, connections, layers, autosave, conflict handling and SVG export |
+| Graph | Relationship graph with type filters, focus, search, pan/zoom, drag and layered export |
+| CTI | CISA KEV catalogue with explicit refresh, bounded download, provenance and offline cache |
+| System | Global search, settings, activity log, module registry with capability gating |
+
+The **module registry** is the source of truth. Modules without a tested backend
+are marked `planned` and cannot be enabled; the UI does not show navigation for
+them. Current planned modules are the NVD connector, external OSINT connectors
+and expanded media forensics.
+
+## Quick start
+
+Clone the repository and run from its root.
+
+Linux/macOS:
 
 ```sh
 ./scripts/run.sh doctor
-./scripts/run.sh serve --port 8000
+./scripts/run.sh init
+./scripts/run.sh serve --port 8765
 ```
 
-The launchers select a Python 3 interpreter, require version 3.10+, and run
-from the repository directory. You can also use `py -3 -m garbage_intel` on
-Windows or `python3 -m garbage_intel` on macOS/Linux. If Python is missing:
+Windows PowerShell:
 
-- Windows/macOS: install Python 3.10+ from [python.org](https://www.python.org/downloads/).
-- Kali, Debian, or Ubuntu: `sudo apt install python3`.
-- Arch Linux: `sudo pacman -S python`.
-- NixOS: run `nix-shell -p python3 --run "python -m garbage_intel doctor"`.
+```powershell
+.\scripts\run.ps1 doctor
+.\scripts\run.ps1 init
+.\scripts\run.ps1 serve --port 8765
+```
 
-Build a self-contained zipapp (Python standard library only):
+Open <http://127.0.0.1:8765/>. The same server exposes the JSON API at
+`/api`. The server binds to loopback only and has no authentication.
+
+Equivalent direct invocation:
+
+```sh
+python3 -m garbage_intel doctor
+python3 -m garbage_intel init
+python3 -m garbage_intel serve --port 8765
+```
+
+Select a different database with `--database PATH` or `GARBAGE_DATABASE`.
+Evidence bytes are stored next to the database by default.
+
+### Zipapp
 
 ```sh
 python3 tools/build_zipapp.py
 python3 dist/garbage.pyz doctor
-python3 dist/garbage.pyz serve --port 8000
+python3 dist/garbage.pyz serve --port 8765
 ```
 
-On Windows, use `py -3 tools\build_zipapp.py` and
-`py -3 dist\garbage.pyz doctor`. The build refuses to overwrite an existing
-output; choose another path with `--output PATH` or remove the old artifact
-yourself. It bundles the CLI and web assets, but not Python itself. Database
-paths are relative to the current directory unless `--database` or
-`GARBAGE_DATABASE` is set. The development server remains loopback-only.
+The build refuses to overwrite an existing output; pass `--output PATH` for a
+new artifact. The zipapp still requires Python 3.10+ on the target machine.
 
-## Current implementation
+## Using the interface
 
-The first working slice is a local evidence ledger built with Python's standard
-library and SQLite. It records investigations and user-entered observations,
-including a source reference, collection basis, observation time, and recording
-time. Reports include local pattern-based detection of IPv4 addresses, domain
-names, and MD5/SHA-1/SHA-256 strings; findings carry their observation
-provenance and are not independently verified or reputation-checked.
+- **Overview** — counts, recent activity, case health and quick entry points.
+- **Investigations** — create, edit, close and reopen cases; each case file has
+  observations, sources, entities, evidence, report, board and graph tabs.
+- **Entities** — canonical records shared across cases, with aliases, source
+  links and relationships.
+- **Indicators** — extracted values grouped by type, with provenance and analyst
+  assessment. Matches are not reputation verdicts.
+- **File intelligence** — select or drop a file up to 4 MiB; results include
+  hashes, format, entropy, strings, metadata, structure, findings and embedded
+  indicators. An analysis can be attached to an open case as evidence.
+- **Evidence** — upload with acquisition context, verify integrity, preview
+  supported images.
+- **Sources** — record where material came from and how it was obtained.
+- **Boards** — arrange entity-backed cards and notes, connect them, group them
+  into layers and export the board as SVG.
+- **Graph** — inspect recorded relationships; layout is client-side and derived
+  only from stored entities and edges.
+- **Threat intel** — view the cached CISA KEV catalogue and refresh it
+  explicitly. Page loads never contact CISA.
+- **Modules / Settings** — inspect capability state, storage and preferences.
 
-Run the CLI from the repository root:
+Closed or cancelled cases are read-only until reopened. Actions that mutate a
+case report structured errors rather than silently succeeding.
+
+## File intelligence limits
+
+- 4 MiB decoded input.
+- Base64 body up to 6 MiB; invalid base64 is rejected.
+- 500 archive members listed, 1 MiB GZIP preview, 150 strings, 96 sections and
+  80 imports.
+- Nothing is executed, emulated, mounted or extracted. Archive path traversal
+  and macros are reported, not followed.
+- Binary parsing is header/section oriented; it is not disassembly, malware
+  detonation or a safety verdict.
+- Embedded indicators are syntactic string matches. They are not checked
+  against reputation services and do not imply attribution.
+
+## CLI
 
 ```sh
 python3 -m garbage_intel init
 python3 -m garbage_intel investigation create --name "Example investigation"
 python3 -m garbage_intel investigation list
-python3 -m garbage_intel investigation show --investigation-id INVESTIGATION_ID
-python3 -m garbage_intel investigation timeline \
-  --investigation-id INVESTIGATION_ID
-python3 -m garbage_intel investigation set-status \
-  --investigation-id INVESTIGATION_ID --status closed
-```
-
-Add an observation using the created investigation's ID:
-
-```sh
 python3 -m garbage_intel observation add \
   --investigation-id INVESTIGATION_ID \
   --title "Public notice" \
-  --content "A concise description of the observation." \
+  --content "A concise description." \
   --source-reference "https://example.org/notice" \
   --collection-basis public \
   --observed-at "2025-01-02T03:04:05Z"
-python3 -m garbage_intel report --investigation-id INVESTIGATION_ID
+python3 -m garbage_intel report --investigation-id INVESTIGATION_ID --format html
 ```
 
-Set `GARBAGE_DATABASE` or pass `--database PATH` to select another SQLite
-database. Collection basis must be `public`, `authorized`, or `user-provided`.
-Only record information you are authorized to access and use.
+Collection basis must be `public`, `authorized` or `user-provided`. Reports are
+escaped and printable. CSV exports prefix formula-like cells.
 
-Investigations may be `open`, `closed`, or `cancelled`. Closed and cancelled
-investigations are read-only; set the status back to `open` to add evidence
-again. Analyst notes can be recorded as observations with a `note://` source
-reference and `user-provided` collection basis.
-
-Reports default to JSON and can also be emitted as HTML or CSV:
-
-```sh
-python3 -m garbage_intel report \
-  --investigation-id INVESTIGATION_ID --format csv
-python3 -m garbage_intel report \
-  --investigation-id INVESTIGATION_ID --format html --output report.html
-```
-
-`--output` creates a new file and refuses to overwrite an existing one.
-CSV rows retain investigation/observation metadata and provenance; indicators,
-correlations, and report limitations are encoded as JSON-valued columns.
-Formula-like text cells are prefixed to reduce spreadsheet formula injection
-when CSV is opened in spreadsheet software.
-
-Create a versioned JSON archive and restore it into another database:
+Backup and restore:
 
 ```sh
 python3 -m garbage_intel backup --output archive.json
 python3 -m garbage_intel --database restored.sqlite3 import --input archive.json
 ```
 
-JSON import validates the complete archive before modifying the database, then
-imports investigations, observations, and status history transactionally.
-Existing records are never overwritten; conflicting IDs fail the import.
-Archive inputs are limited to 10 MiB. A consistent SQLite file backup is also
-available with `backup --format sqlite`; both backup formats refuse to replace
-an existing destination.
+JSON imports are capped at 10 MiB, fully validated before changes, transactional
+and refuse to overwrite existing records. SQLite backups are also available with
+`backup --format sqlite`. Both formats refuse to replace an existing file.
 
-## CISA KEV public metadata
-
-The optional CISA Known Exploited Vulnerabilities connector fetches only the
-fixed public CISA JSON feed when explicitly requested. It records catalog
-version, source release time, fetch time, source URL, and a SHA-256 digest in a
-local sidecar cache (`DATABASE.cisa-kev-cache.json`). Cached catalog data is
-separate from investigations and is not included in investigation archives.
-Descriptions, vendor/product names, due dates, and remediation actions are
-retained; external notes/references are omitted.
+CISA KEV:
 
 ```sh
 python3 -m garbage_intel intel kev refresh
@@ -136,65 +155,84 @@ python3 -m garbage_intel intel kev status
 python3 -m garbage_intel intel kev list --search "Example Vendor"
 ```
 
-Refreshes less than 15 minutes apart use the cache without a network request;
-`--force` bypasses that interval but still performs at most one HTTPS request.
-The connector uses a 10-second timeout, a 10 MiB response limit, CISA-host-only
-HTTPS redirects, ETag/Last-Modified conditional requests, and surfaces
-`Retry-After` on rate limiting without retrying. It never checks assets,
-correlates CVEs to targets, or performs automated actions.
+The connector uses the fixed public CISA feed, a 10-second timeout, a 10 MiB
+response cap, HTTPS CISA-host redirects and a 15-minute freshness window.
+`--force` bypasses the window but still performs one request. It does not scan
+targets or take action.
 
-Run the focused tests with `python3 -m unittest discover -s tests`. The GitHub
-Actions workflow runs the standard-library test suite on Windows, macOS, and
-Ubuntu with Python 3.10 and 3.14, and smoke-tests the matching PowerShell or
-POSIX launcher on each runner.
-
-## Local web interface and API
-
-Start the local-only web interface and JSON API:
-
-```sh
-python3 -m garbage_intel serve --port 8000
-```
-
-Open `http://127.0.0.1:8000/`. The same server exposes `GET /api/health`,
-`GET /api/investigations`, `POST /api/investigations`,
-`POST /api/investigations/{id}/observations`, and
-`GET /api/investigations/{id}/report`. `PATCH /api/investigations/{id}` updates
-the investigation status. Printable, escaped HTML reports are available at
-`/reports/{id}`. Chronological event data is available from
-`GET /api/investigations/{id}/timeline` and the CLI timeline command.
-The CISA cache is read-only at `GET /api/intel/cisa-kev`; an explicit
-same-origin `POST /api/intel/cisa-kev/refresh` or the “Refresh CISA KEV” button
-initiates a refresh. Page load and ordinary reads never contact CISA.
-
-The development server binds only to loopback, checks Host/Origin, limits JSON
-bodies to 1 MiB, and uses a restrictive content security policy. It has no
-user authentication or TLS and is not suitable for remote or production
-deployment. Do not expose it on a network or record information you are not
-authorized to access.
-
-## Local analysis modules
-
-Reports include deterministic exact-value correlation when the same normalized
-indicator appears in multiple observations. Correlations list every source and
-do not imply attribution or maliciousness.
-
-Hash one explicitly named, analyst-provided regular file and record its SHA-256
-and filesystem metadata in an investigation:
+Single-file hashing and document metadata (read-only):
 
 ```sh
 python3 -m garbage_intel forensics hash-file \
-  --investigation-id INVESTIGATION_ID \
-  --path /path/to/authorized/evidence.bin
+  --investigation-id INVESTIGATION_ID --path /path/to/authorized/evidence.bin
+python3 -m garbage_intel forensics document-metadata --path /path/to/document.pdf
 ```
 
-The command is read-only, processes one file without recursion, rejects
-symbolic links and changing files, and does not store the file contents.
+## Architecture
 
-Inspect filesystem/document metadata without initializing the database or
-reading file contents:
+```text
+web/ (vanilla JS) ── same-origin JSON ──> garbage_intel/api.py
+                                              │
+                                              ├─ validation + module gate
+                                              ├─ store / entities / sources / evidence / boards
+                                              ├─ modules/ (indicators, imaging, file_intel, kev)
+                                              └─ SQLite + evidence files
+```
+
+- No framework, bundler or CDN.
+- SQLite migrations are additive; schema version 3 adds file-analysis history.
+- The HTTP server enforces loopback Host/Origin, a strict CSP, `no-store`,
+  `nosniff`, `no-referrer` and bounded bodies.
+- Reports and UI escape record content.
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md).
+
+## Testing
 
 ```sh
-python3 -m garbage_intel forensics document-metadata \
-  --path /path/to/authorized/document.pdf
+python3 -m unittest discover -s tests -v
+python3 -m compileall -q garbage_intel tests
+for f in web/*.js; do node --check "$f"; done
 ```
+
+Current result: **84 tests pass**. A temporary jsdom smoke test rendered every
+route against a seeded database with zero error states and zero console errors.
+There is no real-browser E2E test and no native component to test. See
+[TESTING.md](docs/TESTING.md) for what is and is not verified.
+
+## Security and limitations
+
+- Loopback only; no authentication, TLS or CSRF token. Do not expose it.
+- No encryption at rest. Protect the database and evidence directory.
+- Static analysis is not antivirus and does not prove a file is safe.
+- No website/domain/IP collectors, external OSINT connectors, automation,
+  plugin loader, FTS5 search or PDF export yet.
+- No C, C++ or Rust engine is present. The native contract is documented but
+  not implemented.
+- OpenArchive identity is ambiguous. The only verified reference is **OpenArchive
+  Save**, a mobile media-preservation app. GARBAGE does not claim feature parity
+  with it or with any unnamed project. Read
+  [OPENARCHIVE_FEATURE_MATRIX.md](docs/OPENARCHIVE_FEATURE_MATRIX.md).
+
+Report vulnerabilities privately; see [SECURITY.md](docs/SECURITY.md).
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [OpenArchive feature matrix](docs/OPENARCHIVE_FEATURE_MATRIX.md)
+- [Roadmap and phase status](docs/ROADMAP.md)
+- [API reference](docs/API_REFERENCE.md)
+- [Database schema](docs/DATABASE_SCHEMA.md)
+- [Module development](docs/MODULE_DEVELOPMENT.md)
+- [Testing](docs/TESTING.md)
+- [Security](docs/SECURITY.md)
+- [Installation](docs/INSTALLATION.md)
+- [Development](docs/DEVELOPMENT.md)
+- [Development status](DEVELOPMENT_STATUS.md)
+
+## Licence and provenance
+
+See the repository licence. GARBAGE is an independent implementation; no
+OpenArchive source code is included. OpenArchive Save is GPL-3.0; its name and
+links are used only for identification and comparison.

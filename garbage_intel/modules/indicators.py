@@ -17,6 +17,12 @@ _DOMAIN = re.compile(
     r"[A-Z]{2,63}\.?(?![A-Z0-9_-])",
     re.IGNORECASE,
 )
+_URL = re.compile(r"https?://[^\s<>\"']{3,2000}", re.IGNORECASE)
+_EMAIL = re.compile(
+    r"(?<![A-Z0-9._%+-])[A-Z0-9._%+-]{1,64}@"
+    r"(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}",
+    re.IGNORECASE,
+)
 _HASHES = (
     ("sha256", re.compile(r"(?<![A-Fa-f0-9])[A-Fa-f0-9]{64}(?![A-Fa-f0-9])")),
     ("sha1", re.compile(r"(?<![A-Fa-f0-9])[A-Fa-f0-9]{40}(?![A-Fa-f0-9])")),
@@ -40,6 +46,14 @@ def extract_indicators(
             except ipaddress.AddressValueError:
                 continue
             matches.append((match.start(), "ipv4", str(address)))
+
+        for match in _URL.finditer(content):
+            value = match.group().rstrip(".,;:!?)\]}")
+            if len(value) > 3:
+                matches.append((match.start(), "url", value))
+
+        for match in _EMAIL.finditer(content):
+            matches.append((match.start(), "email", match.group().lower()))
 
         for match in _DOMAIN.finditer(content):
             matches.append((match.start(), "domain", match.group().rstrip(".").lower()))

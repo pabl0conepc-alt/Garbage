@@ -1,222 +1,78 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-density="comfortable" data-reduce-motion="false">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0b1017">
-    <title>GARBAGE | Intelligence workspace</title>
+    <meta name="theme-color" content="#0a0e14">
+    <title>GARBAGE | Intelligence workstation</title>
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
+    <script src="/views.js" defer></script>
+    <script src="/views-intel.js" defer></script>
+    <script src="/views-system.js" defer></script>
+    <script src="/views-file.js" defer></script>
+    <script src="/board.js" defer></script>
+    <script src="/graph.js" defer></script>
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Primary navigation">
-        <a class="brand" href="/" aria-label="GARBAGE home">
+        <a class="brand" href="#/overview" aria-label="GARBAGE overview">
           <span class="brand-mark" aria-hidden="true">G</span>
-          <span><strong>GARBAGE</strong><small>INTELLIGENCE WORKSPACE</small></span>
+          <span class="brand-copy"><strong>GARBAGE</strong><small>INTELLIGENCE WORKSTATION</small></span>
         </a>
-        <div class="workspace-label">WORKSPACE</div>
-        <nav class="primary-nav">
-          <button class="nav-link is-active" data-view="overview" type="button">
-            <span class="nav-icon" aria-hidden="true">◫</span> Overview
-          </button>
-          <button class="nav-link" data-view="investigations" type="button">
-            <span class="nav-icon" aria-hidden="true">⌕</span> Investigations
-            <span class="nav-count" id="nav-investigation-count">0</span>
-          </button>
-          <button class="nav-link" data-view="timeline" type="button">
-            <span class="nav-icon" aria-hidden="true">◷</span> Activity timeline
-          </button>
-          <button class="nav-link" data-view="kev" type="button">
-            <span class="nav-icon" aria-hidden="true">⌁</span> CISA KEV
-          </button>
-        </nav>
+        <nav id="nav-groups" class="nav-groups" aria-label="Workspace modules"></nav>
         <div class="sidebar-bottom">
           <div class="local-card">
             <span class="live-dot" aria-hidden="true"></span>
             <div><strong>Local workspace</strong><small>Data stays on this machine</small></div>
           </div>
-          <p class="sidebar-footnote">Evidence is analyst-recorded and not independently verified.</p>
+          <p class="sidebar-footnote">Observations are analyst-recorded and not independently verified.</p>
         </div>
       </aside>
 
       <main class="main-shell">
         <header class="topbar">
-          <div class="breadcrumb"><span>WORKSPACE</span><span aria-hidden="true">/</span><strong id="page-breadcrumb">Overview</strong></div>
+          <div class="breadcrumb">
+            <span class="breadcrumb-root">WORKSPACE</span>
+            <span aria-hidden="true">/</span>
+            <strong id="page-breadcrumb">Overview</strong>
+          </div>
           <div class="topbar-actions">
-            <span class="local-indicator"><span class="live-dot" aria-hidden="true"></span> LOCAL ONLY</span>
-            <button class="button button-primary button-small" id="new-investigation-button" type="button">
-              <span aria-hidden="true">＋</span> New investigation
+            <button class="search-trigger" id="global-search-button" type="button" aria-label="Search workspace">
+              <span aria-hidden="true">⌕</span>
+              <span class="search-trigger-label">Search workspace</span>
+              <kbd>Ctrl K</kbd>
             </button>
+            <span class="local-indicator"><span class="live-dot" aria-hidden="true"></span> LOCAL ONLY</span>
+            <button class="button button-primary button-small" id="new-investigation-button" type="button">＋ New investigation</button>
           </div>
         </header>
 
         <div id="status" class="toast" role="status" aria-live="polite"></div>
         <div id="loading-state" class="loading-bar" aria-hidden="true"></div>
-
-        <section class="view-panel" id="view-overview" aria-labelledby="overview-title">
-          <div class="page-heading">
-            <div>
-              <p class="eyebrow">INTELLIGENCE OVERVIEW</p>
-              <h1 id="overview-title">Your operations, at a glance.</h1>
-              <p class="page-description">A live view of investigations and evidence in this local workspace.</p>
-            </div>
-            <button class="button button-secondary" id="refresh-button" type="button"><span aria-hidden="true">↻</span> Refresh data</button>
-          </div>
-
-          <div class="metric-grid" aria-label="Workspace metrics">
-            <article class="metric-card">
-              <div class="metric-top"><span>OPEN INVESTIGATIONS</span><span class="metric-icon icon-violet" aria-hidden="true">⌕</span></div>
-              <div class="metric-value" id="metric-open">—</div>
-              <div class="metric-foot"><span class="metric-dot dot-violet"></span><span id="metric-open-foot">Loading workspace</span></div>
-            </article>
-            <article class="metric-card">
-              <div class="metric-top"><span>OBSERVATIONS</span><span class="metric-icon icon-blue" aria-hidden="true">▤</span></div>
-              <div class="metric-value" id="metric-observations">—</div>
-              <div class="metric-foot"><span class="metric-dot dot-blue"></span><span>Sourced evidence records</span></div>
-            </article>
-            <article class="metric-card">
-              <div class="metric-top"><span>EXTRACTED INDICATORS</span><span class="metric-icon icon-amber" aria-hidden="true">⌁</span></div>
-              <div class="metric-value" id="metric-indicators">—</div>
-              <div class="metric-foot"><span class="metric-dot dot-amber"></span><span>Pattern matches · not reputation checked</span></div>
-            </article>
-            <article class="metric-card">
-              <div class="metric-top"><span>EXACT-VALUE CORRELATIONS</span><span class="metric-icon icon-green" aria-hidden="true">⟷</span></div>
-              <div class="metric-value" id="metric-correlations">—</div>
-              <div class="metric-foot"><span class="metric-dot dot-green"></span><span>Shared values across observations</span></div>
-            </article>
-          </div>
-
-          <div class="dashboard-grid">
-            <article class="panel activity-panel">
-              <div class="panel-heading">
-                <div><p class="eyebrow">EVIDENCE FLOW</p><h2>Observation activity</h2></div>
-                <span class="panel-caption">Last 7 days · by observed date</span>
-              </div>
-              <div class="chart-wrap" id="activity-chart" aria-label="Observation activity chart"></div>
-              <div class="chart-legend"><span><i class="legend-square legend-blue"></i> Observations</span><span id="activity-total">0 records</span></div>
-            </article>
-            <article class="panel distribution-panel">
-              <div class="panel-heading">
-                <div><p class="eyebrow">EVIDENCE PROVENANCE</p><h2>Collection basis</h2></div>
-                <span class="panel-caption">All observations</span>
-              </div>
-              <div id="basis-chart" class="basis-chart"></div>
-              <div class="basis-legend" id="basis-legend"></div>
-            </article>
-          </div>
-
-          <div class="dashboard-grid lower-grid">
-            <article class="panel recent-panel">
-              <div class="panel-heading">
-                <div><p class="eyebrow">CASEWORK</p><h2>Recent investigations</h2></div>
-                <button class="text-button" data-open-view="investigations" type="button">View all <span aria-hidden="true">→</span></button>
-              </div>
-              <div id="recent-investigations" class="recent-list"></div>
-            </article>
-            <article class="panel indicator-panel">
-              <div class="panel-heading">
-                <div><p class="eyebrow">OBSERVED ARTIFACTS</p><h2>Indicator mix</h2></div>
-                <span class="panel-caption">Extracted from evidence</span>
-              </div>
-              <div id="indicator-mix" class="indicator-mix"></div>
-            </article>
-          </div>
-        </section>
-
-        <section class="view-panel" id="view-investigations" aria-labelledby="investigations-title" hidden>
-          <div class="page-heading">
-            <div>
-              <p class="eyebrow">CASE MANAGEMENT</p>
-              <h1 id="investigations-title">Investigations</h1>
-              <p class="page-description">Review case status, evidence volume, and extracted indicators.</p>
-            </div>
-            <label class="search-control"><span aria-hidden="true">⌕</span><input id="investigation-search" type="search" aria-label="Search investigations" placeholder="Search investigations" autocomplete="off"></label>
-          </div>
-          <div class="panel table-panel">
-            <div class="table-toolbar"><span id="investigation-result-count">0 investigations</span><span>Sorted by most recently created</span></div>
-            <div class="table-scroll">
-              <table>
-                <thead><tr><th>INVESTIGATION</th><th>STATUS</th><th>CREATED</th><th>OBSERVATIONS</th><th>INDICATORS</th><th></th></tr></thead>
-                <tbody id="investigation-rows"></tbody>
-              </table>
-            </div>
-            <div id="investigation-empty" class="empty-state" hidden>
-              <span class="empty-icon" aria-hidden="true">⌕</span><h3>No investigations yet</h3>
-              <p>Create a case to start building a sourced evidence record.</p>
-              <button class="button button-primary" data-create-investigation type="button">Create investigation</button>
-            </div>
-          </div>
-          <article id="investigation-detail" class="panel case-detail" hidden></article>
-        </section>
-
-        <section class="view-panel" id="view-timeline" aria-labelledby="timeline-title" hidden>
-          <div class="page-heading">
-            <div>
-              <p class="eyebrow">CHRONOLOGICAL RECORD</p>
-              <h1 id="timeline-title">Activity timeline</h1>
-              <p class="page-description">Investigation creation, observations, and status changes in recorded order.</p>
-            </div>
-            <label class="select-control"><span>INVESTIGATION</span><select id="timeline-investigation-select"></select></label>
-          </div>
-          <div class="panel timeline-panel">
-            <div class="panel-heading"><div><p class="eyebrow">EVENT HISTORY</p><h2 id="timeline-case-name">Select an investigation</h2></div><span class="panel-caption" id="timeline-event-count"></span></div>
-            <div id="timeline-events" class="timeline-list"></div>
-            <div id="timeline-empty" class="empty-state" hidden><span class="empty-icon" aria-hidden="true">◷</span><h3>No timeline events</h3><p>Create an investigation or record an observation to see activity here.</p></div>
-          </div>
-        </section>
-
-        <section class="view-panel" id="view-kev" aria-labelledby="kev-title" hidden>
-          <div class="page-heading">
-            <div>
-              <p class="eyebrow">PUBLIC CATALOG · MANUAL REFRESH</p>
-              <h1 id="kev-title">Known Exploited Vulnerabilities</h1>
-              <p class="page-description">Search the locally cached CISA catalog. No target checks or automated actions are performed.</p>
-            </div>
-            <button class="button button-primary" id="kev-refresh-button" type="button"><span aria-hidden="true">↻</span> Refresh CISA KEV</button>
-          </div>
-          <article class="panel kev-provenance" id="kev-provenance">
-            <span class="kev-source-mark">CISA</span>
-            <div class="kev-source-copy"><strong>Catalog snapshot</strong><span id="kev-snapshot-meta">No cached catalog loaded.</span></div>
-            <span class="source-badge">PUBLIC SOURCE</span>
-          </article>
-          <div class="panel kev-panel">
-            <div class="kev-toolbar">
-              <form id="kev-search-form" class="kev-search">
-                <label for="kev-search">Search CVE, vendor, product, or vulnerability</label>
-                <div class="search-control"><span aria-hidden="true">⌕</span><input id="kev-search" type="search" placeholder="e.g. CVE-2024-..." autocomplete="off"><button type="submit" class="button button-secondary button-small">Search</button></div>
-              </form>
-              <span id="kev-result-count" class="panel-caption"></span>
-            </div>
-            <div id="kev-records" class="kev-records"></div>
-            <div id="kev-empty" class="empty-state" hidden><span class="empty-icon" aria-hidden="true">⌁</span><h3 id="kev-empty-title">No cached catalog</h3><p id="kev-empty-description">Refresh the public CISA catalog to make a local snapshot available.</p></div>
-          </div>
-        </section>
+        <div id="view-root" class="view-root" tabindex="-1"></div>
       </main>
     </div>
 
-    <dialog id="investigation-dialog" class="app-dialog">
-      <form id="investigation-form" method="dialog">
-        <div class="dialog-heading"><div><p class="eyebrow">NEW CASE</p><h2>Create investigation</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Close dialog">×</button></div>
-        <label>Investigation name<input name="name" required maxlength="200" placeholder="e.g. Suspicious infrastructure review"></label>
-        <label>Description <span class="optional-label">OPTIONAL</span><textarea name="description" rows="3" placeholder="Scope, context, or analyst objective"></textarea></label>
-        <p id="investigation-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Create investigation</button></div>
-      </form>
+    <dialog id="search-dialog" class="command-dialog" aria-label="Workspace search">
+      <div class="command-header">
+        <span class="command-icon" aria-hidden="true">⌕</span>
+        <input id="global-search-input" type="search" autocomplete="off" spellcheck="false"
+               placeholder="Search investigations, entities, evidence, sources, indicators…"
+               aria-label="Search investigations, entities, evidence, sources and indicators">
+        <kbd>ESC</kbd>
+      </div>
+      <div id="global-search-results" class="command-results"></div>
+      <footer class="command-footer">
+        <span>↑ ↓ navigate</span>
+        <span>↵ open</span>
+        <span>Local records only</span>
+      </footer>
     </dialog>
 
-    <dialog id="observation-dialog" class="app-dialog">
-      <form id="observation-form" method="dialog">
-        <div class="dialog-heading"><div><p class="eyebrow">EVIDENCE CAPTURE</p><h2>Record observation</h2><p id="observation-case-name" class="dialog-description"></p></div><button class="icon-button" type="button" data-close-dialog aria-label="Close dialog">×</button></div>
-        <label>Observation title<input name="title" required maxlength="300" placeholder="A concise, factual description"></label>
-        <label>Details<textarea name="content" required rows="4" placeholder="What was observed? Preserve relevant context."></textarea></label>
-        <label>Source reference<input name="source_reference" required placeholder="URL, file reference, or note://analyst"></label>
-        <label>Collection basis<select name="collection_basis" required><option value="public">Public</option><option value="authorized">Authorized</option><option value="user-provided">User-provided</option></select></label>
-        <label>Observed at <span class="optional-label">OPTIONAL · ISO 8601 WITH TIMEZONE</span><input name="observed_at" placeholder="Defaults to now"></label>
-        <p class="form-note">Only record information you are authorized to access and use.</p>
-        <p id="observation-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions"><button class="button button-secondary" type="button" data-close-dialog>Cancel</button><button class="button button-primary" type="submit">Save observation</button></div>
-      </form>
-    </dialog>
+    <noscript>
+      <div class="noscript">GARBAGE requires JavaScript. The local API and database remain available through the CLI.</div>
+    </noscript>
   </body>
 </html>

@@ -1,81 +1,217 @@
 "use strict";
 
-const status = document.querySelector("#status");
-const loadingState = document.querySelector("#loading-state");
-const investigationDialog = document.querySelector("#investigation-dialog");
-const observationDialog = document.querySelector("#observation-dialog");
-const investigationForm = document.querySelector("#investigation-form");
-const observationForm = document.querySelector("#observation-form");
-const detailPanel = document.querySelector("#investigation-detail");
-const timelineSelect = document.querySelector("#timeline-investigation-select");
-const kevRecords = document.querySelector("#kev-records");
-const state = {
-  investigations: [],
-  reports: new Map(),
-  selectedInvestigationId: "",
-  kevLoaded: false,
+/* GARBAGE workstation core: API client, components, router and search. */
+
+const G = (window.GARBAGE = window.GARBAGE || {});
+G.views = G.views || {};
+
+const statusNode = document.querySelector("#status");
+const loadingNode = document.querySelector("#loading-state");
+const viewRoot = document.querySelector("#view-root");
+const searchDialog = document.querySelector("#search-dialog");
+const searchInput = document.querySelector("#global-search-input");
+const searchResults = document.querySelector("#global-search-results");
+const searchButton = document.querySelector("#global-search-button");
+const newInvestigationButton = document.querySelector("#new-investigation-button");
+
+G.NAV = [
+  {
+    label: "WORKSPACE",
+    items: [
+      { view: "overview", label: "Overview", icon: "◫" },
+      { view: "investigations", label: "Investigations", icon: "⌕", module: "investigations" },
+      { view: "activity", label: "Activity timeline", icon: "◷", module: "activity-log" },
+    ],
+  },
+  {
+    label: "INTELLIGENCE",
+    items: [
+      { view: "entities", label: "Entity intelligence", icon: "⬡", module: "entities" },
+      { view: "indicators", label: "IOC analyzer", icon: "⌁", module: "indicator-engine" },
+      { view: "files", label: "File intelligence", icon: "▧", module: "file-intelligence" },
+    ],
+  },
+  {
+    label: "ANALYSIS",
+    items: [
+      { view: "board", label: "Investigation board", icon: "▦", module: "investigation-board" },
+      { view: "graph", label: "Relationship graph", icon: "⟷", module: "relationship-graph" },
+    ],
+  },
+  {
+    label: "EVIDENCE",
+    items: [
+      { view: "evidence", label: "Evidence manager", icon: "▤", module: "evidence" },
+      { view: "sources", label: "Source manager", icon: "⛁", module: "source-manager" },
+    ],
+  },
+  {
+    label: "THREAT INTELLIGENCE",
+    items: [
+      { view: "kev", label: "CISA KEV", icon: "☰", module: "cisa-kev" },
+    ],
+  },
+  {
+    label: "OUTPUT",
+    items: [
+      { view: "reports", label: "Report center", icon: "⎙", module: "report-center" },
+    ],
+  },
+  {
+    label: "SYSTEM",
+    items: [
+      { view: "modules", label: "Module manager", icon: "⊞", module: "module-manager" },
+      { view: "settings", label: "Settings", icon: "⚙", module: "settings" },
+    ],
+  },
+];
+
+G.VIEW_LABELS = Object.fromEntries(
+  G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
+);
+
+G.ENTITY_TYPES = [
+  ["person", "Person"],
+  ["username", "Username"],
+  ["profile", "Public profile"],
+  ["domain", "Domain"],
+  ["ipv4", "IPv4 address"],
+  ["ipv6", "IPv6 address"],
+  ["email", "Email"],
+  ["organization", "Organization"],
+  ["file", "File"],
+  ["image", "Image"],
+  ["hash", "Hash"],
+  ["url", "URL"],
+  ["ioc", "Indicator"],
+  ["other", "Other"],
+];
+G.ENTITY_TYPE_LABELS = Object.fromEntries(G.ENTITY_TYPES);
+G.RELATIONSHIP_TYPES = [
+  ["associated-with", "Associated with"],
+  ["belongs-to", "Belongs to"],
+  ["references", "References"],
+  ["hosted-on", "Hosted on"],
+  ["derived-from", "Derived from"],
+  ["related-to", "Related to"],
+  ["connected-to", "Connected to"],
+  ["communicates-with", "Communicates with"],
+  ["owns", "Owns"],
+  ["uses", "Uses"],
+];
+G.RELATIONSHIP_TYPE_LABELS = Object.fromEntries(G.RELATIONSHIP_TYPES);
+G.COLLECTION_BASES = [
+  ["public", "Public"],
+  ["authorized", "Authorized"],
+  ["user-provided", "User-provided"],
+];
+G.CONFIDENCE_LEVELS = [
+  ["unconfirmed", "Unconfirmed"],
+  ["possible", "Possible"],
+  ["probable", "Probable"],
+  ["confirmed", "Confirmed"],
+];
+G.VERIFICATION_STATUSES = [
+  ["not-verified", "Not verified"],
+  ["verified", "Verified"],
+  ["disputed", "Disputed"],
+  ["false-positive", "False positive"],
+];
+G.SOURCE_CATEGORIES = [
+  ["website", "Website"],
+  ["documentation", "Documentation"],
+  ["api", "API"],
+  ["public-database", "Public database"],
+  ["report", "Report"],
+  ["file", "File"],
+  ["other", "Other"],
+];
+G.EVIDENCE_TYPES = [
+  ["file", "File"],
+  ["document", "Document"],
+  ["image", "Image"],
+  ["hash", "Hash reference"],
+  ["note", "Analyst note"],
+  ["url", "URL reference"],
+];
+G.INDICATOR_TYPE_LABELS = {
+  ipv4: "IPv4 address",
+  ipv6: "IPv6 address",
+  domain: "Domain",
+  url: "URL",
+  email: "Email",
+  md5: "MD5",
+  sha1: "SHA-1",
+  sha256: "SHA-256",
+  username: "Username",
 };
+G.INDICATOR_TYPES = Object.entries(G.INDICATOR_TYPE_LABELS);
 
-const COLLECTION_BASES = [
-  { key: "public", label: "Public", color: "blue" },
-  { key: "authorized", label: "Authorized", color: "violet" },
-  { key: "user-provided", label: "User-provided", color: "amber" },
-];
-const INDICATOR_TYPES = [
-  { key: "ipv4", label: "IPv4 address", color: "blue" },
-  { key: "domain", label: "Domain", color: "violet" },
-  { key: "md5", label: "MD5", color: "amber" },
-  { key: "sha1", label: "SHA-1", color: "green" },
-  { key: "sha256", label: "SHA-256", color: "red" },
-];
+G.state = {
+  modules: null,
+  settings: null,
+  investigations: [],
+  currentView: "",
+  currentParams: [],
+  searchIndex: -1,
+  pendingIndicatorSearch: "",
+};
+G.cleanupFns = [];
 
-async function request(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
-    },
-  });
-  const result = await response.json();
-  if (!response.ok) {
-    const error = new Error(result.error || `Request failed (${response.status})`);
-    error.status = response.status;
-    throw error;
+/* ------------------------------------------------------------------ */
+/* DOM helpers                                                        */
+/* ------------------------------------------------------------------ */
+
+function append(parent, children) {
+  for (const child of children.flat(Infinity)) {
+    if (child === null || child === undefined || child === false) continue;
+    parent.append(child instanceof Node ? child : document.createTextNode(String(child)));
   }
-  return result;
 }
 
-function element(tagName, className, text) {
-  const node = document.createElement(tagName);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value === null || value === undefined || value === false) continue;
+    if (key === "class") node.className = value;
+    else if (key === "text") node.textContent = value;
+    else if (key === "dataset") Object.assign(node.dataset, value);
+    else if (key === "value") node.value = value;
+    else if (key === "checked") node.checked = Boolean(value);
+    else if (key === "hidden") node.hidden = Boolean(value);
+    else if (key === "disabled") node.disabled = Boolean(value);
+    else if (key.startsWith("on") && typeof value === "function") {
+      node.addEventListener(key.slice(2).toLowerCase(), value);
+    } else if (value === true) node.setAttribute(key, "");
+    else node.setAttribute(key, String(value));
+  }
+  append(node, children);
   return node;
 }
 
-function showStatus(message, isError = false) {
-  status.textContent = message;
-  status.dataset.tone = isError ? "error" : "success";
-  status.classList.add("is-visible");
-  status.setAttribute("aria-live", isError ? "assertive" : "polite");
-  window.clearTimeout(showStatus.timeoutId);
-  if (message) {
-    showStatus.timeoutId = window.setTimeout(
-      () => status.classList.remove("is-visible"),
-      isError ? 9000 : 4500,
-    );
+function svgEl(tag, attrs = {}, ...children) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value === null || value === undefined || value === false) continue;
+    if (key === "text") node.textContent = value;
+    else if (key === "class") node.setAttribute("class", value);
+    else node.setAttribute(key, String(value));
   }
+  append(node, children);
+  return node;
 }
 
-function setLoading(loading) {
-  loadingState.classList.toggle("is-loading", loading);
-  loadingState.setAttribute("aria-hidden", String(!loading));
-}
+G.el = el;
+G.svgEl = svgEl;
+
+/* ------------------------------------------------------------------ */
+/* Formatting                                                         */
+/* ------------------------------------------------------------------ */
 
 function formatDate(value, options = {}) {
-  if (!value) return "Unknown date";
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown date";
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: options.dateStyle || "medium",
     ...(options.time ? { timeStyle: "short" } : {}),
@@ -83,746 +219,901 @@ function formatDate(value, options = {}) {
   }).format(date);
 }
 
-function relativeDate(value) {
+function relativeTime(value) {
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown date";
-  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
-  if (days < 0) return formatDate(value);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  if (days < 7) return `${days} days ago`;
+  if (Number.isNaN(date.getTime())) return "—";
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+  if (seconds < 172800) return "yesterday";
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`;
   return formatDate(value);
 }
 
-function selectedCase() {
-  return state.investigations.find(
-    (investigation) => investigation.id === state.selectedInvestigationId,
-  );
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
 }
 
-function reportFor(investigationId) {
-  return state.reports.get(investigationId);
+function shortId(value) {
+  if (!value) return "—";
+  return String(value).slice(0, 8);
 }
 
-function updateSelects() {
-  const timelineValue = timelineSelect.value;
-  timelineSelect.replaceChildren();
-  const placeholder = element("option", "", "Choose an investigation");
-  placeholder.value = "";
-  timelineSelect.append(placeholder);
-  for (const investigation of state.investigations) {
-    const option = element(
-      "option",
-      "",
-      `${investigation.name} · ${investigation.status}`,
-    );
-    option.value = investigation.id;
-    timelineSelect.append(option);
+function titleCase(value) {
+  return String(value || "")
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function entityTypeLabel(value) {
+  return G.ENTITY_TYPE_LABELS[value] || titleCase(value);
+}
+
+function relationshipLabel(value) {
+  return G.RELATIONSHIP_TYPE_LABELS[value] || titleCase(value);
+}
+
+function indicatorTypeLabel(value) {
+  return G.INDICATOR_TYPE_LABELS[value] || titleCase(value);
+}
+
+G.formatDate = formatDate;
+G.relativeTime = relativeTime;
+G.formatBytes = formatBytes;
+G.shortId = shortId;
+G.titleCase = titleCase;
+G.entityTypeLabel = entityTypeLabel;
+G.relationshipLabel = relationshipLabel;
+G.indicatorTypeLabel = indicatorTypeLabel;
+
+/* ------------------------------------------------------------------ */
+/* API and feedback                                                   */
+/* ------------------------------------------------------------------ */
+
+async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (options.body) headers["Content-Type"] = "application/json";
+  const response = await fetch(path, { ...options, headers });
+  const contentType = response.headers.get("Content-Type") || "";
+  let payload = null;
+  if (contentType.includes("application/json")) {
+    payload = await response.json();
   }
-  if (state.investigations.some((item) => item.id === timelineValue)) {
-    timelineSelect.value = timelineValue;
-  } else if (state.selectedInvestigationId) {
-    timelineSelect.value = state.selectedInvestigationId;
-  }
-  document.querySelector("#nav-investigation-count").textContent =
-    state.investigations.length.toLocaleString();
-}
-
-async function loadWorkspace({ quiet = false } = {}) {
-  if (!quiet) setLoading(true);
-  try {
-    const investigations = await request("/api/investigations");
-    const reports = await Promise.all(
-      investigations.map(async (investigation) => {
-        const report = await request(
-          `/api/investigations/${encodeURIComponent(investigation.id)}/report`,
-        );
-        return [investigation.id, report];
-      }),
-    );
-    state.investigations = investigations;
-    state.reports = new Map(reports);
-    if (!investigations.some((item) => item.id === state.selectedInvestigationId)) {
-      state.selectedInvestigationId = investigations[0]?.id || "";
-    }
-    updateSelects();
-    renderOverview();
-    renderInvestigationTable();
-    if (!detailPanel.hidden && state.selectedInvestigationId) {
-      renderCaseDetail(state.selectedInvestigationId);
-    }
-    if (document.querySelector("#view-timeline").hidden === false) {
-      await loadTimeline();
-    }
-    if (!quiet) showStatus("Workspace data refreshed.");
-  } catch (error) {
-    showStatus(`Unable to load workspace data: ${error.message}`, true);
+  if (!response.ok) {
+    const error = new Error(payload?.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    error.code = payload?.code;
     throw error;
-  } finally {
-    if (!quiet) setLoading(false);
   }
+  return payload;
 }
 
-function allObservations() {
-  return [...state.reports.values()].flatMap((report) =>
-    report.observations.map((observation) => ({
-      ...observation,
-      investigation_id: report.investigation.id,
-      investigation_name: report.investigation.name,
-    })),
+let toastTimer = null;
+function toast(message, tone = "success") {
+  statusNode.textContent = message;
+  statusNode.dataset.tone = tone;
+  statusNode.classList.add("is-visible");
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(
+    () => statusNode.classList.remove("is-visible"),
+    tone === "error" ? 9000 : 4200,
   );
 }
 
-function allIndicators() {
-  return [...state.reports.values()].flatMap((report) => report.indicators);
+function setLoading(loading) {
+  loadingNode.classList.toggle("is-loading", loading);
+  loadingNode.setAttribute("aria-hidden", String(!loading));
 }
 
-function allCorrelations() {
-  return [...state.reports.values()].flatMap((report) => report.correlations);
+function moduleEnabled(moduleId) {
+  if (!moduleId) return true;
+  const item = G.state.modules?.items?.find((entry) => entry.module_id === moduleId);
+  if (!item) return true;
+  return item.state === "enabled";
 }
 
-function renderOverview() {
-  const observations = allObservations();
-  const openCount = state.investigations.filter(
-    (investigation) => investigation.status === "open",
-  ).length;
-  document.querySelector("#metric-open").textContent = openCount.toLocaleString();
-  document.querySelector("#metric-observations").textContent =
-    observations.length.toLocaleString();
-  document.querySelector("#metric-indicators").textContent =
-    allIndicators().length.toLocaleString();
-  document.querySelector("#metric-correlations").textContent =
-    allCorrelations().length.toLocaleString();
-  document.querySelector("#metric-open-foot").textContent =
-    `${state.investigations.length.toLocaleString()} total investigations`;
-  renderActivityChart(observations);
-  renderBasisChart(observations);
-  renderIndicatorMix(allIndicators());
-  renderRecentInvestigations();
+function applySettings(values = G.state.settings) {
+  if (!values) return;
+  document.documentElement.dataset.theme = values["interface.theme"] || "dark";
+  document.documentElement.dataset.density = values["interface.density"] || "comfortable";
+  document.documentElement.dataset.reduceMotion =
+    values["interface.reduce_motion"] === "true" ? "true" : "false";
 }
 
-function renderActivityChart(observations) {
-  const chart = document.querySelector("#activity-chart");
-  chart.replaceChildren();
-  const today = new Date();
-  const points = [];
-  for (let daysAgo = 6; daysAgo >= 0; daysAgo -= 1) {
-    const date = new Date(Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth(),
-      today.getUTCDate() - daysAgo,
-    ));
-    const key = date.toISOString().slice(0, 10);
-    points.push({
-      key,
-      label: new Intl.DateTimeFormat(undefined, {
-        weekday: "short",
-        timeZone: "UTC",
-      }).format(date),
-      count: observations.filter(
-        (observation) => observation.observed_at?.slice(0, 10) === key,
-      ).length,
-    });
-  }
-  const total = points.reduce((sum, point) => sum + point.count, 0);
-  document.querySelector("#activity-total").textContent =
-    `${total.toLocaleString()} ${total === 1 ? "record" : "records"}`;
-  if (observations.length === 0) {
-    chart.append(
-      element("div", "chart-empty", "Record observations to see evidence activity."),
-    );
-    return;
-  }
+G.api = api;
+G.toast = toast;
+G.setLoading = setLoading;
+G.moduleEnabled = moduleEnabled;
+G.applySettings = applySettings;
 
-  const namespace = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(namespace, "svg");
-  svg.setAttribute("viewBox", "0 0 640 190");
-  svg.setAttribute("role", "img");
-  svg.setAttribute(
-    "aria-label",
-    `Observation counts for the last seven days: ${points
-      .map((point) => `${point.label} ${point.count}`)
-      .join(", ")}`,
+/* ------------------------------------------------------------------ */
+/* Shared components                                                  */
+/* ------------------------------------------------------------------ */
+
+const STATUS_TONES = {
+  open: "success",
+  closed: "neutral",
+  cancelled: "danger",
+  enabled: "success",
+  disabled: "neutral",
+  available: "info",
+  planned: "warning",
+  error: "danger",
+  verified: "success",
+  "not-verified": "neutral",
+  disputed: "warning",
+  "false-positive": "danger",
+  unconfirmed: "neutral",
+  possible: "info",
+  probable: "warning",
+  confirmed: "success",
+};
+
+function badge(text, tone = "neutral") {
+  return el("span", { class: `badge badge-${tone}` }, text);
+}
+
+function statusBadge(value) {
+  return badge(titleCase(value), STATUS_TONES[value] || "neutral");
+}
+
+function pageHeader({ eyebrow, title, description, actions = [] }) {
+  return el(
+    "div",
+    { class: "page-heading" },
+    el(
+      "div",
+      { class: "page-heading-copy" },
+      eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
+      el("h1", {}, title),
+      description ? el("p", { class: "page-description" }, description) : null,
+    ),
+    actions.length ? el("div", { class: "page-actions" }, actions) : null,
   );
-  const max = Math.max(1, ...points.map((point) => point.count));
-  const baseline = 150;
-  const top = 18;
-  for (let line = 0; line < 4; line += 1) {
-    const y = top + ((baseline - top) / 3) * line;
-    const guide = document.createElementNS(namespace, "line");
-    guide.setAttribute("x1", "38");
-    guide.setAttribute("x2", "625");
-    guide.setAttribute("y1", String(y));
-    guide.setAttribute("y2", String(y));
-    guide.setAttribute("class", "chart-guide");
-    svg.append(guide);
-  }
-  points.forEach((point, index) => {
-    const x = 56 + index * 82;
-    const height = point.count === 0 ? 3 : Math.max(8, (point.count / max) * 112);
-    const bar = document.createElementNS(namespace, "rect");
-    bar.setAttribute("x", String(x));
-    bar.setAttribute("y", String(baseline - height));
-    bar.setAttribute("width", "38");
-    bar.setAttribute("height", String(height));
-    bar.setAttribute("rx", "6");
-    bar.setAttribute("class", point.count ? "chart-bar" : "chart-bar is-empty");
-    const tooltip = document.createElementNS(namespace, "title");
-    tooltip.textContent = `${point.key}: ${point.count} observations`;
-    bar.append(tooltip);
-    svg.append(bar);
-    const countLabel = document.createElementNS(namespace, "text");
-    countLabel.setAttribute("x", String(x + 19));
-    countLabel.setAttribute("y", String(baseline - height - 8));
-    countLabel.setAttribute("text-anchor", "middle");
-    countLabel.setAttribute("class", "chart-count");
-    countLabel.textContent = String(point.count);
-    svg.append(countLabel);
-    const dayLabel = document.createElementNS(namespace, "text");
-    dayLabel.setAttribute("x", String(x + 19));
-    dayLabel.setAttribute("y", "177");
-    dayLabel.setAttribute("text-anchor", "middle");
-    dayLabel.setAttribute("class", "chart-day");
-    dayLabel.textContent = point.label;
-    svg.append(dayLabel);
-  });
-  chart.append(svg);
 }
 
-function renderBasisChart(observations) {
-  const chart = document.querySelector("#basis-chart");
-  const legend = document.querySelector("#basis-legend");
-  chart.replaceChildren();
-  legend.replaceChildren();
-  const counts = Object.fromEntries(
-    COLLECTION_BASES.map(({ key }) => [
-      key,
-      observations.filter((item) => item.collection_basis === key).length,
-    ]),
+function panel({ eyebrow, title, caption, actions = [], className = "" }, ...children) {
+  const heading =
+    title || eyebrow || actions.length
+      ? el(
+          "div",
+          { class: "panel-heading" },
+          el(
+            "div",
+            {},
+            eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
+            title ? el("h2", {}, title) : null,
+          ),
+          el(
+            "div",
+            { class: "panel-heading-side" },
+            caption ? el("span", { class: "panel-caption" }, caption) : null,
+            actions.length ? el("div", { class: "panel-actions" }, actions) : null,
+          ),
+        )
+      : null;
+  return el(
+    "section",
+    { class: `panel ${className}`.trim() },
+    heading,
+    el("div", { class: "panel-body" }, children),
   );
-  const total = observations.length;
-  const segmented = element("div", "basis-segments");
-  for (const basis of COLLECTION_BASES) {
-    const count = counts[basis.key];
-    if (count === 0 || total === 0) continue;
-    const width = Math.max(5, Math.round((count / total) * 20) * 5);
-    const segment = element(
-      "span",
-      `basis-segment basis-${basis.color} width-${width}`,
-    );
-    segment.setAttribute("aria-label", `${basis.label}: ${count}`);
-    segmented.append(segment);
-  }
-  if (total === 0) segmented.classList.add("is-empty");
-  chart.append(segmented);
-  for (const basis of COLLECTION_BASES) {
-    const item = element("div", "basis-legend-item");
-    const label = element("span", "basis-name");
-    label.append(element("i", `legend-square legend-${basis.color}`));
-    label.append(document.createTextNode(basis.label));
-    item.append(label, element("strong", "", counts[basis.key].toLocaleString()));
-    legend.append(item);
-  }
-  const totalLabel = element("div", "basis-total");
-  totalLabel.append(element("span", "", "Total sourced observations"));
-  totalLabel.append(element("strong", "", total.toLocaleString()));
-  chart.append(totalLabel);
 }
 
-function renderIndicatorMix(indicators) {
-  const container = document.querySelector("#indicator-mix");
-  container.replaceChildren();
-  if (indicators.length === 0) {
-    container.append(
-      element("div", "chart-empty", "Indicators appear here when patterns are found in observations."),
-    );
-    return;
-  }
-  const counts = Object.fromEntries(
-    INDICATOR_TYPES.map(({ key }) => [
-      key,
-      indicators.filter((indicator) => indicator.type === key).length,
-    ]),
+function metric({ label, value, foot, icon, tone = "blue" }) {
+  return el(
+    "article",
+    { class: "metric-card" },
+    el(
+      "div",
+      { class: "metric-top" },
+      el("span", {}, label),
+      icon ? el("span", { class: `metric-icon tone-${tone}`, "aria-hidden": "true" }, icon) : null,
+    ),
+    el("div", { class: "metric-value" }, value),
+    foot ? el("div", { class: "metric-foot" }, foot) : null,
   );
-  for (const item of INDICATOR_TYPES) {
-    const count = counts[item.key];
-    if (!count) continue;
-    const row = element("div", "indicator-row");
-    const heading = element("div", "indicator-row-heading");
-    heading.append(
-      element("span", "indicator-label", item.label),
-      element("strong", "", count.toLocaleString()),
-    );
-    const track = element("div", "indicator-track");
-    const width = Math.max(5, Math.round((count / indicators.length) * 20) * 5);
-    const fill = element("span", `indicator-fill fill-${item.color} width-${width}`);
-    track.append(fill);
-    row.append(heading, track);
-    container.append(row);
-  }
 }
 
-function renderRecentInvestigations() {
-  const container = document.querySelector("#recent-investigations");
-  container.replaceChildren();
-  const recent = [...state.investigations]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, 5);
-  if (recent.length === 0) {
-    container.append(
-      element("div", "chart-empty", "New investigations will appear here."),
-    );
-    return;
-  }
-  for (const investigation of recent) {
-    const report = reportFor(investigation.id);
-    const row = element("button", "recent-item");
-    row.type = "button";
-    row.addEventListener("click", () => openInvestigation(investigation.id));
-    const mark = element("span", "case-avatar", investigation.name.slice(0, 1).toUpperCase());
-    const copy = element("span", "recent-copy");
-    copy.append(
-      element("strong", "", investigation.name),
-      element("small", "", `${report.observations.length} observations · ${relativeDate(investigation.created_at)}`),
-    );
-    row.append(
-      mark,
-      copy,
-      element("span", `status-badge status-${investigation.status}`, investigation.status),
-      element("span", "row-chevron", "›"),
-    );
-    container.append(row);
-  }
-}
-
-function renderInvestigationTable() {
-  const rows = document.querySelector("#investigation-rows");
-  const empty = document.querySelector("#investigation-empty");
-  rows.replaceChildren();
-  const query = document.querySelector("#investigation-search").value.trim().toLocaleLowerCase();
-  const investigations = [...state.investigations]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .filter((investigation) =>
-      `${investigation.name} ${investigation.description} ${investigation.status}`
-        .toLocaleLowerCase()
-        .includes(query),
-    );
-  document.querySelector("#investigation-result-count").textContent =
-    `${investigations.length.toLocaleString()} ${investigations.length === 1 ? "investigation" : "investigations"}`;
-  empty.hidden = investigations.length > 0;
-  document.querySelector(".table-scroll").hidden =
-    state.investigations.length === 0;
-  if (investigations.length === 0 && state.investigations.length > 0) {
-    const row = document.createElement("tr");
-    const cell = element("td", "filter-empty", "No investigations match this search.");
-    cell.colSpan = 6;
-    row.append(cell);
-    rows.append(row);
-    return;
-  }
-  for (const investigation of investigations) {
-    const report = reportFor(investigation.id);
-    const row = document.createElement("tr");
-    const nameCell = document.createElement("td");
-    const name = element("strong", "table-case-name", investigation.name);
-    const description = element(
-      "span",
-      "table-case-description",
-      investigation.description || "No description provided",
-    );
-    nameCell.append(name, description);
-    const statusCell = document.createElement("td");
-    statusCell.append(
-      element("span", `status-badge status-${investigation.status}`, investigation.status),
-    );
-    const createdCell = element("td", "muted-cell", formatDate(investigation.created_at));
-    const observationCell = element(
-      "td",
-      "numeric-cell",
-      report.observations.length.toLocaleString(),
-    );
-    const indicatorCell = element(
-      "td",
-      "numeric-cell",
-      report.indicators.length.toLocaleString(),
-    );
-    const actionCell = document.createElement("td");
-    const openButton = element("button", "text-button", "Open case →");
-    openButton.type = "button";
-    openButton.addEventListener("click", () => openInvestigation(investigation.id));
-    actionCell.append(openButton);
-    row.append(nameCell, statusCell, createdCell, observationCell, indicatorCell, actionCell);
-    rows.append(row);
-  }
-}
-
-function openInvestigation(investigationId) {
-  state.selectedInvestigationId = investigationId;
-  updateSelects();
-  renderCaseDetail(investigationId);
-  detailPanel.hidden = false;
-  setView("investigations");
-  detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function renderCaseDetail(investigationId) {
-  const report = reportFor(investigationId);
-  if (!report) return;
-  const { investigation, observations, indicators, correlations } = report;
-  detailPanel.replaceChildren();
-  const heading = element("div", "case-detail-heading");
-  const titleGroup = element("div", "");
-  const eyebrow = element("p", "eyebrow", "INVESTIGATION FILE");
-  const title = element("h2", "", investigation.name);
-  titleGroup.append(eyebrow, title);
-  const actions = element("div", "case-actions");
-  const recordButton = element("button", "button button-primary button-small", "＋ Record observation");
-  recordButton.type = "button";
-  recordButton.disabled = investigation.status !== "open";
-  recordButton.addEventListener("click", openObservationDialog);
-  const statusButton = element(
-    "button",
-    "button button-secondary button-small",
-    investigation.status === "open" ? "Close investigation" : "Reopen investigation",
+function emptyState({ icon = "◫", title, description, action = null }) {
+  return el(
+    "div",
+    { class: "empty-state" },
+    el("span", { class: "empty-icon", "aria-hidden": "true" }, icon),
+    el("h3", {}, title),
+    description ? el("p", {}, description) : null,
+    action || null,
   );
-  statusButton.type = "button";
-  statusButton.addEventListener("click", () => toggleInvestigationStatus(investigation));
-  const printableReport = element("a", "button button-secondary button-small", "Printable report");
-  printableReport.href = `/reports/${encodeURIComponent(investigation.id)}`;
-  printableReport.target = "_blank";
-  printableReport.rel = "noopener";
-  actions.append(recordButton, statusButton, printableReport);
-  heading.append(titleGroup, actions);
+}
 
-  const summary = element("p", "case-description", investigation.description || "No description provided.");
-  const stats = element("div", "case-stat-grid");
-  stats.append(
-    caseStat("Status", investigation.status, `status-text-${investigation.status}`),
-    caseStat("Observations", observations.length.toLocaleString()),
-    caseStat("Indicators", indicators.length.toLocaleString()),
-    caseStat("Correlations", correlations.length.toLocaleString()),
+function errorState({ title = "Unable to load this view", message, retry = null }) {
+  return el(
+    "div",
+    { class: "error-state", role: "alert" },
+    el("span", { class: "error-icon", "aria-hidden": "true" }, "!"),
+    el("h3", {}, title),
+    el("p", {}, message || "The local API returned an error."),
+    retry
+      ? el("button", { class: "button button-secondary", type: "button", onClick: retry }, "Try again")
+      : null,
   );
-  const observationHeading = element("div", "subsection-heading");
-  observationHeading.append(
-    element("h3", "", "Evidence observations"),
-    element("span", "panel-caption", `${observations.length} total`),
+}
+
+function dataTable({ columns, rows, emptyMessage = "No records.", onRowClick = null }) {
+  const table = el("table", { class: "data-table" });
+  table.append(
+    el(
+      "thead",
+      {},
+      el(
+        "tr",
+        {},
+        ...columns.map((column) =>
+          el("th", { scope: "col", class: column.className || "" }, column.label),
+        ),
+      ),
+    ),
   );
-  const observationList = element("div", "observation-list");
-  if (observations.length === 0) {
-    observationList.append(
-      element("div", "chart-empty", "No observations have been recorded for this investigation."),
+  const tbody = el("tbody");
+  if (!rows.length) {
+    tbody.append(
+      el(
+        "tr",
+        {},
+        el("td", { class: "table-empty", colspan: String(columns.length) }, emptyMessage),
+      ),
     );
-  } else {
-    [...observations].reverse().slice(0, 8).forEach((observation) => {
-      const item = element("article", "observation-item");
-      const titleLine = element("div", "observation-heading");
-      titleLine.append(
-        element("strong", "", observation.title),
-        element("span", "collection-chip", observation.collection_basis),
-      );
-      item.append(
-        titleLine,
-        element("p", "observation-content", observation.content),
-        element("div", "observation-meta", `Observed ${formatDate(observation.observed_at, { time: true })} · Source: ${observation.source_reference}`),
-      );
-      observationList.append(item);
-    });
   }
-  detailPanel.append(heading, summary, stats, observationHeading, observationList);
-}
-
-function caseStat(label, value, valueClass = "") {
-  const item = element("div", "case-stat");
-  item.append(element("span", "", label), element("strong", valueClass, value));
-  return item;
-}
-
-async function toggleInvestigationStatus(investigation) {
-  const nextStatus = investigation.status === "open" ? "closed" : "open";
-  try {
-    await request(`/api/investigations/${encodeURIComponent(investigation.id)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    await loadWorkspace({ quiet: true });
-    showStatus(`Investigation ${nextStatus}.`);
-  } catch (error) {
-    showStatus(`Unable to update investigation: ${error.message}`, true);
-  }
-}
-
-async function loadTimeline() {
-  const investigationId = timelineSelect.value;
-  const eventsContainer = document.querySelector("#timeline-events");
-  const empty = document.querySelector("#timeline-empty");
-  eventsContainer.replaceChildren();
-  const investigation = state.investigations.find((item) => item.id === investigationId);
-  document.querySelector("#timeline-case-name").textContent =
-    investigation?.name || "Select an investigation";
-  document.querySelector("#timeline-event-count").textContent = "";
-  if (!investigationId) {
-    empty.hidden = true;
-    eventsContainer.append(
-      element("div", "chart-empty", "Choose an investigation to load its chronological activity."),
-    );
-    return;
-  }
-  try {
-    const timeline = await request(
-      `/api/investigations/${encodeURIComponent(investigationId)}/timeline`,
-    );
-    document.querySelector("#timeline-event-count").textContent =
-      `${timeline.events.length} ${timeline.events.length === 1 ? "event" : "events"}`;
-    empty.hidden = timeline.events.length > 0;
-    if (timeline.events.length === 0) return;
-    for (const event of [...timeline.events].reverse()) {
-      const item = element("article", "timeline-event");
-      const marker = element(
-        "span",
-        `timeline-marker marker-${event.type === "observation" ? "observation" : event.type === "status_changed" ? "status" : "created"}`,
-      );
-      const body = element("div", "timeline-event-body");
-      const header = element("div", "timeline-event-header");
-      header.append(
-        element("h3", "", event.title),
-        element("time", "", formatDate(event.occurred_at, { time: true })),
-      );
-      body.append(header);
-      if (event.collection_basis) {
-        body.append(
-          element("span", "collection-chip", event.collection_basis),
-        );
-      }
-      if (event.source_reference) {
-        body.append(element("p", "timeline-source", `Source: ${event.source_reference}`));
-      }
-      item.append(marker, body);
-      eventsContainer.append(item);
+  for (const row of rows) {
+    const tr = el("tr");
+    if (onRowClick) {
+      tr.classList.add("is-clickable");
+      tr.tabIndex = 0;
+      tr.addEventListener("click", (event) => {
+        if (event.target.closest("button, a, input, select")) return;
+        onRowClick(row);
+      });
+      tr.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && event.target === tr) onRowClick(row);
+      });
     }
-  } catch (error) {
-    empty.hidden = false;
-    document.querySelector("#timeline-empty h3").textContent = "Timeline unavailable";
-    document.querySelector("#timeline-empty p").textContent = error.message;
+    for (const column of columns) {
+      const td = el("td", { class: column.cellClass || "" });
+      append(td, [column.render(row)]);
+      tr.append(td);
+    }
+    tbody.append(tr);
+  }
+  table.append(tbody);
+  return el("div", { class: "table-scroll" }, table);
+}
+
+function tabs({ items, active, onSelect }) {
+  return el(
+    "div",
+    { class: "tabs", role: "tablist" },
+    ...items.map((item) =>
+      el(
+        "button",
+        {
+          class: `tab${item.key === active ? " is-active" : ""}`,
+          type: "button",
+          role: "tab",
+          "aria-selected": String(item.key === active),
+          onClick: () => onSelect(item.key),
+        },
+        item.label,
+        item.count !== undefined && item.count !== null
+          ? el("span", { class: "tab-count" }, String(item.count))
+          : null,
+      ),
+    ),
+  );
+}
+
+function sectionHeading(title, caption = null) {
+  return el(
+    "div",
+    { class: "subsection-heading" },
+    el("h3", {}, title),
+    caption ? el("span", { class: "panel-caption" }, caption) : null,
+  );
+}
+
+function kvList(pairs) {
+  const dl = el("dl", { class: "kv-list" });
+  for (const [key, value] of pairs) {
+    if (value === null || value === undefined || value === "") continue;
+    dl.append(el("dt", {}, key), el("dd", {}, value));
+  }
+  return dl;
+}
+
+function loadingBlock(message = "Loading…") {
+  return el("div", { class: "loading-block", role: "status" }, el("span", { class: "spinner", "aria-hidden": "true" }), message);
+}
+
+function inlineError(message) {
+  return el("p", { class: "inline-error", role: "alert" }, message);
+}
+
+G.pageHeader = pageHeader;
+G.panel = panel;
+G.metric = metric;
+G.badge = badge;
+G.statusBadge = statusBadge;
+G.emptyState = emptyState;
+G.errorState = errorState;
+G.table = dataTable;
+G.tabs = tabs;
+G.sectionHeading = sectionHeading;
+G.kvList = kvList;
+G.loadingBlock = loadingBlock;
+G.inlineError = inlineError;
+G.titleCase = titleCase;
+
+/* ------------------------------------------------------------------ */
+/* Dialogs                                                            */
+/* ------------------------------------------------------------------ */
+
+function fieldLabel(field) {
+  return el(
+    "span",
+    { class: "field-label" },
+    field.label,
+    field.optional ? el("span", { class: "optional-label" }, "OPTIONAL") : null,
+  );
+}
+
+function fieldControl(field) {
+  if (field.type === "textarea") {
+    const textarea = el("textarea", {
+      name: field.name,
+      rows: field.rows || 4,
+      placeholder: field.placeholder || "",
+      maxlength: field.maxlength || "",
+    });
+    textarea.value = field.value || "";
+    return textarea;
+  }
+  if (field.type === "select") {
+    const select = el("select", { name: field.name });
+    for (const option of field.options || []) {
+      const value = Array.isArray(option) ? option[0] : option;
+      const label = Array.isArray(option) ? option[1] : titleCase(option);
+      select.append(el("option", { value }, label));
+    }
+    select.value = field.value !== undefined ? String(field.value) : "";
+    return select;
+  }
+  if (field.type === "checkbox") {
+    return el("input", {
+      type: "checkbox",
+      name: field.name,
+      checked: Boolean(field.value),
+    });
+  }
+  if (field.type === "file") {
+    return el("input", {
+      type: "file",
+      name: field.name,
+      accept: field.accept || "",
+    });
+  }
+  const input = el("input", {
+    type: field.type || "text",
+    name: field.name,
+    placeholder: field.placeholder || "",
+    maxlength: field.maxlength || "",
+    min: field.min !== undefined ? field.min : "",
+    max: field.max !== undefined ? field.max : "",
+    step: field.step || "",
+    autocomplete: "off",
+  });
+  input.value = field.value !== undefined && field.value !== null ? String(field.value) : "";
+  return input;
+}
+
+function fieldNode(field) {
+  if (field.type === "checkbox") {
+    return el(
+      "label",
+      { class: "check-field" },
+      fieldControl(field),
+      el("span", {}, field.label),
+      field.hint ? el("span", { class: "field-hint" }, field.hint) : null,
+    );
+  }
+  return el(
+    "label",
+    { class: "field" },
+    fieldLabel(field),
+    fieldControl(field),
+    field.hint ? el("span", { class: "field-hint" }, field.hint) : null,
+  );
+}
+
+function readForm(form, fields) {
+  const values = {};
+  for (const field of fields) {
+    const control = form.elements.namedItem(field.name);
+    if (!control) continue;
+    if (field.type === "checkbox") values[field.name] = Boolean(control.checked);
+    else if (field.type === "file") values[field.name] = control.files?.[0] || null;
+    else values[field.name] = control.value;
+  }
+  return values;
+}
+
+function formDialog({
+  eyebrow = "",
+  title,
+  description = "",
+  fields = [],
+  submitLabel = "Save",
+  danger = false,
+  onSubmit,
+}) {
+  return new Promise((resolve) => {
+    const errorNode = el("p", { class: "form-error", role: "alert", hidden: true });
+    const submitButton = el(
+      "button",
+      { class: `button ${danger ? "button-danger" : "button-primary"}`, type: "submit" },
+      submitLabel,
+    );
+    const form = el(
+      "form",
+      { class: "dialog-form", novalidate: true },
+      el(
+        "div",
+        { class: "dialog-heading" },
+        el(
+          "div",
+          {},
+          eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
+          el("h2", {}, title),
+          description ? el("p", { class: "dialog-description" }, description) : null,
+        ),
+        el(
+          "button",
+          {
+            class: "icon-button",
+            type: "button",
+            "aria-label": "Close dialog",
+            onClick: () => dialog.close("cancel"),
+          },
+          "×",
+        ),
+      ),
+      ...fields.map(fieldNode),
+      errorNode,
+      el(
+        "div",
+        { class: "dialog-actions" },
+        el(
+          "button",
+          {
+            class: "button button-secondary",
+            type: "button",
+            onClick: () => dialog.close("cancel"),
+          },
+          "Cancel",
+        ),
+        submitButton,
+      ),
+    );
+    const dialog = el("dialog", { class: "app-dialog", "aria-label": title }, form);
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      resolve(dialog.returnValue === "submitted");
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close("cancel");
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      errorNode.hidden = true;
+      const values = readForm(form, fields);
+      const missing = fields.filter((field) => {
+        if (!field.required) return false;
+        if (field.type === "checkbox") return !values[field.name];
+        if (field.type === "file") return !values[field.name];
+        return !String(values[field.name] ?? "").trim();
+      });
+      if (missing.length) {
+        errorNode.textContent = `Required: ${missing.map((field) => field.label).join(", ")}`;
+        errorNode.hidden = false;
+        return;
+      }
+      submitButton.disabled = true;
+      try {
+        await onSubmit?.(values, form, dialog);
+        dialog.close("submitted");
+      } catch (error) {
+        errorNode.textContent = error.message;
+        errorNode.hidden = false;
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+    dialog.showModal();
+  });
+}
+
+function confirmDialog({ title, message, confirmLabel = "Confirm", danger = false }) {
+  return new Promise((resolve) => {
+    let confirmed = false;
+    const dialog = el(
+      "dialog",
+      { class: "app-dialog confirm-dialog", "aria-label": title },
+      el(
+        "div",
+        { class: "dialog-form" },
+        el(
+          "div",
+          { class: "dialog-heading" },
+          el("div", {}, el("p", { class: "eyebrow" }, "CONFIRM ACTION"), el("h2", {}, title)),
+        ),
+        el("p", { class: "confirm-message" }, message),
+        el(
+          "div",
+          { class: "dialog-actions" },
+          el(
+            "button",
+            { class: "button button-secondary", type: "button", onClick: () => dialog.close() },
+            "Cancel",
+          ),
+          el(
+            "button",
+            {
+              class: `button ${danger ? "button-danger" : "button-primary"}`,
+              type: "button",
+              onClick: () => {
+                confirmed = true;
+                dialog.close();
+              },
+            },
+            confirmLabel,
+          ),
+        ),
+      ),
+    );
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      resolve(confirmed);
+    });
+    dialog.showModal();
+  });
+}
+
+G.formDialog = formDialog;
+G.confirm = confirmDialog;
+
+/* ------------------------------------------------------------------ */
+/* Navigation                                                         */
+/* ------------------------------------------------------------------ */
+
+function renderNav() {
+  const container = document.querySelector("#nav-groups");
+  container.replaceChildren();
+  for (const group of G.NAV) {
+    const items = group.items.filter((item) => moduleEnabled(item.module));
+    if (!items.length) continue;
+    const section = el("section", { class: "nav-section" });
+    section.append(el("div", { class: "nav-section-label" }, group.label));
+    for (const item of items) {
+      section.append(
+        el(
+          "a",
+          { class: "nav-link", href: `#/${item.view}`, dataset: { view: item.view } },
+          el("span", { class: "nav-icon", "aria-hidden": "true" }, item.icon),
+          el("span", { class: "nav-label" }, item.label),
+        ),
+      );
+    }
+    container.append(section);
   }
 }
 
-function setView(viewName) {
-  const views = ["overview", "investigations", "timeline", "kev"];
-  for (const view of views) {
-    document.querySelector(`#view-${view}`).hidden = view !== viewName;
+function renderShellState() {
+  renderNav();
+  if (newInvestigationButton) {
+    newInvestigationButton.hidden = !moduleEnabled("investigations");
   }
+  if (searchButton) {
+    searchButton.hidden = !moduleEnabled("global-search");
+  }
+}
+
+function markActiveNav(view) {
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const active = link.dataset.view === viewName;
+    const active = link.dataset.view === view;
     link.classList.toggle("is-active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
-  document.querySelector("#page-breadcrumb").textContent =
-    { overview: "Overview", investigations: "Investigations", timeline: "Activity timeline", kev: "CISA KEV" }[viewName];
-  if (viewName === "timeline") loadTimeline();
-  if (viewName === "kev" && !state.kevLoaded) loadKevCatalog();
 }
 
-async function loadKevCatalog(search = "") {
-  const query = new URLSearchParams({ search, limit: "25" });
+function setBreadcrumb(view) {
+  const label = G.VIEW_LABELS[view] || titleCase(view);
+  document.querySelector("#page-breadcrumb").textContent = label;
+}
+
+function go(...parts) {
+  const target = `#/${parts.filter(Boolean).join("/")}`;
+  if (location.hash === target) route();
+  else location.hash = target;
+}
+
+async function route() {
+  if (!G.views) return;
+  for (const cleanup of G.cleanupFns.splice(0)) {
+    try {
+      cleanup();
+    } catch {
+      /* cleanup is best effort */
+    }
+  }
+  const raw = location.hash.replace(/^#\/?/, "");
+  const segments = raw.split("/").filter(Boolean);
+  const candidate = segments[0] || "overview";
+  const view = G.views[candidate] ? candidate : "overview";
+  const params = segments.slice(1);
+  G.state.currentView = view;
+  G.state.currentParams = params;
+  markActiveNav(view);
+  setBreadcrumb(view);
+  setLoading(true);
+  viewRoot.replaceChildren();
   try {
-    const catalog = await request(`/api/intel/cisa-kev?${query}`);
-    state.kevLoaded = true;
-    renderKevCatalog(catalog, search);
+    await G.views[view](viewRoot, params);
   } catch (error) {
-    if (error.status === 404) {
-      state.kevLoaded = false;
-      renderKevEmpty("No cached catalog", "Refresh CISA KEV to fetch a local copy. Page load does not contact CISA.");
+    viewRoot.replaceChildren(
+      errorState({
+        title: "This view could not be loaded",
+        message: error.message,
+        retry: () => route(),
+      }),
+    );
+  } finally {
+    setLoading(false);
+    viewRoot.focus({ preventScroll: true });
+  }
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+G.go = go;
+G.refreshView = route;
+G.reloadModules = async function reloadModules() {
+  G.state.modules = await api("/api/modules");
+  renderShellState();
+};
+G.loadInvestigations = async function loadInvestigations(force = false) {
+  if (G.state.investigations.length && !force) return G.state.investigations;
+  G.state.investigations = await api("/api/investigations");
+  return G.state.investigations;
+};
+G.invalidateInvestigations = function invalidateInvestigations() {
+  G.state.investigations = [];
+};
+
+G.newInvestigation = async function newInvestigation() {
+  await formDialog({
+    eyebrow: "NEW CASE",
+    title: "Create investigation",
+    description: "Open a case file. Observations stay sourced and unverified.",
+    fields: [
+      {
+        name: "name",
+        label: "Investigation name",
+        required: true,
+        maxlength: 200,
+        placeholder: "e.g. Suspicious infrastructure review",
+      },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea",
+        rows: 3,
+        placeholder: "Scope, context, or analyst objective",
+      },
+    ],
+    submitLabel: "Create investigation",
+    onSubmit: async (values) => {
+      const created = await api("/api/investigations", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      G.invalidateInvestigations();
+      toast("Investigation created.");
+      go("investigations", created.id);
+    },
+  });
+};
+
+/* ------------------------------------------------------------------ */
+/* Global search                                                      */
+/* ------------------------------------------------------------------ */
+
+let searchTimer = null;
+
+function renderSearchHint(message = "Type at least two characters to search local records.") {
+  searchResults.replaceChildren(el("p", { class: "search-hint" }, message));
+  G.state.searchIndex = -1;
+}
+
+function navigateSearchItem(item) {
+  if (item.view === "entities" && item.entity_id) go("entities", item.entity_id);
+  else if (item.view === "sources" && item.source_id) go("sources", item.source_id);
+  else if (item.view === "evidence" && item.investigation_id) go("evidence", item.investigation_id);
+  else if (item.view === "investigations" && item.investigation_id)
+    go("investigations", item.investigation_id);
+  else go(item.view);
+}
+
+function renderSearchResults(data) {
+  searchResults.replaceChildren();
+  G.state.searchIndex = -1;
+  if (data.message) {
+    renderSearchHint(data.message);
+    return;
+  }
+  const groups = (data.groups || []).filter((group) => group.items.length);
+  if (!groups.length) {
+    renderSearchHint("No matching local records.");
+    return;
+  }
+  for (const group of groups) {
+    const section = el(
+      "section",
+      { class: "search-group" },
+      el(
+        "div",
+        { class: "search-group-label" },
+        el("span", {}, group.label),
+        el("span", { class: "search-group-total" }, String(group.total)),
+      ),
+    );
+    for (const item of group.items) {
+      section.append(
+        el(
+          "button",
+          {
+            class: "search-result",
+            type: "button",
+            onClick: () => {
+              searchDialog.close();
+              navigateSearchItem(item);
+            },
+          },
+          el("span", { class: "search-result-title" }, item.title),
+          el("span", { class: "search-result-subtitle" }, item.subtitle),
+        ),
+      );
+    }
+    searchResults.append(section);
+  }
+}
+
+async function runSearch(query) {
+  try {
+    const data = await api(`/api/search?q=${encodeURIComponent(query)}`);
+    if (searchInput.value.trim() !== query) return;
+    renderSearchResults(data);
+  } catch (error) {
+    if (searchInput.value.trim() !== query) return;
+    searchResults.replaceChildren(inlineError(error.message));
+  }
+}
+
+function moveSearchSelection(delta) {
+  const buttons = [...searchResults.querySelectorAll(".search-result")];
+  if (!buttons.length) return;
+  const current = G.state.searchIndex;
+  G.state.searchIndex = (current + delta + buttons.length) % buttons.length;
+  buttons.forEach((button, index) => button.classList.toggle("is-active", index === G.state.searchIndex));
+  buttons[G.state.searchIndex].scrollIntoView({ block: "nearest" });
+}
+
+function openSearch() {
+  if (!moduleEnabled("global-search")) {
+    toast("Global search is disabled in the module manager.", "error");
+    return;
+  }
+  searchInput.value = "";
+  renderSearchHint();
+  searchDialog.showModal();
+  window.setTimeout(() => searchInput.focus(), 20);
+}
+
+G.openSearch = openSearch;
+
+/* ------------------------------------------------------------------ */
+/* Boot                                                               */
+/* ------------------------------------------------------------------ */
+
+function bindShell() {
+  if (bindShell.bound) return;
+  bindShell.bound = true;
+  document.querySelector("#nav-groups").addEventListener("click", () => {
+    /* native anchors handle navigation; active state follows hashchange */
+  });
+  newInvestigationButton.addEventListener("click", () => {
+    G.newInvestigation().catch((error) => toast(error.message, "error"));
+  });
+  searchButton.addEventListener("click", openSearch);
+  searchDialog.addEventListener("click", (event) => {
+    if (event.target === searchDialog) searchDialog.close();
+  });
+  searchInput.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    const query = searchInput.value.trim();
+    if (query.length < 2) {
+      renderSearchHint();
       return;
     }
-    showStatus(`Unable to read the cached CISA catalog: ${error.message}`, true);
-    renderKevEmpty("Catalog unavailable", error.message);
-  }
-}
-
-function renderKevCatalog(catalog, search = "") {
-  kevRecords.replaceChildren();
-  document.querySelector("#kev-empty").hidden = true;
-  document.querySelector("#kev-result-count").textContent =
-    `${catalog.matched.toLocaleString()} matching ${catalog.matched === 1 ? "record" : "records"}`;
-  document.querySelector("#kev-snapshot-meta").textContent =
-    `Version ${catalog.catalog_version} · ${catalog.count.toLocaleString()} entries · released ${formatDate(catalog.source_updated_at)} · fetched ${formatDate(catalog.fetched_at, { time: true })}`;
-  if (catalog.items.length === 0) {
-    renderKevEmpty(search ? "No matching vulnerabilities" : "No records to display", search ? "Try a different search term. The catalog remains cached locally." : "The cached catalog contains no records.");
-    return;
-  }
-  for (const vulnerability of catalog.items) {
-    const card = element("article", "kev-record");
-    const head = element("div", "kev-record-header");
-    const identifier = element("a", "cve-id", vulnerability.cve_id);
-    identifier.href = `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(vulnerability.cve_id)}`;
-    identifier.target = "_blank";
-    identifier.rel = "noopener noreferrer";
-    const dateAdded = element("span", "kev-date-added", `Added ${formatDate(vulnerability.date_added)}`);
-    head.append(identifier, dateAdded);
-    const title = element("h3", "", vulnerability.vulnerability_name);
-    const product = element("p", "kev-product", `${vulnerability.vendor_project} · ${vulnerability.product}`);
-    const description = element("p", "kev-description", vulnerability.short_description);
-    const footer = element("div", "kev-record-footer");
-    footer.append(
-      element("span", "kev-due-date", `Due ${formatDate(vulnerability.due_date)}`),
-      element("span", "kev-ransomware", `Ransomware use: ${vulnerability.ransomware_use}`),
-    );
-    const action = element("p", "kev-action");
-    action.append(element("strong", "", "Required action "), document.createTextNode(vulnerability.required_action));
-    card.append(head, title, product, description, action, footer);
-    kevRecords.append(card);
-  }
-  if (catalog.matched > catalog.items.length) {
-    kevRecords.append(
-      element("p", "kev-truncated", `Showing ${catalog.items.length} of ${catalog.matched} matches. Refine your search to narrow the results.`),
-    );
-  }
-}
-
-function renderKevEmpty(title, description) {
-  kevRecords.replaceChildren();
-  document.querySelector("#kev-result-count").textContent = "";
-  const empty = document.querySelector("#kev-empty");
-  empty.hidden = false;
-  document.querySelector("#kev-empty-title").textContent = title;
-  document.querySelector("#kev-empty-description").textContent = description;
-}
-
-function openObservationDialog() {
-  const investigation = selectedCase();
-  if (!investigation || investigation.status !== "open") return;
-  document.querySelector("#observation-case-name").textContent = investigation.name;
-  observationForm.reset();
-  document.querySelector("#observation-form-error").hidden = true;
-  observationDialog.showModal();
-}
-
-document.querySelectorAll(".nav-link").forEach((button) => {
-  button.addEventListener("click", () => setView(button.dataset.view));
-});
-
-document.querySelectorAll("[data-open-view]").forEach((button) => {
-  button.addEventListener("click", () => setView(button.dataset.openView));
-});
-
-document.querySelector("#new-investigation-button").addEventListener("click", () => {
-  investigationForm.reset();
-  document.querySelector("#investigation-form-error").hidden = true;
-  investigationDialog.showModal();
-});
-
-document.querySelectorAll("[data-create-investigation]").forEach((button) => {
-  button.addEventListener("click", () => {
-    setView("investigations");
-    investigationForm.reset();
-    document.querySelector("#investigation-form-error").hidden = true;
-    investigationDialog.showModal();
+    searchResults.replaceChildren(loadingBlock("Searching local records…"));
+    searchTimer = window.setTimeout(() => runSearch(query), 220);
   });
-});
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveSearchSelection(1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveSearchSelection(-1);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const buttons = [...searchResults.querySelectorAll(".search-result")];
+      if (!buttons.length) return;
+      buttons[Math.max(0, G.state.searchIndex)].click();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      openSearch();
+    }
+  });
+}
 
-document.querySelectorAll("[data-close-dialog]").forEach((button) => {
-  button.addEventListener("click", () => button.closest("dialog").close());
-});
-
-investigationForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const submitButton = investigationForm.querySelector('[type="submit"]');
-  submitButton.disabled = true;
-  document.querySelector("#investigation-form-error").hidden = true;
-  const data = Object.fromEntries(new FormData(investigationForm));
-  try {
-    const investigation = await request("/api/investigations", {
-      method: "POST",
-      body: JSON.stringify(data),
+async function boot() {
+  bindShell();
+  if (!boot.retryBound) {
+    boot.retryBound = true;
+    window.addEventListener("hashchange", () => {
+      route();
     });
-    investigationDialog.close();
-    await loadWorkspace({ quiet: true });
-    openInvestigation(investigation.id);
-    showStatus("Investigation created.");
-  } catch (error) {
-    const formError = document.querySelector("#investigation-form-error");
-    formError.textContent = `Unable to create investigation: ${error.message}`;
-    formError.hidden = false;
-  } finally {
-    submitButton.disabled = false;
   }
-});
-
-observationForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const investigation = selectedCase();
-  if (!investigation || investigation.status !== "open") {
-    observationDialog.close();
-    showStatus("Reopen the investigation before recording evidence.", true);
-    return;
-  }
-  const submitButton = observationForm.querySelector('[type="submit"]');
-  submitButton.disabled = true;
-  const data = Object.fromEntries(new FormData(observationForm));
-  document.querySelector("#observation-form-error").hidden = true;
-  if (!data.observed_at) delete data.observed_at;
   try {
-    await request(
-      `/api/investigations/${encodeURIComponent(investigation.id)}/observations`,
-      { method: "POST", body: JSON.stringify(data) },
+    const [modules, settings] = await Promise.all([api("/api/modules"), api("/api/settings")]);
+    G.state.modules = modules;
+    G.state.settings = settings.values;
+    applySettings();
+    renderShellState();
+    if (!location.hash) {
+      history.replaceState(null, "", "#/overview");
+    }
+    await route();
+  } catch (error) {
+    document.querySelector("#nav-groups").replaceChildren();
+    viewRoot.replaceChildren(
+      errorState({
+        title: "The local workspace is unavailable",
+        message: `${error.message}. Start the server with "python3 -m garbage_intel serve" and retry.`,
+        retry: () => boot(),
+      }),
     );
-    observationDialog.close();
-    await loadWorkspace({ quiet: true });
-    showStatus("Observation recorded.");
-  } catch (error) {
-    const formError = document.querySelector("#observation-form-error");
-    formError.textContent = `Unable to record observation: ${error.message}`;
-    formError.hidden = false;
-  } finally {
-    submitButton.disabled = false;
   }
-});
+}
 
-document.querySelector("#refresh-button").addEventListener("click", async () => {
-  const button = document.querySelector("#refresh-button");
-  button.disabled = true;
-  try {
-    await loadWorkspace();
-  } catch {
-    // loadWorkspace already displays a visible error.
-  } finally {
-    button.disabled = false;
-  }
-});
-
-document.querySelector("#investigation-search").addEventListener("input", renderInvestigationTable);
-
-timelineSelect.addEventListener("change", loadTimeline);
-
-document.querySelector("#kev-search-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  await loadKevCatalog(document.querySelector("#kev-search").value);
-});
-
-document.querySelector("#kev-refresh-button").addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  button.disabled = true;
-  button.classList.add("is-loading");
-  try {
-    const catalog = await request("/api/intel/cisa-kev/refresh", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    await loadKevCatalog(document.querySelector("#kev-search").value);
-    const label = catalog.refresh_status.replaceAll("_", " ");
-    showStatus(`CISA KEV ${label} · ${catalog.count.toLocaleString()} catalog records.`);
-  } catch (error) {
-    showStatus(`CISA KEV refresh failed: ${error.message}`, true);
-  } finally {
-    button.disabled = false;
-    button.classList.remove("is-loading");
-  }
-});
-
-loadWorkspace().catch(() => {
-  document.querySelector("#metric-open").textContent = "—";
-  document.querySelector("#metric-observations").textContent = "—";
-  document.querySelector("#metric-indicators").textContent = "—";
-  document.querySelector("#metric-correlations").textContent = "—";
+document.addEventListener("DOMContentLoaded", () => {
+  boot();
 });
