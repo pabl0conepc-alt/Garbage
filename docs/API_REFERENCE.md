@@ -21,7 +21,7 @@ rejected where the handler validates an allowlist.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/health` | Liveness and application version |
-| GET | `/api/system` | Storage, counts and runtime information |
+| GET | `/api/system` | Storage, counts, runtime and optional native-engine status |
 | GET | `/api/settings` | Read application settings |
 | PATCH | `/api/settings` | Update allowlisted settings |
 | GET | `/api/activities?limit=` | Recent activity |
@@ -69,12 +69,15 @@ Case membership:
 | GET | `/api/relationships/types` | Supported types |
 | PATCH | `/api/relationships/{id}` | Update relationship |
 | DELETE | `/api/relationships/{id}` | Delete relationship |
-| GET | `/api/graph?investigation_id=` | Global or case graph payload |
+| GET | `/api/graph?investigation_id=` | Graph payload with nodes, edges and structural metrics |
 
 Entity fields include `entity_type`, `name`, `identifier`, `description`,
 `source_reference`, `collection_basis`, `confidence` and
 `verification_status`. Relationship creation requires distinct source and target
-entities and a supported type.
+entities and a supported type. The graph response also carries `metrics`:
+`engine`, `nodes`, `edges`, `components`, `isolates`, `self_loops`,
+`reciprocal_edges`, `degree_sum`, `max_degree`, `max_degree_node` and `density`.
+`engine` is `cpp-native` or `python-fallback`.
 
 ## Sources
 
@@ -146,6 +149,16 @@ Response (abridged):
   "hashes": {"sha256": "...", "sha1": "...", "md5": "..."},
   "entropy": 5.12,
   "magic_hex": "25 50 44 46",
+  "hardening": {
+    "engine": "c-native",
+    "format": "pe",
+    "bits": 64,
+    "enabled_count": 4,
+    "missing_count": 2,
+    "checks": [
+      {"key": "aslr", "label": "ASLR / DYNAMIC_BASE", "status": "enabled", "detail": "..."}
+    ]
+  },
   "metadata": {"pdf": {"Title": "..."}},
   "structure": {},
   "strings": {"count": 12, "items": [{"offset": 0, "value": "..."}], "truncated": false},
@@ -210,6 +223,11 @@ Value inspection accepts `value` (up to 2,000 characters) and an optional
 }
 ```
 
+Domain inspection also returns `local.lookalikes`:
+`{engine, items: [{value, distance, reason}], scanned}`. Candidates come only
+from local records and are structural edit-distance matches, not registrations
+or reputation claims.
+
 `kind` is one of `ipv4`, `ipv6`, `cidr`, `domain`, `url`, `email`, `md5`,
 `sha1`, `sha256`, `asn`, `filename`, `multiple` or `unknown`. IPv6 inspection
 includes compressed/expanded forms, IPv4-mapped/6to4/Teredo details, scope and
@@ -243,6 +261,7 @@ same-origin Content Security Policy.
 
 ## Non-goals
 
-There are no write endpoints for website/domain/IP collection, OSINT connectors,
-automation or native engines. Those capabilities are not implemented; the
-module registry exposes them as `planned`.
+There are no write endpoints for website/domain/IP collection, OSINT
+connectors or automation. Those collection capabilities are not implemented and
+remain `planned`. Native C/C++/Rust helpers are local, read-only accelerators
+behind existing endpoints; they never fetch or write data.

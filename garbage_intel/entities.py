@@ -29,6 +29,7 @@ from .db import (
     record_activity,
     utc_now,
 )
+from . import native
 from .errors import ConflictError, NotFoundError, ValidationError
 from .modules.indicators import canonical_ip_address
 from .validation import (
@@ -835,6 +836,7 @@ def graph_payload(
         "investigation": investigation_payload,
         "nodes": nodes,
         "edges": edges,
+        "metrics": native.graph_metrics(nodes, edges),
         "entity_types": entity_types(),
         "relationship_types": relationship_types(),
     }

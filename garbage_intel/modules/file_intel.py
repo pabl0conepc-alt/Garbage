@@ -21,9 +21,11 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
+from .. import native
 from ..db import _connection, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
+from .hardening import describe_hardening
 from .imaging import inspect_image
 from .indicators import extract_indicators
 
@@ -205,6 +207,9 @@ def _safe_uint(data: bytes, offset: int, length: int, endian: str = "little") ->
 def _entropy(data: bytes) -> float:
     if not data:
         return 0.0
+    native_value = native.entropy(data)
+    if native_value is not None:
+        return round(native_value, 3)
     counts = Counter(data)
     total = len(data)
     value = 0.0
@@ -1107,6 +1112,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             }
         )
     indicators = _indicators_from_strings(strings)
+    hardening = describe_hardening(kind, data)
     return {
         "file_name": safe_name,
         "format": kind,
@@ -1125,6 +1131,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         "strings": strings,
         "indicators": indicators,
         "imports": imports,
+        "hardening": hardening,
         "findings": findings,
         "limitations": [
             "Static, read-only inspection only; no execution, emulation or sandbox detonation.",

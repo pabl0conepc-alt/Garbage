@@ -17,7 +17,7 @@ and evidence directories. It does not need network access.
 
 At the time of this change:
 
-- **106 tests pass.**
+- **115 tests pass** with the optional native build; without it, 9 native parity tests are skipped and the remaining suite passes.
 - `compileall` completes without errors.
 - `node --check` passes for every classic browser script.
 - A jsdom route smoke test (temporary harness outside the repository) rendered
@@ -27,6 +27,10 @@ At the time of this change:
   case coverage and the case-scoped indicator tab with no application errors.
   The cloud browser preview returned a private-preview 403 before reaching the
   app, so this increment was not visually screenshotted.
+
+Native tests build C, C++ and Rust helpers and compare entropy, ELF/PE
+hardening, graph metrics, edit distance and lookalike results with the Python
+fallback. They skip cleanly when `native/build` is absent.
 
 The baseline before this work was 47–48 tests. New coverage includes entities,
 relationships, boards, evidence verification, image inspection, workspace
@@ -45,7 +49,8 @@ text triage, offline value inspection and case coverage.
 | Boards | `test_boards.py` | Layout persistence, revisions, element/connection validation |
 | Indicators | `test_indicators.py`, `test_indicator_tools.py` | Refanging, IPv4/IPv6/CIDR validation, IPv4-mapped and scoped IPv6, bracketed IPv6 URLs, filename and embedded-host suppression, triage counts, inspection, correlation strength |
 | Imaging | `test_imaging.py` | PNG/JPEG/GIF/WebP dimensions, malformed input |
-| File intelligence | `test_file_intel.py` | PDF, OOXML/ZIP traversal, GZIP bomb bound, ELF/PE/Mach-O, limits, API persistence and module gate |
+| File intelligence | `test_file_intel.py` | PDF, OOXML/ZIP traversal, GZIP bomb bound, ELF/PE/Mach-O, limits, API persistence and module gate; hardening is covered by native tests |
+| Native parity | `test_native.py` | C entropy and ELF/PE hardening, C++ graph metrics, Rust distance/skeleton and lookalikes against Python fallbacks; malformed inputs |
 | CISA KEV | `test_cisa_kev.py` | Bounded parsing, cache, failure handling |
 
 ## 4. What is not verified
@@ -56,7 +61,7 @@ text triage, offline value inspection and case coverage.
   also performed through a temporary loopback preview proxy, covering desktop
   and mobile layouts, command palette, display menu, shortcuts and drawer focus.
   That inspection is not a repeatable automated suite.
-- **No native components.** No C, C++ or Rust library exists to test.
+- **Native builds are verified on Ubuntu in CI**, not on macOS or Windows. Other platforms use the Python fallback unless built locally. Native parity covers entropy, ELF/PE hardening, graph metrics and domain similarity.
 - **No performance/load benchmark.**
 - **No authenticated or multi-user tests**, because authentication is not
   implemented.

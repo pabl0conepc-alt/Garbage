@@ -6,7 +6,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from . import __version__
+from . import __version__, native
 from .db import (
     MODULE_STATES,
     SCHEMA_VERSION,
@@ -23,6 +23,7 @@ from .errors import ConflictError, NotFoundError, ValidationError
 from .modules.correlation import correlate_indicators
 from .modules.indicator_tools import inspect_value, triage_text
 from .modules.indicators import extract_indicators
+from .modules.lookalikes import find_domain_lookalikes
 from .validation import choice, clean_text, search_pattern
 
 
@@ -594,6 +595,18 @@ def inspect_local_indicator(
                         )[:8]
                     ]
 
+    lookalikes = {"engine": "none", "items": [], "scanned": 0}
+    if kind == "domain":
+        candidates = [
+            item["value"]
+            for item in index["items"]
+            if item["type"] == "domain"
+        ]
+        candidates.extend(
+            row["identifier"] for row in entities if row.get("identifier")
+        )
+        lookalikes = find_domain_lookalikes(canonical, candidates)
+
     return {
         **inspection,
         "local": {
@@ -602,6 +615,7 @@ def inspect_local_indicator(
             "evidence": evidence,
             "file_analyses": file_analyses,
             "cooccurring": cooccurring,
+            "lookalikes": lookalikes,
         },
         "match_count": (
             (1 if matched else 0)
@@ -893,6 +907,7 @@ def system_info(database: str) -> dict[str, Any]:
             "size_bytes": path.stat().st_size if path.is_file() else 0,
         },
         "runtime": runtime_diagnostics(),
+        "native": native.native_status(),
         "migrations": migrations,
         "counts": counts,
         "modules": modules,

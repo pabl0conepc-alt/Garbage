@@ -121,10 +121,16 @@ Content Security Policy (`script-src 'self'`). Views render only API data.
 Board and graph layout are the only client-side derived state; the board is
 saved with optimistic revisions.
 
-## 6. Multi-language contract (planned, not implemented)
+## 6. Multi-language contract
 
-The request requires Python, C, C++ and Rust. Only Python is implemented in
-this change. The intended contract, before any native code is merged:
+Python remains the reference implementation. Optional C, C++ and Rust helpers
+are implemented in `native/`:
+
+- C reads bounded ELF/PE headers for hardening markers and computes entropy.
+- C++ computes graph components, isolates, degree, density and reciprocity.
+- Rust computes bounded domain edit distance and a comparison skeleton.
+
+The contract:
 
 1. **C ABI is the stable boundary.** Native libraries export plain C functions
    with caller-owned buffers, explicit lengths, integer status codes and no
@@ -136,19 +142,18 @@ this change. The intended contract, before any native code is merged:
 3. **Ownership and limits are documented.** Every function states buffer
    ownership, maximum input, error codes and thread-safety. No native function
    receives a path and opens it implicitly.
-4. **Rust** is appropriate for bulk hashing, entropy, deduplication and
-   parallel string extraction. The planned PyO3/maturin path must not duplicate
-   already-correct Python behavior without a benchmark.
-5. **C++** is appropriate for large graph metrics and complex format parsers.
-   It must use the same C ABI, with `extern "C"` entry points and RAII inside.
-6. **C** is appropriate for byte-level header readers. Parsers must bound every
-   offset and length and must not execute data.
-7. **Builds are reproducible and optional.** `scripts/` will document compiler
-   requirements. CI will build native components only on supported runners and
-   run the fallback path everywhere.
+4. **Rust** handles bounded string similarity. It is a `cdylib` with no
+   third-party crates and no Python object boundary.
+5. **C++** handles graph metrics through `extern "C"` entry points with RAII
+   and validated node indexes.
+6. **C** handles byte-level ELF/PE readers. Every offset and length is bounded;
+   input is never executed.
+7. **Builds are reproducible and optional.** `make -C native` builds all three;
+   `tests.test_native` compares native and Python results. CI builds on Ubuntu;
+   every other platform runs the Python path unless a library is supplied.
 
-No Rust or C/C++ toolchain is assumed by the runtime. This host has `gcc`,
-`g++` and `make`; `cargo`, `rustc` and `cmake` are absent.
+No Rust or C/C++ toolchain is assumed by the runtime. The native directory is
+never downloaded and a missing library simply selects the fallback.
 
 ## 7. Extension points
 
@@ -174,5 +179,5 @@ database would add dependencies without a measured need.
 - Reports have no PDF renderer.
 - No website/domain/IP collector exists, so no SSRF surface has been added.
 - No automation runner or plugin loader exists.
-- No native engine or benchmark exists.
+- Native helpers have parity tests but no load/performance benchmark.
 - No authentication, TLS or multi-user isolation.

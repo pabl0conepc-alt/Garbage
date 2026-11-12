@@ -38,6 +38,20 @@ python3 -m garbage_intel serve --port 8765
 
 Open <http://127.0.0.1:8765/>.
 
+## Optional native helpers
+
+GARBAGE runs without native code. To build the optional C, C++ and Rust helpers:
+
+```sh
+make -C native
+make -C native check
+```
+
+Requires a C11/C++17 compiler and a Rust toolchain (`cargo`). Outputs go to
+`native/build/`. Set `GARBAGE_NATIVE_DIR` to load a build from another directory.
+The zipapp does not bundle `.so`/`.dylib` files; use the Python fallback or set
+the environment variable to an external build. See [native/README.md](../native/README.md).
+
 ## Python installation by platform
 
 - Windows/macOS: <https://www.python.org/downloads/>

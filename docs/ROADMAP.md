@@ -15,9 +15,9 @@ marks unimplemented capabilities as `planned` and refuses to enable them.
 | 5 | Evidence and file/media intelligence | Partial: PDF, documents, archives, images, ELF/PE/Mach-O; no full media forensics |
 | 6 | CTI/OSINT | Partial: manual indicators and CISA KEV; no external OSINT collectors |
 | 7 | Automation and plugin SDK | Not started (contract documented only) |
-| 8 | Native C/C++/Rust engines | Not started |
+| 8 | Native C/C++/Rust engines | Optional helpers implemented with tested Python fallbacks; no benchmark |
 | 9 | Workstation UI | Complete for enabled modules; no UI for planned modules |
-| 10 | Testing and hardening | Partial: 106 Python tests plus jsdom route smoke; no browser E2E in this environment |
+| 10 | Testing and hardening | Partial: 115 Python tests (including optional native parity) plus jsdom route smoke; no browser E2E in this environment |
 | 11 | Documentation and release | Partial: docs and README updated; branch/PR prepared |
 
 ## Phase 1 — audit
@@ -110,11 +110,14 @@ tests.
 
 ## Phase 8 — native engines
 
-Not delivered. No C, C++ or Rust source is present and no native library is
-loaded. The C ABI and fallback contract is documented in
-[ARCHITECTURE.md](ARCHITECTURE.md). A first candidate is a C byte-reader for
-bounded header parsing, with the Python implementation retained as fallback and
-the same fixtures used for both.
+Delivered as optional helpers with Python fallbacks:
+
+- C: bounded ELF/PE hardening and entropy in `native/c/`.
+- C++: graph components, isolates, degree, density and reciprocity in `native/cpp/`.
+- Rust: bounded edit distance and domain skeleton in `native/rust/`.
+- `tests.test_native` compares each engine with the Python path; the Ubuntu CI
+  job builds all three. Missing or incompatible libraries fall back safely.
+- No library is downloaded at runtime and no native code executes input.
 
 ## Phase 9 — UI
 
@@ -140,7 +143,7 @@ Not delivered:
 
 Delivered:
 
-- 106 Python tests passing (`python3 -m unittest discover -s tests`).
+- 115 Python tests passing with native helpers (`make -C native`); 9 parity tests skip without the build.
 - Compile checks for all Python files.
 - `node --check` for all classic scripts.
 - jsdom smoke over every route with a seeded database: 0 failure records,
@@ -153,7 +156,7 @@ Delivered:
 Not delivered:
 
 - Real-browser E2E and visual regression.
-- Native component tests (nothing native exists).
+- Native builds on macOS/Windows; CI covers Ubuntu and other platforms use the Python fallback.
 - Load/performance benchmarks.
 
 ## Phase 11 — documentation and release

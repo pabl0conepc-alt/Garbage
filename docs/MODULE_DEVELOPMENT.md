@@ -78,10 +78,20 @@ Not implemented yet. Any future connector must:
 Collection must be lawful and authorized. No authentication bypass, scanning of
 third parties without permission, or stealth.
 
-## 4. Native module contract (planned)
+## 4. Native modules (optional)
 
-No native code exists today. The contract below is the prerequisite for adding
-C, C++ or Rust.
+C, C++ and Rust helpers live in `native/` and are loaded through `ctypes`:
+
+- C: bounded ELF/PE hardening scan and byte entropy (`native/c/`).
+- C++: relationship graph components, isolates, degree, density and reciprocal
+  edges (`native/cpp/`).
+- Rust: bounded Damerau-Levenshtein distance and domain skeleton for lookalike
+  analysis (`native/rust/`).
+
+Build with `make -C native`; run parity tests with `make -C native check` or
+`GARBAGE_NATIVE_DIR=... python3 -m unittest tests.test_native -v`. A missing
+library, wrong ABI or missing symbol falls back to the Python reference. The
+contract below applies to every native function.
 
 ### C ABI
 
@@ -113,12 +123,16 @@ Rules:
 ### Loading and fallback
 
 - `ctypes` (or `cffi`) loads a library only from an explicit build directory or
-  `GARBAGE_NATIVE_LIB` environment variable.
+  `GARBAGE_NATIVE_DIR` environment variable.
 - A missing library, symbol mismatch or ABI version mismatch logs a diagnostic
   and uses the pure-Python path.
 - The Python path remains the reference implementation and must pass the same
   fixtures.
 - No native library is downloaded at runtime.
+- `GARBAGE_NATIVE_DIR` selects one explicit build directory; it is not merged
+  with the repository default.
+- The API/UI exposes which engine actually ran (`c-native`, `cpp-native`,
+  `rust-native` or `python-fallback`).
 
 ### Language fit
 
@@ -135,8 +149,10 @@ Rules:
 - Add malformed/truncated cases and a fuzz target where feasible.
 - Do not claim a speedup without a benchmark.
 
-This host has `gcc`, `g++` and `make`; `cargo`, `rustc` and `cmake` are not
-installed, so no Rust/C++ build was attempted.
+The Ubuntu CI job installs a stable Rust toolchain, builds all three helpers and
+runs `tests.test_native` so native and fallback results are compared. macOS keeps
+the `.dylib` naming in `native/Makefile`; Windows remains fallback-only unless a
+compatible build is supplied.
 
 ## 5. Automation rules (planned)
 

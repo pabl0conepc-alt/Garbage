@@ -83,8 +83,10 @@ Out of scope:
 - **No antivirus or sandbox.** Static analysis does not prove a file is safe.
 - **No remote connectors.** Website/domain/IP collection and external OSINT are
   not implemented; their SSRF and authorization design is still open.
-- **No native code.** Native parsers would introduce memory-safety risk and are
-  not present.
+- **Optional native code.** C, C++ and Rust helpers parse only caller-supplied
+  buffers with explicit bounds. A missing or incompatible library falls back to
+  Python; builds are not downloaded. Native builds are memory-unsafe by nature,
+  so their fixtures and parity tests matter; see `native/README.md`.
 - **No audit log integrity.** Activity records are ordinary rows; an attacker
   with database write access can alter them.
 

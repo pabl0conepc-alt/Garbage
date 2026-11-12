@@ -70,12 +70,14 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
   offline cache.
 - Loopback-only API with Host/Origin checks, body limits, static allowlist,
   CSP, `no-store`, `nosniff` and `no-referrer`.
+- Optional native helpers with tested Python fallbacks: C ELF/PE hardening,
+  C++ graph metrics and Rust domain similarity; `make -C native` builds them.
 - Python 3.10+ launchers for POSIX and PowerShell, plus a dependency-free
   zipapp builder.
 
 ## Verification performed
 
-- `python3 -m unittest discover -s tests` — **106 tests passed**.
+- `python3 -m unittest discover -s tests` — **115 tests passed** with native helpers built; 9 native parity tests are skipped without them.
 - `python3 -m compileall -q garbage_intel tests` — passed.
 - `node --check` on all browser scripts — passed.
 - jsdom route smoke with a seeded database — every route rendered, **0 failure
@@ -95,7 +97,7 @@ Not verified:
   drag-and-drop. The cloud-browser pass was a manual inspection, not a suite.
 - Windows/macOS execution in this environment. The CI matrix is configured but
   was not observed running here.
-- Any native component; none exists.
+- Native builds on macOS/Windows in this environment. The source and CI job cover Ubuntu; other platforms use the Python fallback unless built locally.
 - PDF export; not implemented.
 
 ## Not implemented

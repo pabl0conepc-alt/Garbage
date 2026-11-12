@@ -341,6 +341,32 @@
               : el("p", { class: "panel-empty" }, "System diagnostics are unavailable."),
           ),
           panel(
+            { eyebrow: "NATIVE ENGINE", title: "Optional accelerators" },
+            system?.native
+              ? G.kvList([
+                  [
+                    "C file intelligence",
+                    system.native.engines.c_file_intelligence
+                      ? "Loaded"
+                      : "Python fallback",
+                  ],
+                  [
+                    "C++ graph metrics",
+                    system.native.engines.cpp_graph_metrics
+                      ? "Loaded"
+                      : "Python fallback",
+                  ],
+                  [
+                    "Rust similarity",
+                    system.native.engines.rust_similarity
+                      ? "Loaded"
+                      : "Python fallback",
+                  ],
+                  ["Build directory", system.native.directory],
+                ])
+              : el("p", { class: "panel-empty" }, "Native status is unavailable."),
+          ),
+          panel(
             { eyebrow: "COUNTS", title: "Stored records" },
             system
               ? G.kvList(

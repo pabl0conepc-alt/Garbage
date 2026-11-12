@@ -80,7 +80,7 @@ Status meanings:
 | OSINT connectors | No | Planned (`external-osint-connectors` state) | Registry entry only; cannot be enabled | No fake modules or results | `test_workspace.py` module gate |
 | Automation engine | No | Planned | No flow runner or scheduler | Design must forbid arbitrary command execution | — |
 | Plugin SDK | No | Partial (documented contract) | `docs/MODULE_DEVELOPMENT.md`; no dynamic loading | Allowlist and in-process contracts before code | — |
-| Native C / C++ / Rust engines | Rust backend exists for DWeb, not analysis | Planned | No native component in this change | Optional bindings must fall back to Python | — |
+| Native C / C++ / Rust engines | Rust backend exists for DWeb, not analysis | Optional helpers | C hardening, C++ graph metrics and Rust domain similarity with Python fallbacks | No downloaded libraries; native code never executes input | `native/README.md` |
 | PDF report export | No | Planned | HTML, JSON, CSV and Markdown exist | PDF requires a justified dependency or a print workflow | `test_reporting` coverage via API/CLI |
 | STIX / TAXII / ATT&CK | No | Planned | Not implemented | No unverified feed integration | — |
 | Authentication / TLS / remote deployment | N/A | N/A (local only) | Loopback server, no accounts | Must not be exposed remotely | `test_api.py` |
