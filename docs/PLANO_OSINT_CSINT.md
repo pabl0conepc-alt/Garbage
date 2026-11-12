@@ -165,7 +165,7 @@ Mantendo o design system monocromático do PR #8:
 | 1 | Cliente HTTP seguro (anti-SSRF), cache, limitador, tabelas `intel_*`, registro de conectores — **concluída** (`net.py`, `intel.py`, migração 4) | — |
 | 2 | Conectores sem chave: RDAP, DNS, crt.sh, Wayback, Team Cymru, EPSS e KEV local — **concluída** (`modules/intel_connectors.py`). URLhaus e ThreatFox passaram para a fase 7: a abuse.ch agora exige Auth-Key em todas as APIs | 1 |
 | 3 | Multi-Source Search + painel de fontes (backend e UI) | 2 |
-| 4 | Inteligência de domínio, IP/ASN, certificados e web | 2 |
+| 4 | Inteligência de domínio, IP/ASN, certificados e web — **concluída**: domínio e IP/ASN na fase 2; certificado TLS e impressão digital web (com trava própria de contato com o alvo), parser X.509 e hash de favicon em Python | 2 |
 | 5 | Pivô no grafo + algoritmos C++ | 3, 4 |
 | 6 | Motores de arquivo: YARA (C), TLSH/ssdeep (C), scanner de assinaturas (Rust), formatos novos | — (paralelo) |
 | 7 | Conectores com chave do usuário (VirusTotal, AbuseIPDB, Shodan, GreyNoise, OTX, URLhaus, ThreatFox) | 1 |

@@ -52,6 +52,7 @@ RESULT_STATUSES = (
     "error",
     "rate-limited",
     "network-disabled",
+    "target-contact-disabled",
     "unsupported",
 )
 MAX_FINDINGS_PER_CONNECTOR = 200
@@ -89,6 +90,9 @@ class Connector:
     accepts: tuple[str, ...]
     run: ConnectorFunction
     network: bool = False
+    # True when the connector talks to the artifact's own servers (an HTTP
+    # request or TLS handshake), not to a third-party registry or archive.
+    contacts_target: bool = False
     requires_key: bool = False
     rate_per_minute: int = 60
     ttl_seconds: int = 0
@@ -252,6 +256,7 @@ def list_connectors(database: str) -> dict[str, Any]:
     with _connection(database) as connection:
         require_module(connection, "intel-orchestrator")
         network_allowed = setting_bool(connection, "intel.allow_network", False)
+        target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
         status_rows = {
             row["connector_id"]: dict(row)
             for row in connection.execute("SELECT * FROM intel_source_status")
@@ -261,6 +266,8 @@ def list_connectors(database: str) -> dict[str, Any]:
         status = status_rows.get(connector.connector_id)
         if connector.network and not network_allowed:
             availability = "network-disabled"
+        elif connector.contacts_target and not target_allowed:
+            availability = "target-contact-disabled"
         else:
             availability = "ready"
         items.append(
@@ -271,6 +278,7 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "accepts": list(connector.accepts),
                 "network": connector.network,
                 "requires_key": connector.requires_key,
+                "contacts_target": connector.contacts_target,
                 "rate_per_minute": connector.rate_per_minute,
                 "ttl_seconds": connector.ttl_seconds,
                 "source_url": connector.source_url,
@@ -278,7 +286,12 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "status": status,
             }
         )
-    return {"network_allowed": network_allowed, "items": items, "total": len(items)}
+    return {
+        "network_allowed": network_allowed,
+        "target_contact_allowed": target_allowed,
+        "items": items,
+        "total": len(items),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +360,7 @@ def run_query(
         ).fetchone() is None:
             raise NotFoundError(f"investigation not found: {case_id}")
         network_allowed = setting_bool(connection, "intel.allow_network", False)
+        target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
         workers = setting_int(connection, "intel.max_workers", 4, 1, 16)
         connection.execute(
             """INSERT INTO intel_runs
@@ -374,6 +388,8 @@ def run_query(
             outcomes[connector.connector_id] = ("ok" if hit else "empty", hit, "", 0, True)
         elif connector.network and not network_allowed:
             outcomes[connector.connector_id] = ("network-disabled", [], "", 0, False)
+        elif connector.contacts_target and not target_allowed:
+            outcomes[connector.connector_id] = ("target-contact-disabled", [], "", 0, False)
         elif not RATE_LIMITER.acquire(connector.connector_id, connector.rate_per_minute):
             outcomes[connector.connector_id] = ("rate-limited", [], "", 0, False)
         else:
@@ -691,3 +707,4 @@ register_connector(
 # Public network connectors register themselves on import. Imported last so
 # the registry and Finding types above are fully defined.
 from .modules import intel_connectors as _intel_connectors  # noqa: E402,F401
+from .modules import intel_target_connectors as _intel_target_connectors  # noqa: E402,F401

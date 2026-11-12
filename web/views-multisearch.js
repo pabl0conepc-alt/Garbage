@@ -19,6 +19,8 @@
     crtsh: ["Certificate Transparency (crt.sh)", "Nomes em certificados não expirados do domínio e subdomínios, com emissores."],
     wayback: ["Internet Archive (Wayback)", "Capturas arquivadas distintas de um domínio ou URL, com datas e status."],
     "first-epss": ["FIRST EPSS", "Probabilidade e percentil de exploração (EPSS) de uma CVE."],
+    "tls-certificate": ["Certificado TLS", "Um handshake TLS na porta 443 do alvo: confiança, protocolo, titular, emissor, validade, SANs, chave, fingerprints e pin SPKI."],
+    "web-fingerprint": ["Impressão digital web", "Um GET HTTPS da página do alvo (e do favicon): status, redirecionamentos, cabeçalhos de segurança, cookies, título, tecnologias e hash do favicon."],
   };
 
   const RESULT_LABELS = {
@@ -33,6 +35,13 @@
     "ct-name": "Nome em certificado", "ct-issuer": "Emissor de certificado",
     "archive-summary": "Resumo do arquivo", "archive-capture": "Captura arquivada",
     epss: "EPSS", "kev-entry": "Entrada KEV",
+    "tls-trust": "Confiança TLS", "cert-subject": "Titular do certificado", "cert-issuer": "Emissor",
+    "cert-validity": "Validade", "cert-key": "Chave pública", "cert-sha256": "SHA-256 do certificado",
+    "cert-spki": "Pin SPKI", "cert-san": "Nome alternativo (SAN)", "cert-san-ip": "IP no SAN",
+    "cert-extensions": "Extensões", "http-response": "Resposta HTTP", "http-redirect": "Redirecionamento",
+    "security-header": "Cabeçalho de segurança", "missing-header": "Cabeçalho ausente",
+    "disclosure-header": "Cabeçalho que expõe software", cookie: "Cookie", "page-title": "Título da página",
+    "page-meta": "Meta da página", technology: "Tecnologia", favicon: "Hash do favicon (mmh3)",
   };
 
   const DATA_LABELS = {
@@ -47,6 +56,16 @@
     meaning: "", origin_count: "origens", verification_status: "verificação", count: "ocorrências",
     entity_type: "categoria", identifier: "identificador", sha256: "SHA-256", format: "formato",
     integrity_status: "integridade", distance: "distância", reason: "motivo",
+    error: "erro", protocol: "protocolo", cipher: "cifra", address: "endereço",
+    hostname_match: "nome confere", cn: "CN", organization: "organização", self_issued: "autoassinado",
+    days_remaining: "dias restantes", validity_days: "validade (dias)", expired: "expirado",
+    not_yet_valid: "ainda não válido", curve: "curva", signature: "assinatura",
+    weak_signature: "assinatura fraca", sha1: "SHA-1", serial: "serial", pin: "",
+    sct_embedded: "SCT embutido", ca: "CA", ocsp: "OCSP", extended_key_usage: "uso estendido",
+    final_url: "URL final", redirects: "redirecionamentos", content_type: "tipo", bytes: "bytes",
+    value: "valor", header: "cabeçalho", secure: "Secure", httponly: "HttpOnly", samesite: "SameSite",
+    category: "categoria", version: "versão", evidence: "evidência", algorithm: "algoritmo",
+    md5: "MD5", url: "URL",
   };
 
   const STATUS_TEXT = {
@@ -55,6 +74,7 @@
     error: ["Erro", "danger"],
     "rate-limited": ["Limite de taxa", "warning"],
     "network-disabled": ["Rede desativada", "warning"],
+    "target-contact-disabled": ["Contato com o alvo desativado", "warning"],
     unsupported: ["Não se aplica", "neutral"],
     ready: ["Pronto", "success"],
   };
@@ -69,11 +89,13 @@
     "dns-a": "ipv4", "dns-aaaa": "ipv6", "dns-ns": "domain", "dns-cname": "domain",
     "dns-mx": "domain", nameserver: "domain", "ct-name": "domain", organization: "organization",
     "abuse-contact": "email", "archive-capture": "url", lookalike: "domain",
+    "cert-san": "domain", "http-redirect": "url",
   };
 
   const PIVOTABLE = new Set([
     "dns-a", "dns-aaaa", "dns-ns", "dns-cname", "dns-mx", "nameserver", "ct-name",
-    "asn", "cidr", "abuse-contact", "lookalike", "co-occurrence", "indicator",
+    "asn", "cidr", "abuse-contact", "lookalike", "co-occurrence", "indicator", "cert-san",
+    "cert-san-ip", "http-redirect",
   ]);
 
   function button(label, onClick, options = {}) {
@@ -148,6 +170,27 @@
       });
       state.settings = result.values;
       toast("Conectores de rede ativados.");
+      onDone();
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  }
+
+  async function enableTargetContact(onDone) {
+    const accepted = await G.confirm({
+      title: "Permitir contato com o alvo",
+      message:
+        "Os conectores Certificado TLS e Impressão digital web acessam diretamente os servidores do artefato: um handshake TLS na porta 443 e um GET HTTPS da página e do favicon, como um visitante comum. O alvo pode registrar o seu endereço IP. Use apenas em alvos que você está autorizado a analisar.",
+      confirmLabel: "Permitir contato",
+    });
+    if (!accepted) return;
+    try {
+      const result = await api("/api/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ "intel.allow_target_contact": "true" }),
+      });
+      state.settings = result.values;
+      toast("Contato com o alvo permitido.");
       onDone();
     } catch (error) {
       toast(error.message, "error");
@@ -307,7 +350,9 @@
       connectorChips.replaceChildren();
       for (const connector of connectorData.items) {
         const applies = !type || connector.accepts.includes(type);
-        const blocked = connector.network && !connectorData.network_allowed;
+        const blocked =
+          (connector.network && !connectorData.network_allowed) ||
+          (connector.contacts_target && !connectorData.target_contact_allowed);
         const checkbox = el("input", {
           type: "checkbox",
           checked: selected.has(connector.connector_id) && applies,
@@ -326,7 +371,11 @@
             },
             checkbox,
             el("span", {}, connectorName(connector.connector_id, connector.name)),
-            connector.network ? el("span", { class: "chip-flag" }, blocked ? "rede off" : "rede") : null,
+            connector.contacts_target
+              ? el("span", { class: "chip-flag is-target" }, blocked ? "alvo off" : "alvo")
+              : connector.network
+                ? el("span", { class: "chip-flag" }, blocked ? "rede off" : "rede")
+                : null,
           ),
         );
       }
@@ -552,7 +601,10 @@
               ),
             },
             { label: "ACEITA", render: (row) => row.accepts.map((type) => TYPE_LABELS[type] || type).join(", ") },
-            { label: "ACESSO", render: (row) => (row.network ? "Rede" : "Local") },
+            {
+              label: "ACESSO",
+              render: (row) => (row.contacts_target ? "Contata o alvo" : row.network ? "Rede (passivo)" : "Local"),
+            },
             { label: "DISPONIBILIDADE", render: (row) => statusBadgeFor(row.availability) },
             {
               label: "ÚLTIMA EXECUÇÃO",
@@ -642,6 +694,18 @@
             ),
             button("Ativar rede", () => enableNetwork(() => G.refreshView())),
           ),
+      connectorData.network_allowed && !connectorData.target_contact_allowed
+        ? el(
+            "div",
+            { class: "notice-bar is-quiet", role: "note" },
+            el(
+              "span",
+              {},
+              "Fontes passivas ativas. Certificado TLS e Impressão digital web acessam o próprio alvo e estão desligados.",
+            ),
+            button("Permitir contato com o alvo", () => enableTargetContact(() => G.refreshView())),
+          )
+        : null,
       tabStrip,
       tabHost,
       ].filter(Boolean),
