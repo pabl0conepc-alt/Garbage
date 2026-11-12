@@ -459,6 +459,9 @@
           el(
             "div",
             { class: "toolbar-end" },
+            moduleEnabled("intel-orchestrator")
+              ? button("Pesquisa multifonte", () => G.multiSearch(item.value), { variant: "button-secondary" })
+              : null,
             button(
               "Inspecionar valor",
               async () => {

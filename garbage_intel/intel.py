@@ -500,6 +500,80 @@ def list_runs(database: str, *, limit: int = 25) -> dict[str, Any]:
     return {"items": [dict(row) for row in rows], "total": total}
 
 
+MAX_OBSERVATION_CHARS = 20_000
+
+
+def record_run_observation(
+    database: str,
+    run_id: str,
+    *,
+    investigation_id: object,
+    connector_ids: object = None,
+) -> dict[str, Any]:
+    """Write a run's findings into a case as one sourced observation.
+
+    The observation text lists every finding with its connector and source URL,
+    so the existing indicator extraction and exact-value correlation see it.
+    The observation's own reference points back to the run.
+    """
+    from .store import add_observation
+
+    if not isinstance(investigation_id, str) or not investigation_id:
+        raise ValidationError("investigation_id is required")
+    run = get_run(database, run_id)
+    selected = None
+    if connector_ids not in (None, []):
+        if not isinstance(connector_ids, list) or not all(
+            isinstance(item, str) for item in connector_ids
+        ):
+            raise ValidationError("connectors must be a list of connector ids")
+        selected = set(connector_ids)
+    results = [
+        item
+        for item in run["results"]
+        if selected is None or item["connector_id"] in selected
+    ]
+    if not results:
+        raise ValidationError("the run has no findings to record")
+    lines = [
+        f"Multi-source query {run['query_type']} {run['query_value']} "
+        f"(run {run['id']}, {run['started_at']}).",
+        "Findings are copied from public sources and have not been independently verified.",
+        "Source URLs and response digests are kept in the run record, not in this text,",
+        "so connector endpoints are not mistaken for indicators of the case.",
+        "",
+    ]
+    for item in results:
+        detail = ", ".join(
+            f"{key}={value}"
+            for key, value in sorted(item["data"].items())
+            if value not in (None, "", [], {})
+        )
+        line = f"[{item['connector_id']}] {item['result_type']}: {item['value']}"
+        if detail:
+            line += f" ({detail})"
+        lines.append(line)
+    content = "\n".join(lines)
+    truncated = len(content) > MAX_OBSERVATION_CHARS
+    if truncated:
+        content = content[: MAX_OBSERVATION_CHARS - 40].rsplit("\n", 1)[0]
+        content += "\n[truncated at the observation size limit]"
+    observation = add_observation(
+        database,
+        investigation_id,
+        f"Multi-source query: {run['query_value']}"[:300],
+        content,
+        f"note://garbage/intel-run/{run['id']}",
+        "public",
+    )
+    with _connection(database) as connection:
+        connection.execute(
+            "UPDATE intel_runs SET investigation_id = ? WHERE id = ? AND investigation_id IS NULL",
+            (investigation_id, run["id"]),
+        )
+    return {"observation": observation, "finding_count": len(results), "truncated": truncated}
+
+
 # ---------------------------------------------------------------------------
 # Built-in local connectors (no network)
 

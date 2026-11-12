@@ -49,7 +49,14 @@ from .evidence import (
     read_evidence_file,
     verify_evidence,
 )
-from .intel import detect_artifact, get_run, list_connectors, list_runs, run_query
+from .intel import (
+    detect_artifact,
+    get_run,
+    list_connectors,
+    list_runs,
+    record_run_observation,
+    run_query,
+)
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -112,6 +119,7 @@ _STATIC_FILES = {
     "views-intel.js": "text/javascript; charset=utf-8",
     "views-system.js": "text/javascript; charset=utf-8",
     "views-file.js": "text/javascript; charset=utf-8",
+    "views-multisearch.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -1230,6 +1238,26 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    def api_intel_run_record(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("intel-orchestrator")
+        self._module("investigations")
+        unknown = set(payload) - {"investigation_id", "connectors"}
+        if unknown:
+            raise ValidationError(
+                f"unsupported record fields: {', '.join(sorted(unknown))}"
+            )
+        self._json(
+            201,
+            record_run_observation(
+                self.database_path,
+                match.group(1),
+                investigation_id=payload.get("investigation_id"),
+                connector_ids=payload.get("connectors"),
+            ),
+        )
+
     def api_print_report(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1534,6 +1562,12 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "GET",
         re.compile(rf"^/api/intel/runs/{_ID_PATTERN}$"),
         "api_intel_run_get",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "POST",
+        re.compile(rf"^/api/intel/runs/{_ID_PATTERN}/record$"),
+        "api_intel_run_record",
         MAX_BODY_BYTES,
     ),
     (

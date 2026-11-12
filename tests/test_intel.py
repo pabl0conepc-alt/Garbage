@@ -10,6 +10,7 @@ from garbage_intel.api import create_server
 from garbage_intel.errors import ModuleDisabledError, ValidationError
 from garbage_intel.intel import (
     Connector,
+    record_run_observation,
     Finding,
     RateLimiter,
     detect_artifact,
@@ -21,7 +22,7 @@ from garbage_intel.intel import (
     unregister_connector,
 )
 from garbage_intel.net import NetworkError
-from garbage_intel.store import initialize
+from garbage_intel.store import build_report, create_investigation, initialize
 from garbage_intel.workspace import set_module_state, update_settings
 
 
@@ -167,6 +168,36 @@ class OrchestratorTests(RuntimeTestCase):
         with self.assertRaises(ValidationError):
             run_query(self.database, value="example.com", connector_ids="local-structure")
 
+    def test_run_is_recorded_as_a_case_observation_without_endpoint_urls(self):
+        def remote(context):
+            return [
+                Finding("dns-a", "203.0.113.7", {"record": "A"}, "https://resolver.example/q?name=x", "ab" * 32),
+                Finding("dns-ns", "ns1.example.net", {}, "https://resolver.example/q?name=y", "cd" * 32),
+            ]
+
+        self.add("test-dns", remote)
+        case = create_investigation(self.database, "Case", "scope")
+        run = run_query(self.database, value="example.com", connector_ids=["test-dns"])
+        recorded = record_run_observation(self.database, run["id"], investigation_id=case["id"])
+        self.assertEqual(recorded["finding_count"], 2)
+        observation = recorded["observation"]
+        self.assertEqual(observation["source_reference"], f"note://garbage/intel-run/{run['id']}")
+        self.assertEqual(observation["collection_basis"], "public")
+        self.assertIn("203.0.113.7", observation["content"])
+        self.assertNotIn("resolver.example", observation["content"])
+        values = {item["value"] for item in build_report(self.database, case["id"])["indicators"]}
+        self.assertIn("203.0.113.7", values)
+        self.assertNotIn("https://resolver.example/q?name=x", values)
+        self.assertEqual(get_run(self.database, run["id"])["investigation_id"], case["id"])
+
+        empty = run_query(self.database, value="example.com", connector_ids=["test-dns"], use_cache=False)
+        with self.assertRaises(ValidationError):
+            record_run_observation(self.database, empty["id"], investigation_id="")
+        with self.assertRaises(ValidationError):
+            record_run_observation(
+                self.database, empty["id"], investigation_id=case["id"], connector_ids=["local-structure"]
+            )
+
     def test_module_gate(self):
         set_module_state(self.database, "intel-orchestrator", "disabled")
         with self.assertRaises(ModuleDisabledError):
@@ -239,6 +270,17 @@ class IntelApiTests(unittest.TestCase):
             "GET", "/api/intel/runs/00000000-0000-0000-0000-000000000000"
         )
         self.assertEqual(status, 404)
+
+        status, case = self.request("POST", "/api/investigations", {"name": "Case"})
+        status, body = self.request(
+            "POST", f"/api/intel/runs/{run['id']}/record", {"investigation_id": case["id"]}
+        )
+        self.assertEqual(status, 201)
+        self.assertGreater(body["finding_count"], 0)
+        status, body = self.request(
+            "POST", f"/api/intel/runs/{run['id']}/record", {"investigation_id": case["id"], "x": 1}
+        )
+        self.assertEqual(status, 400)
 
 
 if __name__ == "__main__":

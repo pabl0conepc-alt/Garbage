@@ -32,6 +32,7 @@ G.NAV = [
   {
     label: "Inteligência",
     items: [
+      { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
@@ -234,6 +235,7 @@ const ICON_PATHS = {
   modules: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM16.75 13.5v6.5M13.5 16.75H20",
   settings: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4",
   search: "M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM16 16l5 5",
+  radar: "M12 12 19 5M12 21a9 9 0 1 1 6.4-15.4M12 17a5 5 0 1 1 3.5-8.5M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
   plus: "M12 5v14M5 12h14",
   close: "M6 6l12 12M18 6 6 18",
   menu: "M4 7h16M4 12h16M4 17h16",
@@ -1501,6 +1503,14 @@ function commandActions() {
       run: () => G.newInvestigation(),
     },
     {
+      label: "Pesquisa multifonte",
+      icon: "radar",
+      hint: "M",
+      keywords: "multi source fan out osint dns rdap whois asn crt certificate wayback epss pesquisa fontes consultar",
+      module: "intel-orchestrator",
+      run: () => go("multisearch"),
+    },
+    {
       label: "Registrar entidade",
       icon: "⬡",
       keywords: "new domain ip person organization nova entidade domínio pessoa organização",
@@ -1892,6 +1902,7 @@ G.openShortcuts = function openShortcuts() {
     ["/", "Focar a pesquisa"],
     ["N", "Nova investigação"],
     ["T", "Triar texto colado"],
+    ["M", "Pesquisa multifonte"],
     ["R", "Atualizar tela atual"],
     ["?", "Este guia de atalhos"],
     ["Esc", "Fechar diálogo, menu ou painel"],
@@ -2048,6 +2059,12 @@ function bindShell() {
       event.preventDefault();
       go("indicators");
       window.setTimeout(() => document.querySelector("#triage-text")?.focus(), 200);
+    } else if (
+      event.key.toLowerCase() === "m" && !event.ctrlKey && !event.metaKey && !event.altKey &&
+      moduleEnabled("intel-orchestrator")
+    ) {
+      event.preventDefault();
+      go("multisearch");
     } else if (event.key.toLowerCase() === "r" && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       G.refreshView();
