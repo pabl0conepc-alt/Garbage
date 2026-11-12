@@ -27,7 +27,7 @@
   function fileToBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(new Error("Unable to read the selected file."));
+      reader.onerror = () => reject(new Error("Não foi possível ler o arquivo selecionado."));
       reader.onload = () => {
         const result = String(reader.result || "");
         const comma = result.indexOf(",");
@@ -44,7 +44,7 @@
         if (item && typeof item === "object" && "key" in item && "value" in item) {
           pairs.push([titleCase(item.key), String(item.value)]);
         } else if (typeof item !== "object") {
-          pairs.push([prefix || "Value", String(item)]);
+          pairs.push([prefix || "Valor", String(item)]);
         }
       }
       return pairs;
@@ -55,7 +55,7 @@
       }
       return pairs;
     }
-    pairs.push([prefix || "Value", String(value)]);
+    pairs.push([prefix || "Valor", String(value)]);
     return pairs;
   }
 
@@ -74,7 +74,7 @@
 
     const fileInput = el("input", {
       type: "file",
-      "aria-label": "File to analyse",
+      "aria-label": "Arquivo para análise",
       onChange: (event) => {
         selectedFile = event.target.files?.[0] || null;
         updateSelection();
@@ -84,8 +84,8 @@
       "div",
       { class: "drop-zone", tabindex: "0" },
       el("span", { class: "drop-icon", "aria-hidden": "true" }, "▧"),
-      el("strong", {}, "Choose a file or drop it here"),
-      el("span", {}, "Maximum 4 MiB. Static inspection only: nothing is executed or extracted."),
+      el("strong", {}, "Escolha um arquivo ou solte-o aqui"),
+      el("span", {}, "Máximo de 4 MiB. Somente inspeção estática: nada é executado ou extraído."),
       fileInput,
     );
     dropZone.addEventListener("dragover", (event) => {
@@ -105,43 +105,43 @@
 
     const caseSelect = el(
       "select",
-      { class: "input", "aria-label": "Associate analysis with an investigation" },
-      el("option", { value: "" }, "Workspace history only"),
+      { class: "input", "aria-label": "Associar a análise a uma investigação" },
+      el("option", { value: "" }, "Somente histórico do workspace"),
       ...investigations.map((investigation) =>
         el("option", { value: investigation.id }, investigation.name),
       ),
     );
-    const selectedLabel = el("p", { class: "file-selection" }, "No file selected.");
-    const analyzeButton = button("Analyse file", () => analyse(), {
+    const selectedLabel = el("p", { class: "file-selection" }, "Nenhum arquivo selecionado.");
+    const analyzeButton = button("Analisar arquivo", () => analyse(), {
       variant: "button-primary",
       disabled: true,
     });
 
     function updateSelection() {
       if (!selectedFile) {
-        selectedLabel.textContent = "No file selected.";
+        selectedLabel.textContent = "Nenhum arquivo selecionado.";
         analyzeButton.disabled = true;
         return;
       }
       selectedLabel.replaceChildren(
         el("strong", {}, selectedFile.name),
-        el("span", {}, `${formatBytes(selectedFile.size)} · ${selectedFile.type || "unknown type"}`),
+        el("span", {}, `${formatBytes(selectedFile.size)} · ${selectedFile.type || "tipo desconhecido"}`),
       );
       analyzeButton.disabled = busy || selectedFile.size > MAX_BYTES;
       if (selectedFile.size > MAX_BYTES) {
-        toast("The file exceeds the 4 MiB analysis limit.", "error");
+        toast("O arquivo excede o limite de análise de 4 MiB.", "error");
       }
     }
 
     async function analyse() {
       if (!selectedFile || busy) return;
       if (selectedFile.size > MAX_BYTES) {
-        toast("The file exceeds the 4 MiB analysis limit.", "error");
+        toast("O arquivo excede o limite de análise de 4 MiB.", "error");
         return;
       }
       busy = true;
       analyzeButton.disabled = true;
-      analyzeButton.textContent = "Analysing…";
+      analyzeButton.textContent = "Analisando…";
       try {
         const content_base64 = await fileToBase64(selectedFile);
         analysis = await api("/api/intelligence/files", {
@@ -152,7 +152,7 @@
             ...(caseSelect.value ? { investigation_id: caseSelect.value } : {}),
           }),
         });
-        toast(`Analysed ${analysis.file_name} · ${analysis.format_label}.`);
+        toast(`Analisado: ${analysis.file_name} · ${analysis.format_label}.`);
         await loadHistory();
         drawResult();
       } catch (error) {
@@ -160,7 +160,7 @@
       } finally {
         busy = false;
         analyzeButton.disabled = !selectedFile;
-        analyzeButton.textContent = "Analyse file";
+        analyzeButton.textContent = "Analisar arquivo";
       }
     }
 
@@ -185,7 +185,7 @@
     async function attachEvidence() {
       if (!analysis?.investigation_id) return;
       if (!selectedFile || selectedFile.size > MAX_BYTES) {
-        toast("Re-select the original file to attach it as evidence.", "error");
+        toast("Selecione novamente o arquivo original para anexá-lo como evidência.", "error");
         return;
       }
       try {
@@ -195,13 +195,13 @@
             title: analysis.file_name,
             evidence_type: "file",
             description:
-              "Attached from File Intelligence after static analysis. The file was not executed.",
+              "Anexado pela Análise de arquivos após análise estática. O arquivo não foi executado.",
             source_reference: "note://file-intelligence",
             original_name: selectedFile.name,
             content_base64: await fileToBase64(selectedFile),
           }),
         });
-        toast("Evidence added with its own SHA-256 integrity record.");
+        toast("Evidência adicionada com seu próprio registro de integridade SHA-256.");
       } catch (error) {
         toast(error.message, "error");
       }
@@ -215,9 +215,9 @@
         resultHost.replaceChildren(
           emptyState({
             icon: "▧",
-            title: "No analysis selected",
+            title: "Nenhuma análise selecionada",
             description:
-              "Choose a bounded, authorized file. GARBAGE identifies structure and metadata without executing or unpacking it.",
+              "Escolha um arquivo autorizado dentro do limite. O GARBAGE identifica estrutura e metadados sem executá-lo ou descompactá-lo.",
           }),
         );
         return;
@@ -227,7 +227,7 @@
           "div",
           { class: `file-finding level-${finding.level}` },
           badge(titleCase(finding.level), finding.level === "warning" ? "warning" : finding.level === "note" ? "neutral" : "info"),
-          el("span", {}, finding.message),
+          el("span", {}, G.translateText(finding.message)),
         ),
       );
       const indicators = analysis.indicators || [];
@@ -237,8 +237,8 @@
         ["SHA-256", el("code", { class: "hash" }, analysis.hashes.sha256)],
         ["SHA-1", el("code", { class: "hash" }, analysis.hashes.sha1)],
         ["MD5", el("code", { class: "hash" }, analysis.hashes.md5)],
-        ["Magic bytes", el("code", {}, analysis.magic_hex)],
-        ["Entropy", `${analysis.entropy} / 8`],
+        ["Assinatura (magic bytes)", el("code", {}, analysis.magic_hex)],
+        ["Entropia", `${analysis.entropy} / 8`],
       ]);
 
       const sections = [];
@@ -246,32 +246,32 @@
         sections.push(
           panel(
             {
-              eyebrow: "ARCHIVE STRUCTURE",
-              title: `Members (${structure.entry_count})`,
-              caption: "Listed only; never extracted",
+              eyebrow: "ESTRUTURA DO PACOTE",
+              title: `Membros (${structure.entry_count})`,
+              caption: "Somente listados; nunca extraídos",
             },
             table({
               columns: [
-                { label: "NAME", render: (row) => el("code", { class: "reference-code" }, row.name) },
-                { label: "SIZE", render: (row) => formatBytes(row.size_bytes) },
+                { label: "NOME", render: (row) => el("code", { class: "reference-code" }, row.name) },
+                { label: "TAMANHO", render: (row) => formatBytes(row.size_bytes) },
                 {
-                  label: "RATIO",
+                  label: "TAXA",
                   className: "numeric-col",
                   render: (row) => (row.ratio === null ? "—" : `${row.ratio}×`),
                 },
                 {
-                  label: "FLAGS",
+                  label: "SINALIZADORES",
                   render: (row) =>
                     el(
                       "div",
                       { class: "row-actions" },
-                      row.path_traversal ? badge("Traversal", "warning") : null,
-                      row.encrypted ? badge("Encrypted", "neutral") : null,
+                      row.path_traversal ? badge("Travessia de caminho", "warning") : null,
+                      row.encrypted ? badge("Criptografado", "neutral") : null,
                     ),
                 },
               ],
               rows: structure.entries,
-              emptyMessage: "No members.",
+              emptyMessage: "Nenhum membro.",
             }),
           ),
         );
@@ -280,7 +280,7 @@
         const header = structure.header;
         sections.push(
           panel(
-            { eyebrow: "BINARY HEADER", title: analysis.format_label },
+            { eyebrow: "CABEÇALHO BINÁRIO", title: analysis.format_label },
             G.kvList(
               Object.entries(header)
                 .filter(([, value]) => value !== "" && value !== null && !Array.isArray(value))
@@ -289,9 +289,9 @@
             header.segments?.length
               ? table({
                   columns: [
-                    { label: "SEGMENT", render: (row) => el("code", {}, row.name || "—") },
-                    { label: "VM SIZE", render: (row) => formatBytes(row.vm_size || 0) },
-                    { label: "FILE SIZE", render: (row) => formatBytes(row.file_size || 0) },
+                    { label: "SEGMENTO", render: (row) => el("code", {}, row.name || "—") },
+                    { label: "TAMANHO VM", render: (row) => formatBytes(row.vm_size || 0) },
+                    { label: "TAMANHO NO ARQUIVO", render: (row) => formatBytes(row.file_size || 0) },
                   ],
                   rows: header.segments,
                 })
@@ -299,9 +299,9 @@
             header.architectures?.length
               ? table({
                   columns: [
-                    { label: "ARCHITECTURE", render: (row) => row.cpu },
-                    { label: "OFFSET", render: (row) => `0x${Number(row.offset).toString(16)}` },
-                    { label: "SIZE", render: (row) => formatBytes(row.size) },
+                    { label: "ARQUITETURA", render: (row) => row.cpu },
+                    { label: "DESLOCAMENTO", render: (row) => `0x${Number(row.offset).toString(16)}` },
+                    { label: "TAMANHO", render: (row) => formatBytes(row.size) },
                   ],
                   rows: header.architectures,
                 })
@@ -320,8 +320,8 @@
         sections.push(
           panel(
             {
-              eyebrow: "BINARY HARDENING",
-              title: `${hardening.enabled_count} enabled · ${hardening.missing_count} not found`,
+              eyebrow: "PROTEÇÕES DO BINÁRIO",
+              title: `${hardening.enabled_count} ativas · ${hardening.missing_count} não encontradas`,
               caption: `${hardening.detail} · ${hardening.engine}`,
             },
             el(
@@ -342,7 +342,7 @@
               ),
             ),
             ...(hardening.limitations || []).map((limit) =>
-              el("p", { class: "tool-limit" }, limit),
+              el("p", { class: "tool-limit" }, G.translateText(limit)),
             ),
           ),
         );
@@ -350,13 +350,13 @@
       if (structure.sections?.length) {
         sections.push(
           panel(
-            { eyebrow: "SECTIONS", title: `${structure.sections.length} parsed` },
+            { eyebrow: "SEÇÕES", title: `${structure.sections.length} analisadas` },
             table({
               columns: [
-                { label: "SECTION", render: (row) => el("code", {}, row.name || "—") },
-                { label: "TYPE", render: (row) => String(row.type) },
-                { label: "OFFSET", render: (row) => `0x${Number(row.offset).toString(16)}` },
-                { label: "SIZE", render: (row) => formatBytes(row.size_bytes) },
+                { label: "SEÇÃO", render: (row) => el("code", {}, row.name || "—") },
+                { label: "TIPO", render: (row) => String(row.type) },
+                { label: "DESLOCAMENTO", render: (row) => `0x${Number(row.offset).toString(16)}` },
+                { label: "TAMANHO", render: (row) => formatBytes(row.size_bytes) },
               ],
               rows: structure.sections,
             }),
@@ -366,17 +366,17 @@
       if (structure.gzip) {
         sections.push(
           panel(
-            { eyebrow: "GZIP STREAM", title: "Bounded decompression preview" },
+            { eyebrow: "FLUXO GZIP", title: "Prévia de descompressão limitada" },
             G.kvList(
               Object.entries(structure.gzip).map(([key, value]) => [
                 titleCase(key),
-                typeof value === "boolean" ? (value ? "Yes" : "No") : String(value),
+                typeof value === "boolean" ? (value ? "Sim" : "Não") : String(value),
               ]),
             ),
             el(
               "p",
               { class: "panel-note" },
-              "The preview is capped at 1 MiB and is never written to disk.",
+              "A prévia é limitada a 1 MiB e nunca é gravada em disco.",
             ),
           ),
         );
@@ -384,7 +384,7 @@
       if (structure.image) {
         sections.push(
           panel(
-            { eyebrow: "IMAGE STRUCTURE", title: "Dimensions" },
+            { eyebrow: "ESTRUTURA DA IMAGEM", title: "Dimensões" },
             G.kvList(Object.entries(structure.image).map(([key, value]) => [titleCase(key), String(value)])),
           ),
         );
@@ -392,7 +392,7 @@
       if (structure.version || structure.approximate_page_count !== undefined) {
         sections.push(
           panel(
-            { eyebrow: "PDF STRUCTURE", title: "Document facts" },
+            { eyebrow: "ESTRUTURA DO PDF", title: "Dados do documento" },
             G.kvList(
               Object.entries(structure).map(([key, value]) => [titleCase(key), String(value)]),
             ),
@@ -402,7 +402,7 @@
       if (analysis.imports?.length) {
         sections.push(
           panel(
-            { eyebrow: "STATIC IMPORTS", title: `${analysis.imports.length} referenced` },
+            { eyebrow: "IMPORTAÇÕES ESTÁTICAS", title: `${analysis.imports.length} referenciadas` },
             el("div", { class: "chip-list" }, ...analysis.imports.map((item) => el("code", {}, item))),
           ),
         );
@@ -415,7 +415,7 @@
           el(
             "div",
             {},
-            el("p", { class: "eyebrow" }, "STATIC ANALYSIS"),
+            el("p", { class: "eyebrow" }, "ANÁLISE ESTÁTICA"),
             el("h2", {}, analysis.file_name),
             el(
               "div",
@@ -424,8 +424,8 @@
               badge(analysis.media_type, "neutral"),
               el("span", {}, formatBytes(analysis.size_bytes)),
               analysis.investigation_id
-                ? el("a", { class: "table-link", href: `#/investigations/${analysis.investigation_id}` }, "Open case")
-                : el("span", {}, "Workspace history"),
+                ? el("a", { class: "table-link", href: `#/investigations/${analysis.investigation_id}` }, "Abrir caso")
+                : el("span", {}, "Histórico do workspace"),
               el("span", {}, formatDate(analysis.created_at, { time: true })),
             ),
           ),
@@ -433,9 +433,9 @@
             "div",
             { class: "row-actions" },
             analysis.investigation_id
-              ? button("Attach as evidence", attachEvidence, { variant: "button-primary" })
+              ? button("Anexar como evidência", attachEvidence, { variant: "button-primary" })
               : null,
-            button("Clear", () => {
+            button("Limpar", () => {
               analysis = null;
               drawResult();
             }),
@@ -445,90 +445,90 @@
           "div",
           { class: "metric-grid compact-metrics" },
           metric({
-            label: "FORMAT",
+            label: "FORMATO",
             value: analysis.format_label,
             foot: analysis.media_type,
             icon: "▧",
             tone: "blue",
           }),
           metric({
-            label: "SIZE",
+            label: "TAMANHO",
             value: formatBytes(analysis.size_bytes),
-            foot: `${analysis.strings.count} strings sampled`,
+            foot: `${analysis.strings.count} strings amostradas`,
             icon: "◫",
             tone: "violet",
           }),
           metric({
-            label: "ENTROPY",
+            label: "ENTROPIA",
             value: String(analysis.entropy),
-            foot: "Bits per byte",
+            foot: "Bits por byte",
             icon: "◈",
             tone: analysis.entropy >= 7.2 ? "amber" : "green",
           }),
           metric({
-            label: "INDICATORS",
+            label: "INDICADORES",
             value: String(indicators.length),
-            foot: "Syntactic string matches",
+            foot: "Correspondências sintáticas em strings",
             icon: "⌁",
             tone: "amber",
           }),
         ),
-        panel({ eyebrow: "FINDINGS", title: "Static observations" }, ...findings),
+        panel({ eyebrow: "ACHADOS", title: "Observações estáticas" }, ...findings),
         el(
           "div",
           { class: "detail-grid" },
-          panel({ eyebrow: "INTEGRITY", title: "Digests" }, hashRows),
+          panel({ eyebrow: "INTEGRIDADE", title: "Hashes" }, hashRows),
           panel(
-            { eyebrow: "METADATA", title: "Extracted properties" },
+            { eyebrow: "METADADOS", title: "Propriedades extraídas" },
             metadataPairs.length
               ? G.kvList(metadataPairs.slice(0, 80))
-              : el("p", { class: "panel-empty" }, "No metadata extracted."),
+              : el("p", { class: "panel-empty" }, "Nenhum metadado extraído."),
           ),
         ),
         ...sections,
         panel(
           {
-            eyebrow: "EMBEDDED INDICATORS",
-            title: `Syntactic matches (${indicators.length})`,
-            caption: "Not reputation-checked",
+            eyebrow: "INDICADORES EMBUTIDOS",
+            title: `Correspondências sintáticas (${indicators.length})`,
+            caption: "Sem verificação de reputação",
           },
           indicators.length
             ? table({
                 columns: [
-                  { label: "TYPE", render: (row) => badge(G.indicatorTypeLabel(row.type), "info") },
-                  { label: "VALUE", render: (row) => el("code", { class: "reference-code" }, row.value) },
-                  { label: "NOTE", render: (row) => row.note },
+                  { label: "TIPO", render: (row) => badge(G.indicatorTypeLabel(row.type), "info") },
+                  { label: "VALOR", render: (row) => el("code", { class: "reference-code" }, row.value) },
+                  { label: "NOTA", render: (row) => row.note },
                 ],
                 rows: indicators,
               })
-            : el("p", { class: "panel-empty" }, "No indicators matched the extracted strings."),
+            : el("p", { class: "panel-empty" }, "Nenhum indicador corresponde às strings extraídas."),
         ),
         panel(
           {
             eyebrow: "STRINGS",
-            title: `Sample (${analysis.strings.count})`,
-            caption: analysis.strings.truncated ? "truncated at limit" : "complete sample",
+            title: `Amostra (${analysis.strings.count})`,
+            caption: analysis.strings.truncated ? "truncado no limite" : "complete sample",
           },
           el(
             "pre",
             { class: "code-block strings-block" },
             analysis.strings.items
               .map((item) => `0x${item.offset.toString(16).padStart(6, "0")}  ${item.value}`)
-              .join("\n") || "No printable strings.",
+              .join("\n") || "Nenhuma string imprimível.",
           ),
         ),
         panel(
-          { eyebrow: "LIMITATIONS", title: "Analytical limits" },
+          { eyebrow: "LIMITAÇÕES", title: "Limites analíticos" },
           el(
             "ul",
             { class: "plain-list" },
-            ...analysis.limitations.map((limitation) => el("li", {}, limitation)),
+            ...analysis.limitations.map((limitation) => el("li", {}, G.translateText(limitation))),
           ),
         ),
         el(
           "details",
           { class: "raw-details" },
-          el("summary", {}, "Raw structure (JSON)"),
+          el("summary", {}, "Estrutura bruta (JSON)"),
           el("pre", { class: "code-block" }, JSON.stringify(analysis.structure, null, 2)),
         ),
       );
@@ -538,15 +538,15 @@
       historyHost.replaceChildren(
         panel(
           {
-            eyebrow: "HISTORY",
-            title: "Analysis records",
-            caption: `${analyses.items.length} of ${analyses.total}`,
+            eyebrow: "HISTÓRICO",
+            title: "Registros de análise",
+            caption: `${analyses.items.length} de ${analyses.total}`,
           },
           analyses.items.length
             ? table({
                 columns: [
                   {
-                    label: "FILE",
+                    label: "ARQUIVO",
                     render: (row) =>
                       el(
                         "div",
@@ -555,75 +555,75 @@
                         el("span", {}, row.format),
                       ),
                   },
-                  { label: "SIZE", render: (row) => formatBytes(row.size_bytes) },
+                  { label: "TAMANHO", render: (row) => formatBytes(row.size_bytes) },
                   {
                     label: "SHA-256",
                     render: (row) => el("code", { class: "hash" }, row.sha256.slice(0, 16)),
                   },
                   {
-                    label: "CASE",
+                    label: "CASO",
                     render: (row) =>
                       row.investigation_id
                         ? el("a", { class: "table-link", href: `#/investigations/${row.investigation_id}` }, row.investigation_name || shortId(row.investigation_id))
                         : "Workspace",
                   },
-                  { label: "ANALYSED", render: (row) => formatDate(row.created_at) },
-                  { label: "", render: (row) => button("Open", () => openAnalysis(row.id)) },
+                  { label: "ANÁLISE", render: (row) => formatDate(row.created_at) },
+                  { label: "", render: (row) => button("Abrir", () => openAnalysis(row.id)) },
                 ],
                 rows: analyses.items,
-                emptyMessage: "No files have been analysed yet.",
+                emptyMessage: "Nenhum arquivo foi analisado ainda.",
                 onRowClick: (row) => openAnalysis(row.id),
               })
-            : el("p", { class: "panel-empty" }, "No history yet."),
+            : el("p", { class: "panel-empty" }, "Nenhum histórico ainda."),
         ),
       );
     }
 
     root.append(
       pageHeader({
-        eyebrow: "FILE INTELLIGENCE",
-        title: "Static file analysis",
+        eyebrow: "ANÁLISE DE ARQUIVOS",
+        title: "Análise estática de arquivos",
         description:
-          "Identify format, hashes, metadata, archive structure, binary headers and embedded indicators without execution.",
-        actions: [button("↻ Refresh history", () => loadHistory())],
+          "Identifique formato, hashes, metadados, estrutura de pacotes, cabeçalhos binários e indicadores embutidos sem execução.",
+        actions: [button("Atualizar histórico", () => loadHistory())],
       }),
       el(
         "div",
         { class: "notice" },
-        "Nothing is executed, emulated or automatically extracted. Analysis is bounded and read-only; " +
-          "embedded indicators are syntactic matches, not reputation results.",
+        "Nada é executado, emulado ou extraído automaticamente. A análise é limitada e somente leitura; " +
+          "indicadores embutidos são correspondências sintáticas, não resultados de reputação.",
       ),
       el(
         "div",
         { class: "file-layout" },
         panel(
-          { eyebrow: "INPUT", title: "Analyse a file" },
+          { eyebrow: "ENTRADA", title: "Analisar um arquivo" },
           dropZone,
           selectedLabel,
           el(
             "div",
             { class: "field" },
-            el("label", {}, "Associate with investigation (optional)"),
+            el("label", {}, "Associar a uma investigação (opcional)"),
             caseSelect,
           ),
           el("div", { class: "toolbar-end" }, analyzeButton),
         ),
         panel(
-          { eyebrow: "SCOPE", title: "Supported static parsers" },
+          { eyebrow: "ESCOPO", title: "Analisadores estáticos suportados" },
           el(
             "ul",
             { class: "plain-list" },
-            el("li", {}, "PDF metadata, active-content declarations and approximate page count."),
-            el("li", {}, "ZIP/OOXML/EPUB/JAR/APK central directories, traversal and macro flags."),
-            el("li", {}, "TAR headers and GZIP bounded decompression preview."),
-            el("li", {}, "PNG, JPEG, GIF, WebP and BMP dimensions."),
-            el("li", {}, "ELF, PE and Mach-O headers, sections, imports and architecture."),
-            el("li", {}, "ASCII/UTF-16 strings, entropy and SHA-256/SHA-1/MD5."),
+            el("li", {}, "Metadados de PDF, declarações de conteúdo ativo e contagem aproximada de páginas."),
+            el("li", {}, "Diretórios centrais de ZIP/OOXML/EPUB/JAR/APK, travessia de caminho e sinalizadores de macro."),
+            el("li", {}, "Cabeçalhos TAR e prévia de descompressão GZIP limitada."),
+            el("li", {}, "Dimensões de PNG, JPEG, GIF, WebP e BMP."),
+            el("li", {}, "Cabeçalhos, seções, importações e arquitetura de ELF, PE e Mach-O."),
+            el("li", {}, "Strings ASCII/UTF-16, entropia e SHA-256/SHA-1/MD5."),
           ),
           el(
             "p",
             { class: "panel-note" },
-            "Deeper format support is tracked in the roadmap. Unsupported formats are identified, not guessed.",
+            "Suporte mais profundo a formatos está no roadmap. Formatos não suportados são identificados, não presumidos.",
           ),
         ),
       ),

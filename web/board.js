@@ -28,14 +28,14 @@
   };
   const KIND_LAYER = { note: "notes", text: "notes", group: "groups" };
   const LAYER_LABELS = {
-    people: "People",
-    accounts: "Accounts",
-    domains: "Domains",
-    ips: "IP addresses",
-    files: "Files",
-    notes: "Notes",
-    groups: "Groups",
-    other: "Other",
+    people: "Pessoas",
+    accounts: "Contas",
+    domains: "Domínios",
+    ips: "Endereços IP",
+    files: "Arquivos",
+    notes: "Notas",
+    groups: "Grupos",
+    other: "Outros",
   };
 
   function button(label, onClick, options = {}) {
@@ -81,40 +81,40 @@
       const investigations = await G.loadInvestigations(true);
       root.append(
         pageHeader({
-          eyebrow: "VISUAL ANALYSIS",
-          title: "Investigation board",
+          eyebrow: "ANÁLISE VISUAL",
+          title: "Quadro de investigação",
           description:
-            "Persisted layouts over shared entities. Open a case to arrange its board.",
+            "Layouts persistentes sobre entidades compartilhadas. Abra um caso para organizar seu quadro.",
         }),
         panel(
-          { eyebrow: "BOARDS", title: "Select an investigation" },
+          { eyebrow: "QUADROS", title: "Selecione uma investigação" },
           investigations.length
             ? table({
                 columns: [
                   {
-                    label: "INVESTIGATION",
+                    label: "INVESTIGAÇÃO",
                     render: (row) =>
                       el(
                         "div",
                         { class: "cell-stack" },
                         el("strong", {}, row.name),
-                        el("span", {}, row.description || "No description"),
+                        el("span", {}, row.description || "Sem descrição"),
                       ),
                   },
                   { label: "STATUS", render: (row) => G.statusBadge(row.status) },
-                  { label: "ENTITIES", className: "numeric-col", render: (row) => String(row.entity_count) },
-                  { label: "UPDATED", render: (row) => formatDate(row.updated_at) },
-                  { label: "", render: (row) => button("Open board", () => go("board", row.id)) },
+                  { label: "ENTIDADES", className: "numeric-col", render: (row) => String(row.entity_count) },
+                  { label: "ATUALIZAÇÃO", render: (row) => formatDate(row.updated_at) },
+                  { label: "", render: (row) => button("Abrir quadro", () => go("board", row.id)) },
                 ],
                 rows: investigations,
-                emptyMessage: "No investigations exist.",
+                emptyMessage: "Não há investigações.",
                 onRowClick: (row) => go("board", row.id),
               })
             : emptyState({
                 icon: "▦",
-                title: "No case boards",
-                description: "Create an investigation and link entities to start a board.",
-                action: button("Create investigation", () => G.newInvestigation(), {
+                title: "Nenhum quadro de caso",
+                description: "Crie uma investigação e vincule entidades para iniciar um quadro.",
+                action: button("Criar investigação", () => G.newInvestigation(), {
                   variant: "button-primary",
                 }),
               }),
@@ -145,7 +145,7 @@
     const canvas = el("div", {
       class: "board-canvas",
       tabindex: "0",
-      "aria-label": "Investigation board canvas",
+      "aria-label": "Área do quadro de investigação",
     });
     const world = el("div", { class: "board-world" });
     const edgeLayer = svgNode("svg", {
@@ -156,7 +156,7 @@
     });
     world.append(edgeLayer);
     canvas.append(world);
-    const statusLabel = el("span", { class: "board-status" }, "Loading…");
+    const statusLabel = el("span", { class: "board-status" }, "Carregando…");
     const toolbar = el("div", { class: "board-toolbar" });
     const inspector = el("aside", { class: "board-inspector" });
     const shell = el(
@@ -170,9 +170,9 @@
         el(
           "div",
           { class: "board-zoom" },
-          button("−", () => zoomBy(0.85), { title: "Zoom out" }),
-          button("＋", () => zoomBy(1.18), { title: "Zoom in" }),
-          button("Fit", () => fit(), { title: "Fit board" }),
+          button("−", () => zoomBy(0.85), { title: "Diminuir zoom" }),
+          button("＋", () => zoomBy(1.18), { title: "Aumentar zoom" }),
+          button("Ajustar", () => fit(), { title: "Ajustar quadro à tela" }),
         ),
       ),
       inspector,
@@ -199,14 +199,14 @@
       conflict = false;
       const investigation = investigations.find((item) => item.id === investigationId);
       header = pageHeader({
-        eyebrow: "INVESTIGATION BOARD",
+        eyebrow: "QUADRO DE INVESTIGAÇÃO",
         title: board.name,
-        description: investigation?.description || "Persisted visual workspace.",
+        description: investigation?.description || "Área de trabalho visual persistente.",
         actions: [
-          button("‹ All boards", () => go("board")),
-          button("Open case", () => go("investigations", investigationId)),
-          button("Graph", () => go("graph", investigationId)),
-          button("Save now", () => saveNow(), { variant: "button-primary" }),
+          button("‹ Todos os quadros", () => go("board")),
+          button("Abrir caso", () => go("investigations", investigationId)),
+          button("Grafo", () => go("graph", investigationId)),
+          button("Salvar agora", () => saveNow(), { variant: "button-primary" }),
         ],
       });
       root.replaceChildren(header, shell);
@@ -221,7 +221,7 @@
     function markDirty() {
       dirty = true;
       conflict = false;
-      setStatus("Unsaved changes", "is-dirty");
+      setStatus("Alterações não salvas", "is-dirty");
       window.clearTimeout(autosaveTimer);
       const delay = Math.max(
         300,
@@ -262,12 +262,12 @@
 
     async function saveNow() {
       if (!board || saving || !dirty) {
-        if (board && !dirty) setStatus("Saved", "is-saved");
+        if (board && !dirty) setStatus("Salvo", "is-saved");
         return;
       }
       window.clearTimeout(autosaveTimer);
       saving = true;
-      setStatus("Saving…", "is-saving");
+      setStatus("Salvando…", "is-saving");
       try {
         const result = await api(`/api/investigations/${investigationId}/board`, {
           method: "PUT",
@@ -277,17 +277,17 @@
         board.updated_at = result.board.updated_at;
         dirty = false;
         conflict = false;
-        setStatus(`Saved · revision ${board.revision}`, "is-saved");
+        setStatus(`Salvo · revisão ${board.revision}`, "is-saved");
         renderInspector();
       } catch (error) {
         if (error.status === 409) {
           conflict = true;
           renderToolbar();
-          setStatus("Revision conflict", "is-error");
-          toast("The board changed elsewhere. Reload to continue safely.", "error");
+          setStatus("Conflito de revisão", "is-error");
+          toast("O quadro foi alterado em outro lugar. Recarregue para continuar com segurança.", "error");
           renderInspector();
         } else {
-          setStatus("Save failed", "is-error");
+          setStatus("Falha ao salvar", "is-error");
           toast(error.message, "error");
         }
       } finally {
@@ -300,7 +300,7 @@
       renderWorld();
       renderInspector();
       setStatus(
-        dirty ? "Unsaved changes" : `Saved · revision ${board.revision}`,
+        dirty ? "Alterações não salvas" : `Salvo · revisão ${board.revision}`,
         dirty ? "is-dirty" : "is-saved",
       );
     }
@@ -310,7 +310,7 @@
         "select",
         {
           class: "input board-case-select",
-          "aria-label": "Switch investigation board",
+          "aria-label": "Trocar quadro de investigação",
           onChange: (event) => go("board", event.target.value),
         },
         ...G.state.investigations.map((item) =>
@@ -320,23 +320,23 @@
       toolbar.replaceChildren(
         investigationSelector,
         el("span", { class: "toolbar-divider" }),
-        button("＋ Entity", () => addEntity()),
-        button("＋ Note", () => addFreeElement("note")),
-        button("＋ Text", () => addFreeElement("text")),
-        button("＋ Group", () => addFreeElement("group")),
-        button("⟷ Connect", () => addConnection(), {
+        button("＋ Entidade", () => addEntity()),
+        button("＋ Nota", () => addFreeElement("note")),
+        button("＋ Texto", () => addFreeElement("text")),
+        button("＋ Grupo", () => addFreeElement("group")),
+        button("⟷ Conectar", () => addConnection(), {
           disabled: elements.length < 2,
-          title: elements.length < 2 ? "Add at least two elements" : "",
+          title: elements.length < 2 ? "Adicione pelo menos dois elementos" : "",
         }),
         el("span", { class: "toolbar-divider" }),
-        button("Arrange", () => arrange()),
-        button("Export SVG", () => exportSvg()),
+        button("Organizar", () => arrange()),
+        button("Exportar SVG", () => exportSvg()),
         el("span", { class: "toolbar-spacer" }),
         statusLabel,
       );
       if (conflict) {
         toolbar.append(
-          button("Reload", () => load(), { variant: "button-danger" }),
+          button("Recarregar", () => load(), { variant: "button-danger" }),
         );
       }
     }
@@ -414,7 +414,7 @@
           class: `board-node kind-${record.element_kind} layer-${record.layer}`,
           tabindex: "0",
           role: "button",
-          "aria-label": `${titleCase(record.element_kind)}: ${label}`,
+          "aria-label": `${G.statusLabel(record.element_kind)}: ${label}`,
           dataset: { id: record.id },
         },
         el(
@@ -620,7 +620,7 @@
 
     canvas.addEventListener("keydown", (event) => {
       if (!selection) return;
-      if (event.key === "Delete" || event.key === "Backspace") {
+      if (event.key === "Excluir" || event.key === "Backspace") {
         event.preventDefault();
         removeSelection();
       } else if (event.key === "Escape") {
@@ -639,7 +639,7 @@
 
     function onGlobalKey(event) {
       if (
-        (event.key === "Delete" || event.key === "Backspace") &&
+        (event.key === "Excluir" || event.key === "Backspace") &&
         selection &&
         !event.target.closest("input, textarea, select") &&
         !event.target.closest("[contenteditable='true']")
@@ -735,20 +735,20 @@
       if (!available.length) {
         toast(
           data.items.length
-            ? "All entities linked to this case are already on the board."
-            : "Link entities to this investigation first.",
+            ? "Todas as entidades vinculadas a este caso já estão no quadro."
+            : "Vincule entidades a esta investigação primeiro.",
           "error",
         );
         return;
       }
       await formDialog({
-        eyebrow: "ADD ENTITY",
-        title: "Place a shared entity",
-        description: "The board stores layout only; the entity record remains canonical.",
+        eyebrow: "ADICIONAR ENTIDADE",
+        title: "Posicionar uma entidade compartilhada",
+        description: "O quadro armazena apenas o layout; o registro da entidade permanece canônico.",
         fields: [
           {
             name: "entity_id",
-            label: "Entity",
+            label: "Entidade",
             type: "select",
             options: available.map((entity) => [
               entity.id,
@@ -756,10 +756,10 @@
             ]),
           },
         ],
-        submitLabel: "Add to board",
+        submitLabel: "Adicionar ao quadro",
         onSubmit: async (values) => {
           const entity = available.find((item) => item.id === values.entity_id);
-          if (!entity) throw new Error("Select an entity.");
+          if (!entity) throw new Error("Selecione uma entidade.");
           const center = viewportCenter();
           elements.push({
             id: uid("el"),
@@ -788,31 +788,31 @@
 
     async function addFreeElement(kind) {
       await formDialog({
-        eyebrow: `ADD ${kind.toUpperCase()}`,
+        eyebrow: `ADICIONAR ${G.statusLabel(kind).toUpperCase()}`,
         title:
-          kind === "note" ? "Add an analyst note" : kind === "text" ? "Add a text block" : "Add a group frame",
-        description: "Notes and groups are board-local presentation elements.",
+          kind === "note" ? "Adicionar nota do analista" : kind === "text" ? "Adicionar bloco de texto" : "Adicionar moldura de grupo",
+        description: "Notas e grupos são elementos de apresentação locais do quadro.",
         fields: [
           {
             name: "label",
-            label: "Label",
+            label: "Rótulo",
             required: true,
             maxlength: 300,
-            placeholder: kind === "group" ? "Cluster name" : "Short title",
+            placeholder: kind === "group" ? "Nome do agrupamento" : "Título curto",
           },
           ...(kind === "group"
             ? []
             : [
                 {
                   name: "content",
-                  label: "Content",
+                  label: "Conteúdo",
                   type: "textarea",
                   rows: 4,
-                  placeholder: "Analyst annotation. Not a sourced observation.",
+                  placeholder: "Anotação do analista. Não é uma observação com fonte.",
                 },
               ]),
         ],
-        submitLabel: "Add",
+        submitLabel: "Adicionar",
         onSubmit: async (values) => {
           const center = viewportCenter();
           const record = {
@@ -839,35 +839,35 @@
 
     async function addConnection() {
       if (elements.length < 2) {
-        toast("Add at least two elements before connecting.", "error");
+        toast("Adicione pelo menos dois elementos antes de conectar.", "error");
         return;
       }
       const options = elements.map((record) => [
         record.id,
-        `${record.label || record.element_kind} (${record.element_kind})`,
+        `${record.label || G.statusLabel(record.element_kind)} (${G.statusLabel(record.element_kind)})`,
       ]);
       const typeOptions = (G.RELATIONSHIP_TYPES || []).map(([value, label]) => [value, label]);
       await formDialog({
-        eyebrow: "BOARD CONNECTION",
-        title: "Connect two elements",
+        eyebrow: "CONEXÃO DO QUADRO",
+        title: "Conectar dois elementos",
         description:
-          "If the two entities share a recorded relationship, the board connection references it.",
+          "Se as duas entidades tiverem um relacionamento registrado, a conexão do quadro faz referência a ele.",
         fields: [
-          { name: "source_element_id", label: "Source", type: "select", options },
-          { name: "target_element_id", label: "Target", type: "select", options },
+          { name: "source_element_id", label: "Fonte", type: "select", options },
+          { name: "target_element_id", label: "Destino", type: "select", options },
           {
             name: "connection_type",
-            label: "Type",
+            label: "Tipo",
             type: "select",
             options: typeOptions,
             value: "connected-to",
           },
-          { name: "label", label: "Label", maxlength: 300 },
+          { name: "label", label: "Rótulo", maxlength: 300 },
         ],
-        submitLabel: "Connect",
+        submitLabel: "Conectar",
         onSubmit: async (values) => {
           if (values.source_element_id === values.target_element_id) {
-            throw new Error("Choose two different elements.");
+            throw new Error("Escolha dois elementos diferentes.");
           }
           if (
             connections.some(
@@ -878,7 +878,7 @@
                   record.target_element_id === values.source_element_id),
             )
           ) {
-            throw new Error("These elements are already connected.");
+            throw new Error("Estes elementos já estão conectados.");
           }
           const source = nodeById(values.source_element_id);
           const target = nodeById(values.target_element_id);
@@ -947,28 +947,28 @@
           class: "input",
           value: record.label,
           maxlength: 300,
-          "aria-label": "Element label",
+          "aria-label": "Rótulo do elemento",
         });
         const content = el("textarea", {
           class: "input",
           rows: 4,
           maxlength: 5000,
-          placeholder: isEntity ? "Board annotation" : "Element content",
-          "aria-label": "Element content",
+          placeholder: isEntity ? "Anotação do quadro" : "Conteúdo do elemento",
+          "aria-label": "Conteúdo do elemento",
         });
         content.value = record.content || "";
         const layer = el(
           "select",
-          { class: "input", "aria-label": "Element layer" },
+          { class: "input", "aria-label": "Camada do elemento" },
           ...Object.entries(LAYER_LABELS).map(([value, text]) =>
             el("option", { value, selected: value === record.layer }, text),
           ),
         );
         const applyButton = button(
-          "Apply changes",
+          "Aplicar alterações",
           () => {
             if (!label.value.trim()) {
-              toast("A label is required.", "error");
+              toast("Um rótulo é obrigatório.", "error");
               return;
             }
             record.label = label.value.trim();
@@ -981,29 +981,29 @@
         );
         inspector.replaceChildren(
           panel(
-            { eyebrow: isEntity ? "ENTITY ELEMENT" : titleCase(record.element_kind), title: record.label || "Untitled" },
+            { eyebrow: isEntity ? "ELEMENTO DE ENTIDADE" : titleCase(record.element_kind), title: record.label || "Sem título" },
             isEntity
               ? G.kvList([
-                  ["Entity", record.entity_name],
-                  ["Category", entityTypeLabel(record.entity_type)],
-                  ["Identifier", record.entity_identifier || "—"],
-                  ["Verification", G.statusBadge(record.entity_verification || "not-verified")],
+                  ["Entidade", record.entity_name],
+                  ["Categoria", entityTypeLabel(record.entity_type)],
+                  ["Identificador", record.entity_identifier || "—"],
+                  ["Verificação", G.statusBadge(record.entity_verification || "not-verified")],
                 ])
               : null,
-            el("div", { class: "field" }, el("label", {}, "Label"), label),
-            el("div", { class: "field" }, el("label", {}, "Content"), content),
-            el("div", { class: "field" }, el("label", {}, "Layer"), layer),
+            el("div", { class: "field" }, el("label", {}, "Rótulo"), label),
+            el("div", { class: "field" }, el("label", {}, "Conteúdo"), content),
+            el("div", { class: "field" }, el("label", {}, "Camada"), layer),
             el("div", { class: "inspector-actions" }, applyButton),
             isEntity
-              ? button("Open entity record", () => go("entities", record.entity_id))
+              ? button("Abrir registro da entidade", () => go("entities", record.entity_id))
               : null,
-            button("Remove from board", () => removeSelection(), {
+            button("Remover do quadro", () => removeSelection(), {
               variant: "button-danger",
             }),
             el(
               "p",
               { class: "panel-note" },
-              "Removing a board element never deletes the shared entity or its relationships.",
+              "Remover um elemento do quadro nunca exclui a entidade compartilhada nem seus relacionamentos.",
             ),
           ),
         );
@@ -1017,7 +1017,7 @@
         }
         const type = el(
           "select",
-          { class: "input", "aria-label": "Connection type" },
+          { class: "input", "aria-label": "Tipo de conexão" },
           ...(G.RELATIONSHIP_TYPES || []).map(([value, label]) =>
             el("option", { value, selected: value === record.connection_type }, label),
           ),
@@ -1026,35 +1026,35 @@
           class: "input",
           value: record.label || "",
           maxlength: 300,
-          "aria-label": "Connection label",
+          "aria-label": "Rótulo da conexão",
         });
         const source = nodeById(record.source_element_id);
         const target = nodeById(record.target_element_id);
         inspector.replaceChildren(
           panel(
-            { eyebrow: "CONNECTION", title: `${source?.label || "?"} → ${target?.label || "?"}` },
+            { eyebrow: "CONEXÃO", title: `${source?.label || "?"} → ${target?.label || "?"}` },
             G.kvList([
-              ["Type", relationshipLabel(record.connection_type)],
+              ["Tipo", relationshipLabel(record.connection_type)],
               [
-                "Shared relationship",
+                "Relacionamento compartilhado",
                 record.relationship_id
                   ? el("code", { class: "hash" }, shortId(record.relationship_id))
-                  : "Layout-only connection",
+                  : "Conexão apenas visual",
               ],
               [
-                "Verification",
+                "Verificação",
                 record.relationship_verification
                   ? G.statusBadge(record.relationship_verification)
-                  : "Not recorded",
+                  : "Não registrado",
               ],
             ]),
-            el("div", { class: "field" }, el("label", {}, "Type"), type),
-            el("div", { class: "field" }, el("label", {}, "Label"), label),
+            el("div", { class: "field" }, el("label", {}, "Tipo"), type),
+            el("div", { class: "field" }, el("label", {}, "Rótulo"), label),
             el(
               "div",
               { class: "inspector-actions" },
               button(
-                "Apply",
+                "Aplicar",
                 () => {
                   record.connection_type = type.value;
                   record.label = label.value;
@@ -1063,16 +1063,16 @@
                 },
                 { variant: "button-primary" },
               ),
-              button("Delete connection", () => removeSelection(), {
+              button("Excluir conexão", () => removeSelection(), {
                 variant: "button-danger",
               }),
             ),
             record.relationship_id
-              ? button("Open relationship context", () => go("investigations", investigationId))
+              ? button("Abrir contexto do relacionamento", () => go("investigations", investigationId))
               : el(
                   "p",
                   { class: "panel-note" },
-                  "This connection is presentation-only. Record a relationship in the case to make it part of the intelligence graph.",
+                  "Esta conexão é apenas visual. Registre um relacionamento no caso para que ela faça parte do grafo de inteligência.",
                 ),
           ),
         );
@@ -1100,23 +1100,23 @@
         class: "input",
         value: board.name,
         maxlength: 200,
-        "aria-label": "Board name",
+        "aria-label": "Nome do quadro",
       });
       inspector.replaceChildren(
         panel(
-          { eyebrow: "BOARD", title: "Layout properties" },
+          { eyebrow: "QUADRO", title: "Propriedades do layout" },
           G.kvList([
-            ["Revision", String(board.revision)],
-            ["Elements", String(elements.length)],
-            ["Connections", String(connections.length)],
-            ["Updated", formatDate(board.updated_at, { time: true })],
+            ["Revisão", String(board.revision)],
+            ["Elementos", String(elements.length)],
+            ["Conexões", String(connections.length)],
+            ["Atualização", formatDate(board.updated_at, { time: true })],
           ]),
-          el("div", { class: "field" }, el("label", {}, "Board name"), nameInput),
+          el("div", { class: "field" }, el("label", {}, "Nome do quadro"), nameInput),
           button(
-            "Rename board",
+            "Renomear quadro",
             () => {
               if (!nameInput.value.trim()) {
-                toast("A board name is required.", "error");
+                toast("Um nome de quadro é obrigatório.", "error");
                 return;
               }
               board.name = nameInput.value.trim();
@@ -1129,26 +1129,26 @@
           ),
         ),
         panel(
-          { eyebrow: "LAYERS", title: "Visibility" },
+          { eyebrow: "CAMADAS", title: "Visibilidade" },
           el("div", { class: "layer-list" }, ...layerToggles),
           el(
             "p",
             { class: "panel-note" },
-            "Hidden layers stay in the saved board and are not deleted.",
+            "Camadas ocultas permanecem no quadro salvo e não são excluídas.",
           ),
         ),
         panel(
-          { eyebrow: "SYNC", title: "Persistence" },
+          { eyebrow: "SINCRONIZAÇÃO", title: "Persistência" },
           el(
             "p",
             { class: "panel-note" },
-            `Autosave after ${Math.round(
+            `Salvamento automático após ${Math.round(
               Number(G.state.settings?.["board.autosave_delay_ms"] || 1200) / 1000,
-            )}s of inactivity. Saves use optimistic revisions to prevent overwriting another session.`,
+            )}s de inatividade. Os salvamentos usam revisões otimistas para evitar sobrescrever outra sessão.`,
           ),
-          button("Save now", () => saveNow(), { variant: "button-primary" }),
+          button("Salvar agora", () => saveNow(), { variant: "button-primary" }),
           conflict
-            ? button("Reload from server", () => load(), { variant: "button-danger" })
+            ? button("Recarregar do servidor", () => load(), { variant: "button-danger" })
             : null,
         ),
       );
@@ -1160,7 +1160,7 @@
 
     function exportSvg() {
       if (!elements.length) {
-        toast("The board is empty.", "error");
+        toast("O quadro está vazio.", "error");
         return;
       }
       const padding = 80;
@@ -1230,7 +1230,7 @@
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(link.href), 2000);
-      toast("Board exported as SVG.");
+      toast("Quadro exportado como SVG.");
     }
 
     /* ------------------------------------------------------------ */
@@ -1238,7 +1238,7 @@
     /* ------------------------------------------------------------ */
 
     G.setLoading(true);
-    root.replaceChildren(loadingBlock("Opening investigation board…"));
+    root.replaceChildren(loadingBlock("Abrindo quadro de investigação…"));
     try {
       await load();
     } catch (error) {
@@ -1247,9 +1247,9 @@
           "div",
           { class: "empty-state" },
           el("span", { class: "empty-icon", "aria-hidden": "true" }, "!"),
-          el("h2", {}, "Board unavailable"),
+          el("h2", {}, "Quadro indisponível"),
           el("p", {}, error.message),
-          button("Retry", () => renderBoardCanvas(root, investigationId), {
+          button("Tentar novamente", () => renderBoardCanvas(root, investigationId), {
             variant: "button-primary",
           }),
         ),
