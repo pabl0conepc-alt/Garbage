@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import ipaddress
+import os
 import socket
 import ssl
 import time
@@ -151,9 +152,29 @@ class _PinnedHTTPConnection(http.client.HTTPConnection):
         self.sock = socket.create_connection((self._address, self.port), self.timeout)
 
 
+_CA_BUNDLE_CANDIDATES = (
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/ssl/cert.pem",
+    "/etc/ssl/ca-bundle.pem",
+)
+
+
+def tls_context() -> ssl.SSLContext:
+    """Verified TLS context; finds the system CA bundle when the interpreter's
+    compiled-in default path does not exist (standalone Python on NixOS)."""
+    context = ssl.create_default_context()
+    if context.cert_store_stats().get("x509_ca", 0) == 0:
+        for candidate in _CA_BUNDLE_CANDIDATES:
+            if os.path.isfile(candidate):
+                context.load_verify_locations(cafile=candidate)
+                break
+    return context
+
+
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     def __init__(self, host: str, address: str, port: int, timeout: float) -> None:
-        super().__init__(host, port, timeout=timeout, context=ssl.create_default_context())
+        super().__init__(host, port, timeout=timeout, context=tls_context())
         self._address = address
 
     def connect(self) -> None:

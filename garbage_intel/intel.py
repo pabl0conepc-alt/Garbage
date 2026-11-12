@@ -613,3 +613,7 @@ register_connector(
         run=_workspace_connector,
     )
 )
+
+# Public network connectors register themselves on import. Imported last so
+# the registry and Finding types above are fully defined.
+from .modules import intel_connectors as _intel_connectors  # noqa: E402,F401

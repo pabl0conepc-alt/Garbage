@@ -163,12 +163,12 @@ Mantendo o design system monocromático do PR #8:
 | Fase | Entrega | Depende de |
 | --- | --- | --- |
 | 1 | Cliente HTTP seguro (anti-SSRF), cache, limitador, tabelas `intel_*`, registro de conectores — **concluída** (`net.py`, `intel.py`, migração 4) | — |
-| 2 | Conectores sem chave: RDAP, DNS, crt.sh, Wayback, Team Cymru, URLhaus, ThreatFox, EPSS | 1 |
+| 2 | Conectores sem chave: RDAP, DNS, crt.sh, Wayback, Team Cymru, EPSS e KEV local — **concluída** (`modules/intel_connectors.py`). URLhaus e ThreatFox passaram para a fase 7: a abuse.ch agora exige Auth-Key em todas as APIs | 1 |
 | 3 | Multi-Source Search + painel de fontes (backend e UI) | 2 |
 | 4 | Inteligência de domínio, IP/ASN, certificados e web | 2 |
 | 5 | Pivô no grafo + algoritmos C++ | 3, 4 |
 | 6 | Motores de arquivo: YARA (C), TLSH/ssdeep (C), scanner de assinaturas (Rust), formatos novos | — (paralelo) |
-| 7 | Conectores com chave do usuário (VirusTotal, AbuseIPDB, Shodan, GreyNoise, OTX) | 1 |
+| 7 | Conectores com chave do usuário (VirusTotal, AbuseIPDB, Shodan, GreyNoise, OTX, URLhaus, ThreatFox) | 1 |
 | 8 | ATT&CK offline, exportação STIX/MISP, typosquatting em Rust | 2 |
 | 9 | Monitoramento local e notificações | 3 |
 | 10 | FTS5, revisão de acessibilidade, testes de ponta a ponta, documentação, atualização da matriz OpenArchive | todas |
