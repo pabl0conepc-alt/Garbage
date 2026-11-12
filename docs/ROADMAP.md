@@ -1,0 +1,175 @@
+# Roadmap and phase status
+
+This roadmap separates **implemented and tested** work from **planned** work.
+A phase is not complete because a page or button exists. The module registry
+marks unimplemented capabilities as `planned` and refuses to enable them.
+
+## Phase status at a glance
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 1 | Audit and baseline | Complete |
+| 2 | Architecture and OpenArchive scope | Complete (documentation) |
+| 3 | Core data and API | Complete |
+| 4 | Entities, sources, relationships, search | Complete for the implemented scope |
+| 5 | Evidence and file/media intelligence | Partial: PDF, documents, archives, images, ELF/PE/Mach-O; no full media forensics |
+| 6 | CTI/OSINT | Partial: manual indicators and CISA KEV; no external OSINT collectors |
+| 7 | Automation and plugin SDK | Not started (contract documented only) |
+| 8 | Native C/C++/Rust engines | Not started |
+| 9 | Workstation UI | Complete for enabled modules; no UI for planned modules |
+| 10 | Testing and hardening | Partial: 84 Python tests plus jsdom route smoke; no browser E2E in this environment |
+| 11 | Documentation and release | Partial: docs and README updated; branch/PR prepared |
+
+## Phase 1 — audit
+
+Delivered:
+
+- Full inventory of the original Python/SQLite/vanilla-JS application.
+- Baseline suite (47–48 tests at audit time) and known limitations recorded.
+- Preservation of the v1 database shape and additive migrations.
+
+## Phase 2 — architecture and reference scope
+
+Delivered:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [OPENARCHIVE_FEATURE_MATRIX.md](OPENARCHIVE_FEATURE_MATRIX.md)
+- Explicit decision that OpenArchive Save is the only verified reference and
+  that OSINT/CTI scope is GARBAGE-native.
+
+## Phase 3 — core
+
+Delivered:
+
+- Typed errors and shared validation.
+- Additive schema v2/v3, settings and module registry.
+- Investigation lifecycle, observations, timeline, report and export routes.
+- Loopback host/origin enforcement, body caps and static asset allowlist.
+- CLI and zipapp remain functional.
+
+## Phase 4 — intelligence records
+
+Delivered:
+
+- Canonical entity registry with aliases, types, confidence and verification.
+- Relationships with direction, confidence, provenance and cycle-safe deletion.
+- Source registry, case links and entity links.
+- Cross-record search grouped by record type.
+- Indicator extraction with source provenance and exact-value correlation.
+
+Not delivered:
+
+- Ranked FTS5 search.
+- Bulk import formats (STIX, CSV mapping, MISP).
+
+## Phase 5 — evidence and files
+
+Delivered:
+
+- Evidence upload, SHA-256 integrity, verification, download and preview.
+- Image structure inspection.
+- File Intelligence: bounded static analysis, 4 MiB cap, format detection,
+  hashes, entropy, strings, PDF metadata, OOXML/archive listings, TAR/GZIP,
+  image dimensions, ELF/PE/Mach-O headers/sections/imports, findings,
+  indicators, persistence and history API/UI.
+- Evidence attachment from an analysis (with its own integrity record).
+
+Not delivered:
+
+- Full EXIF/XMP/IPTC media forensics.
+- Video/audio container parsing.
+- Malware disassembly, emulation or execution.
+- Native high-throughput engines.
+
+## Phase 6 — CTI/OSINT
+
+Delivered:
+
+- Manual indicator assessment with confidence and rationale.
+- CISA KEV read-only catalogue: explicit refresh, bounded download, offline
+  cache, provenance and failure reporting.
+
+Not delivered:
+
+- Website, domain, IP and DNS collectors.
+- NVD connector (registered as planned).
+- STIX/TAXII, MITRE ATT&CK, MISP.
+- Any collection that would bypass authorization or rate limits.
+
+## Phase 7 — automation and SDK
+
+Not delivered. [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md) defines the
+contract and safety constraints. There is intentionally no dynamic plugin
+loader, scheduler or flow runner yet, because executing arbitrary code from a
+workspace directory is a security boundary that needs explicit design and
+tests.
+
+## Phase 8 — native engines
+
+Not delivered. No C, C++ or Rust source is present and no native library is
+loaded. The C ABI and fallback contract is documented in
+[ARCHITECTURE.md](ARCHITECTURE.md). A first candidate is a C byte-reader for
+bounded header parsing, with the Python implementation retained as fallback and
+the same fixtures used for both.
+
+## Phase 9 — UI
+
+Delivered:
+
+- Dark investigation workstation shell with responsive navigation.
+- Overview, cases, case file, activity, entities, indicators, evidence,
+  sources, reports, modules, settings, CISA KEV, file intelligence.
+- Persisted board with layers, groups, notes, connections, keyboard movement,
+  autosave, conflict handling and SVG export.
+- Relationship graph with type filters, focus, search, pan/zoom, drag and
+  layered SVG export.
+- Global search, command palette, toasts, dialogs, loading/error/empty states.
+
+Not delivered:
+
+- Dedicated UI for planned modules (correctly absent).
+- Browser E2E suite (no browser in this environment; jsdom smoke used).
+
+## Phase 10 — tests
+
+Delivered:
+
+- 84 Python tests passing (`python3 -m unittest discover -s tests`).
+- Compile checks for all Python files.
+- `node --check` for all classic scripts.
+- jsdom smoke over every route with a seeded database: 0 failure records,
+  0 console errors.
+- API tests for module gating, invalid input, authentication-free loopback
+  behavior, file-analysis limits and persistence.
+
+Not delivered:
+
+- Real-browser E2E and visual regression.
+- Native component tests (nothing native exists).
+- Load/performance benchmarks.
+
+## Phase 11 — documentation and release
+
+Delivered:
+
+- README, development status, architecture, OpenArchive matrix, API, schema,
+  module guide, testing, security, installation and development docs.
+- Branch `feature/garbage-universal-intelligence-platform`.
+
+Pending:
+
+- Commit, push and open the pull request. No merge.
+
+## Recommended next increments
+
+1. FTS5 search with a migration that degrades to `LIKE` when FTS5 is absent,
+   plus ranking and tests.
+2. A C header-reader with a C ABI, optional `ctypes` loader and Python fallback,
+   measured against the existing parser.
+3. A website-intelligence collector with an allowlist, redirect cap, byte cap,
+   timeout, DNS/IP SSRF checks and recorded provenance. Add it as `planned`
+   until tests pass.
+4. PDF report output via a print stylesheet first; avoid a heavy dependency
+   unless justified.
+5. Automation runner limited to declarative, allowlisted steps; no shell
+   execution.
