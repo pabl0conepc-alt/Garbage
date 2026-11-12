@@ -129,7 +129,10 @@ case report structured errors rather than silently succeeding.
   is treated as a filename, not a domain. Real TLDs such as `.zip`, `.md`, `.sh`
   and `.py` are not excluded.
 - IPv6 and CIDR candidates are validated with `ipaddress`; clock times, MAC
-  addresses and malformed ranges are rejected.
+  addresses and malformed ranges are rejected. IPv4-mapped IPv6 stays one
+  value instead of becoming a bogus IPv6 fragment plus an IPv4 address.
+- Bracketed IPv6 URLs keep their brackets when canonicalized, and scoped
+  link-local values keep their zone for inspection.
 - Correlation counts distinct observations and distinct source references.
   Two observations from the same source are not called independent evidence.
 - All values remain syntactic. No DNS, WHOIS, reputation or attribution lookup
@@ -227,7 +230,7 @@ python3 -m compileall -q garbage_intel tests
 for f in web/*.js; do node --check "$f"; done
 ```
 
-Current result: **101 tests pass**. A temporary jsdom smoke test rendered every
+Current result: **106 tests pass**. A temporary jsdom smoke test rendered every
 route against a seeded database with zero error states and zero console errors.
 There is no real-browser E2E test and no native component to test. See
 [TESTING.md](docs/TESTING.md) for what is and is not verified.

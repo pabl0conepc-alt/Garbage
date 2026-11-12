@@ -20,9 +20,12 @@ _IPV4 = re.compile(
     r"(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}(?![\d.])"
 )
 # Candidate scan only. ipaddress performs the real validation below, which
-# rejects clock times, MAC addresses and malformed compressed forms.
+# rejects clock times, MAC addresses and malformed compressed forms. The tail
+# accepts an embedded dotted quad so IPv4-mapped addresses stay one value.
+_IPV4_TAIL = r"(?:\d{1,3}\.){3}\d{1,3}"
 _IPV6 = re.compile(
-    r"(?<![0-9A-Fa-f:.])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}"
+    r"(?<![0-9A-Fa-f:.])(?:[0-9A-Fa-f]{0,4}:){2,7}"
+    r"(?:" + _IPV4_TAIL + r"|[0-9A-Fa-f]{0,4})"
     r"(?:%[A-Za-z0-9_.-]+)?(?![0-9A-Fa-f:])"
 )
 _CIDR4 = re.compile(
@@ -31,7 +34,8 @@ _CIDR4 = re.compile(
     r"(?:3[0-2]|[12]?\d)(?!\d)"
 )
 _CIDR6 = re.compile(
-    r"(?<![0-9A-Fa-f:.])(?:[0-9A-Fa-f]{0,4}:){1,7}[0-9A-Fa-f]{0,4}/"
+    r"(?<![0-9A-Fa-f:.])(?:[0-9A-Fa-f]{0,4}:){1,7}"
+    r"(?:" + _IPV4_TAIL + r"|[0-9A-Fa-f]{0,4})/"
     r"(?:12[0-8]|1[01]\d|[1-9]?\d)(?![0-9A-Fa-f:])"
 )
 _DOMAIN = re.compile(
@@ -71,7 +75,8 @@ _DEFANG_RULES = (
     (re.compile(r"\[\s*@\s*\]|\(\s*@\s*\)|\[at\]", re.IGNORECASE), "@"),
     (re.compile(r"\[\s*/\s*\]|\(\s*/\s*\)", re.IGNORECASE), "/"),
 )
-_TRAILING = ".,;:!?)]}'\""
+_TRAILING = ".,;:!?'\""
+_CLOSERS = {"]": "[", ")": "(", "}": "{"}
 
 
 def refang_text(text: str) -> str:
@@ -100,7 +105,7 @@ def canonical_indicator(kind: str, value: str) -> str:
     if kind in {"ipv4", "ipv6"}:
         candidate = raw.strip("[]")
         try:
-            return str(ipaddress.ip_address(candidate.split("%", 1)[0]))
+            return str(ipaddress.ip_address(candidate))
         except ValueError:
             return candidate
     if kind == "cidr":
@@ -124,7 +129,10 @@ def canonical_indicator(kind: str, value: str) -> str:
             parsed.scheme == "https" and port == 443
         ):
             port = None
-        netloc = host if port is None else f"{host}:{port}"
+        # urlsplit removes the brackets from an IPv6 hostname. Put them back
+        # or the canonical URL becomes ambiguous and invalid.
+        netloc_host = f"[{host}]" if ":" in host else host
+        netloc = netloc_host if port is None else f"{netloc_host}:{port}"
         if parsed.username or parsed.password:
             credentials = parsed.username or ""
             if parsed.password:
@@ -144,6 +152,14 @@ def canonical_indicator(kind: str, value: str) -> str:
 
 def _url_value(raw: str) -> str | None:
     value = raw.rstrip(_TRAILING)
+    # Keep a closing bracket that belongs to the URL's IPv6 host, while still
+    # removing prose parentheses around the URL.
+    while value and value[-1] in _CLOSERS:
+        closer = value[-1]
+        opener = _CLOSERS[closer]
+        if value.count(closer) <= value.count(opener):
+            break
+        value = value[:-1]
     if len(value) <= 3:
         return None
     try:
@@ -156,7 +172,7 @@ def _url_value(raw: str) -> str | None:
 
 
 def _ipv6_value(raw: str) -> str | None:
-    candidate = raw.strip("[]").split("%", 1)[0]
+    candidate = raw.strip("[]")
     try:
         return str(ipaddress.IPv6Address(candidate))
     except ipaddress.AddressValueError:
@@ -231,18 +247,7 @@ def extract_indicators(
                 cidr_ranges.append((match.start(), match.end()))
                 matches.append((match.start(), match.end(), "cidr", value))
 
-        for match in _IPV4.finditer(content):
-            if any(
-                start <= match.start() < end
-                for start, end in (*url_ranges, *cidr_ranges)
-            ):
-                continue
-            try:
-                value = str(ipaddress.IPv4Address(match.group()))
-            except ipaddress.AddressValueError:
-                continue
-            matches.append((match.start(), match.end(), "ipv4", value))
-
+        ipv6_ranges: list[tuple[int, int]] = []
         for match in _IPV6.finditer(content):
             if any(
                 start <= match.start() < end
@@ -252,7 +257,20 @@ def extract_indicators(
             value = _ipv6_value(match.group())
             if value is None:
                 continue
+            ipv6_ranges.append((match.start(), match.end()))
             matches.append((match.start(), match.end(), "ipv6", value))
+
+        for match in _IPV4.finditer(content):
+            if any(
+                start <= match.start() < end
+                for start, end in (*url_ranges, *cidr_ranges, *ipv6_ranges)
+            ):
+                continue
+            try:
+                value = str(ipaddress.IPv4Address(match.group()))
+            except ipaddress.AddressValueError:
+                continue
+            matches.append((match.start(), match.end(), "ipv4", value))
 
         for match in _DOMAIN.finditer(content):
             if any(

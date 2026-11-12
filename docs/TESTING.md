@@ -17,7 +17,7 @@ and evidence directories. It does not need network access.
 
 At the time of this change:
 
-- **101 tests pass.**
+- **106 tests pass.**
 - `compileall` completes without errors.
 - `node --check` passes for every classic browser script.
 - A jsdom route smoke test (temporary harness outside the repository) rendered
@@ -43,7 +43,7 @@ text triage, offline value inspection and case coverage.
 | Sources | `test_entities.py`, API coverage | CRUD, case and entity links, provenance |
 | Evidence | `test_evidence.py` | Upload limits, hashing, verification, download/preview, deletion |
 | Boards | `test_boards.py` | Layout persistence, revisions, element/connection validation |
-| Indicators | `test_indicators.py`, `test_indicator_tools.py` | Refanging, IPv4/IPv6/CIDR validation, filename and embedded-host suppression, triage counts, inspection, correlation strength |
+| Indicators | `test_indicators.py`, `test_indicator_tools.py` | Refanging, IPv4/IPv6/CIDR validation, IPv4-mapped and scoped IPv6, bracketed IPv6 URLs, filename and embedded-host suppression, triage counts, inspection, correlation strength |
 | Imaging | `test_imaging.py` | PNG/JPEG/GIF/WebP dimensions, malformed input |
 | File intelligence | `test_file_intel.py` | PDF, OOXML/ZIP traversal, GZIP bomb bound, ELF/PE/Mach-O, limits, API persistence and module gate |
 | CISA KEV | `test_cisa_kev.py` | Bounded parsing, cache, failure handling |

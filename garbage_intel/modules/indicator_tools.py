@@ -48,6 +48,10 @@ def _base_result(raw: str, clean: str) -> dict[str, Any]:
 
 def _address_facts(value: str) -> dict[str, Any]:
     address = ipaddress.ip_address(value)
+    # A scoped IPv6 address is valid for inspection, but ipaddress cannot build
+    # a reverse pointer from the scope suffix. Use the unscoped address for
+    # structural fields and keep the zone as separate metadata.
+    base = ipaddress.ip_address(str(address).split("%", 1)[0])
     scope = "global"
     if address.is_private:
         scope = "private"
@@ -65,11 +69,40 @@ def _address_facts(value: str) -> dict[str, Any]:
         _fact("Version", f"IPv{address.version}"),
         _fact("Scope", scope),
         _fact("Global", "yes" if address.is_global else "no"),
-        _fact("Reverse pointer", address.reverse_pointer),
+        _fact("Reverse pointer", base.reverse_pointer),
     ]
-    if address.version == 6 and address.scope_id:
-        facts.append(_fact("Zone", address.scope_id))
     warnings: list[str] = []
+    if address.version == 6:
+        facts.extend(
+            [
+                _fact("Compressed", base.compressed),
+                _fact("Expanded", base.exploded),
+            ]
+        )
+        mapped = base.ipv4_mapped
+        sixtofour = base.sixtofour
+        teredo = base.teredo
+        if mapped is not None:
+            facts.append(_fact("Embedded IPv4", mapped))
+            facts.append(_fact("Form", "IPv4-mapped"))
+            warnings.append(
+                "This is an IPv4-mapped IPv6 address. The embedded IPv4 value is "
+                "part of this address, not a second indicator."
+            )
+        elif sixtofour is not None:
+            facts.append(_fact("Embedded IPv4", sixtofour))
+            facts.append(_fact("Form", "6to4"))
+        elif teredo is not None:
+            facts.append(_fact("Form", "Teredo"))
+            facts.append(_fact("Teredo server", teredo[0]))
+            facts.append(_fact("Teredo client", teredo[1]))
+        if address.scope_id:
+            facts.append(_fact("Zone", address.scope_id))
+        elif address.is_link_local:
+            warnings.append(
+                "This link-local address has no zone identifier; the interface "
+                "is ambiguous outside its original host."
+            )
     if not address.is_global:
         warnings.append(
             "This address is not globally routable; it may be private, reserved, "
@@ -95,6 +128,11 @@ def _network_facts(value: str) -> dict[str, Any]:
         _fact("Last address", network.broadcast_address),
         _fact("Private range", "yes" if network.is_private else "no"),
     ]
+    if network.version == 6:
+        mapped = network.network_address.ipv4_mapped
+        if mapped is not None:
+            facts.append(_fact("Embedded IPv4 start", mapped))
+            facts.append(_fact("Form", "IPv4-mapped"))
     warnings = []
     if network.is_private:
         warnings.append(
@@ -151,7 +189,7 @@ def _url_facts(value: str) -> dict[str, Any]:
         pass
     facts = [
         _fact("Scheme", parsed.scheme.lower()),
-        _fact("Host", host or "—"),
+        _fact("Host", f"[{host}]" if ":" in host else host or "—"),
         _fact("Host kind", host_version or "domain"),
         _fact("Port", port if port is not None else default_port),
         _fact("Default port", "yes" if port in {None, default_port} else "no"),

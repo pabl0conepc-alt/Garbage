@@ -211,7 +211,9 @@ Value inspection accepts `value` (up to 2,000 characters) and an optional
 ```
 
 `kind` is one of `ipv4`, `ipv6`, `cidr`, `domain`, `url`, `email`, `md5`,
-`sha1`, `sha256`, `asn`, `filename`, `multiple` or `unknown`. Inspection makes no
+`sha1`, `sha256`, `asn`, `filename`, `multiple` or `unknown`. IPv6 inspection
+includes compressed/expanded forms, IPv4-mapped/6to4/Teredo details, scope and
+zone facts; bracketed IPv6 URL hosts keep their brackets. Inspection makes no
 network request. `local` contains exact matches only; co-occurrence is not a
 proven relationship.
 

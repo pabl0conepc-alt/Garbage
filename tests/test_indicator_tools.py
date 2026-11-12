@@ -32,6 +32,74 @@ class IndicatorPrecisionTests(unittest.TestCase):
         self.assertNotIn(("domain", "report.pdf"), values)
         self.assertNotIn(("ipv6", "12:30:45"), values)
 
+    def test_ipv4_mapped_ipv6_stays_one_indicator(self):
+        for text, expected in (
+            ("::ffff:192.0.2.1", "::ffff:c000:201"),
+            ("2001:db8::192.0.2.1", "2001:db8::c000:201"),
+        ):
+            findings = extract_indicators([{"id": "mapped", "content": text}])
+            self.assertEqual(
+                [(finding["type"], finding["value"]) for finding in findings],
+                [("ipv6", expected)],
+            )
+            inspected = inspect_value(text)
+            facts = {fact["label"]: fact["value"] for fact in inspected["facts"]}
+            self.assertEqual(inspected["kind"], "ipv6")
+            if text.startswith("::ffff:"):
+                self.assertEqual(facts["Embedded IPv4"], "192.0.2.1")
+                self.assertEqual(facts["Form"], "IPv4-mapped")
+
+    def test_ipv4_embedded_cidr_is_one_network(self):
+        findings = extract_indicators(
+            [{"id": "mapped-network", "content": "::ffff:192.0.2.0/120"}]
+        )
+        self.assertEqual(
+            [(finding["type"], finding["value"]) for finding in findings],
+            [("cidr", "::ffff:c000:200/120")],
+        )
+        self.assertNotIn(("ipv4", "192.0.2.0"), {
+            (finding["type"], finding["value"]) for finding in findings
+        })
+
+    def test_scoped_ipv6_is_preserved_and_inspected(self):
+        findings = extract_indicators(
+            [{"id": "zone", "content": "fe80::1%eth0"}]
+        )
+        self.assertEqual(
+            [(finding["type"], finding["value"]) for finding in findings],
+            [("ipv6", "fe80::1%eth0")],
+        )
+        inspected = inspect_value("fe80::1%eth0")
+        facts = {fact["label"]: fact["value"] for fact in inspected["facts"]}
+        self.assertEqual(inspected["kind"], "ipv6")
+        self.assertEqual(facts["Zone"], "eth0")
+        self.assertEqual(facts["Compressed"], "fe80::1")
+        self.assertIn("Reverse pointer", facts)
+
+    def test_ipv6_url_keeps_brackets_when_canonicalized(self):
+        findings = extract_indicators(
+            [{"id": "url", "content": "https://[2001:db8::1]:8443/a"}]
+        )
+        self.assertEqual(
+            [(finding["type"], finding["value"]) for finding in findings],
+            [("url", "https://[2001:db8::1]:8443/a")],
+        )
+        inspected = inspect_value("https://[2001:db8::1]:8443/a")
+        self.assertEqual(inspected["kind"], "url")
+        self.assertEqual(inspected["canonical"], "https://[2001:db8::1]:8443/a")
+        facts = {fact["label"]: fact["value"] for fact in inspected["facts"]}
+        self.assertEqual(facts["Host"], "[2001:db8::1]")
+        self.assertEqual(facts["Host kind"], "IPv6")
+
+    def test_bare_ipv6_url_keeps_its_closing_bracket(self):
+        findings = extract_indicators(
+            [{"id": "bare", "content": "(https://[2001:db8::1])"}]
+        )
+        self.assertEqual(
+            [(finding["type"], finding["value"]) for finding in findings],
+            [("url", "https://[2001:db8::1]/")],
+        )
+
     def test_url_credentials_do_not_become_an_email(self):
         findings = extract_indicators(
             [

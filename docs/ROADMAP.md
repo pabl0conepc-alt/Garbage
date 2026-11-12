@@ -17,7 +17,7 @@ marks unimplemented capabilities as `planned` and refuses to enable them.
 | 7 | Automation and plugin SDK | Not started (contract documented only) |
 | 8 | Native C/C++/Rust engines | Not started |
 | 9 | Workstation UI | Complete for enabled modules; no UI for planned modules |
-| 10 | Testing and hardening | Partial: 101 Python tests plus jsdom route smoke; no browser E2E in this environment |
+| 10 | Testing and hardening | Partial: 106 Python tests plus jsdom route smoke; no browser E2E in this environment |
 | 11 | Documentation and release | Partial: docs and README updated; branch/PR prepared |
 
 ## Phase 1 — audit
@@ -140,7 +140,7 @@ Not delivered:
 
 Delivered:
 
-- 101 Python tests passing (`python3 -m unittest discover -s tests`).
+- 106 Python tests passing (`python3 -m unittest discover -s tests`).
 - Compile checks for all Python files.
 - `node --check` for all classic scripts.
 - jsdom smoke over every route with a seeded database: 0 failure records,

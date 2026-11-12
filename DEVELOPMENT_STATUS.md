@@ -24,7 +24,9 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
 - Indicator extraction for IPv4, IPv6, CIDR, domains, URLs, emails and
   hashes; defanged notation is refanged, canonical values are compared, and
   hosts embedded in a URL/email are not duplicated. Common filename suffixes are
-  not treated as domains. Provenance and manual assessment are retained.
+  not treated as domains. IPv4-mapped IPv6 remains a single value, scoped IPv6
+  keeps its zone, and bracketed IPv6 URLs canonicalize correctly. Provenance and
+  manual assessment are retained.
 - Cross-record correlation with distinct observation and independent-source
   counts plus a corroboration strength label; explicitly a match, not
   attribution.
@@ -73,7 +75,7 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
 
 ## Verification performed
 
-- `python3 -m unittest discover -s tests` — **101 tests passed**.
+- `python3 -m unittest discover -s tests` — **106 tests passed**.
 - `python3 -m compileall -q garbage_intel tests` — passed.
 - `node --check` on all browser scripts — passed.
 - jsdom route smoke with a seeded database — every route rendered, **0 failure
