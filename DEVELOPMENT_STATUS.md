@@ -69,7 +69,7 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
 - `node --check` on all browser scripts — passed.
 - jsdom route smoke with a seeded database — every route rendered, **0 failure
   records, 0 console errors**, including board and graph node/edge counts.
-- `git diff --check` — run before the commit.
+- `git diff --check` — passed.
 
 Not verified:
 
