@@ -32,7 +32,7 @@
       el("h2", {}, title),
       el("p", {}, message),
     );
-    if (retry) box.append(button("Retry", retry, { variant: "button-primary" }));
+    if (retry) box.append(button("Tentar novamente", retry, { variant: "button-primary" }));
     return box;
   }
 
@@ -52,7 +52,7 @@
           method: "PATCH",
           body: JSON.stringify({ state: target }),
         });
-        toast(`${module.name} ${target === "enabled" ? "enabled" : "disabled"}.`);
+        toast(`${G.moduleLabel(module.module_id, module.name)}: ${target === "enabled" ? "ativado" : "desativado"}.`);
         await G.reloadModules();
         G.refreshView();
       } catch (error) {
@@ -64,9 +64,9 @@
       const modules = data.items.filter((item) => item.category === category);
       return panel(
         {
-          eyebrow: category.toUpperCase(),
-          title: `${category} modules`,
-          caption: `${modules.length} registered`,
+          eyebrow: "CATEGORIA",
+          title: G.moduleCategory(category),
+          caption: `${modules.length} registrados`,
           className: "module-section",
         },
         el(
@@ -84,18 +84,18 @@
                 el(
                   "div",
                   { class: "module-title" },
-                  el("strong", {}, module.name),
-                  module.core ? badge("Core", "info") : null,
+                  el("strong", {}, G.moduleLabel(module.module_id, module.name)),
+                  module.core ? badge("Essencial", "info") : null,
                   badge(titleCase(module.state), module.state),
                 ),
-                el("p", {}, module.description),
+                el("p", {}, G.moduleDescription(module.module_id, module.description)),
                 el(
                   "div",
                   { class: "module-meta" },
                   el("code", {}, module.module_id),
                   el("span", {}, `v${module.version}`),
                   module.updated_at
-                    ? el("span", {}, `updated ${formatDate(module.updated_at)}`)
+                    ? el("span", {}, `atualizado em ${formatDate(module.updated_at)}`)
                     : null,
                 ),
               ),
@@ -103,11 +103,11 @@
                 "div",
                 { class: "module-actions" },
                 module.state === "planned"
-                  ? badge("Not implemented", "warning")
+                  ? badge("Não implementado", "warning")
                   : module.core
-                    ? el("span", { class: "panel-note" }, "Required")
+                    ? el("span", { class: "panel-note" }, "Obrigatório")
                     : button(
-                        module.state === "enabled" ? "Disable" : "Enable",
+                        module.state === "enabled" ? "Desativar" : "Ativar",
                         () =>
                           setState(
                             module,
@@ -124,40 +124,40 @@
 
     root.append(
       pageHeader({
-        eyebrow: "MODULE REGISTRY",
-        title: "Module manager",
+        eyebrow: "REGISTRO DE MÓDULOS",
+        title: "Gerenciador de módulos",
         description:
-          "Capability state is enforced by the API. Planned modules are not implemented and cannot be enabled.",
-        actions: [button("↻ Refresh", () => G.refreshView())],
+          "O estado de cada recurso é aplicado pela API. Módulos planejados não estão implementados e não podem ser ativados.",
+        actions: [button("Atualizar", () => G.refreshView())],
       }),
       el(
         "div",
         { class: "metric-grid compact-metrics" },
         metric({
-          label: "ENABLED",
+          label: "ATIVADOS",
           value: String(data.enabled),
-          foot: "Serving requests",
+          foot: "Atendendo solicitações",
           icon: "◈",
           tone: "green",
         }),
         metric({
-          label: "AVAILABLE",
+          label: "DISPONÍVEIS",
           value: String(available),
-          foot: "Ready to enable",
+          foot: "Prontos para ativar",
           icon: "○",
           tone: "blue",
         }),
         metric({
-          label: "DISABLED",
+          label: "DESATIVADOS",
           value: String(disabled),
-          foot: "API returns 409",
+          foot: "A API retorna 409",
           icon: "⊘",
           tone: "amber",
         }),
         metric({
-          label: "PLANNED",
+          label: "PLANEJADOS",
           value: String(data.planned),
-          foot: "Documented, not built",
+          foot: "Documentados, não construídos",
           icon: "◇",
           tone: "violet",
         }),
@@ -165,24 +165,24 @@
       el(
         "div",
         { class: "notice" },
-        "Disabling a module changes the API and navigation immediately. " +
-          "Core workflow modules cannot be disabled.",
+        "Desativar um módulo altera a API e a navegação imediatamente. " +
+          "Módulos essenciais não podem ser desativados.",
       ),
       ...sections,
       panel(
-        { eyebrow: "CONTRACTS", title: "Module interface" },
+        { eyebrow: "CONTRATOS", title: "Interface dos módulos" },
         el(
           "p",
           { class: "panel-note" },
-          "Every module declares an identifier, name, description, category, version and state. " +
-            "Planned modules remain visible so the gap between the interface and the backend is explicit.",
+          "Cada módulo declara identificador, nome, descrição, categoria, versão e estado. " +
+            "Módulos planejados permanecem visíveis para que a distância entre a interface e o backend fique explícita.",
         ),
         el(
           "ul",
           { class: "plain-list" },
-          el("li", {}, "Enabled: the API routes accept requests and the view is available."),
-          el("li", {}, "Available / disabled: the implementation exists but the API rejects its routes."),
-          el("li", {}, "Planned: no backend implementation; it cannot be enabled."),
+          el("li", {}, "Ativado: as rotas da API aceitam solicitações e a tela está disponível."),
+          el("li", {}, "Disponível / desativado: a implementação existe, mas a API rejeita suas rotas."),
+          el("li", {}, "Planejado: sem implementação no backend; não pode ser ativado."),
         ),
       ),
     );
@@ -192,7 +192,9 @@
   /* Settings                                                          */
   /* ================================================================ */
 
-  function settingsControl(entry, value) {
+  function settingsControl(source, value) {
+    const [label, description] = G.settingText(source.key, source.label, source.description);
+    const entry = { ...source, label, description };
     if (entry.type === "boolean") {
       const input = el("input", {
         type: "checkbox",
@@ -281,7 +283,7 @@
         });
         G.state.settings = result.values;
         G.applySettings(result.values);
-        toast("Settings saved.");
+        toast("Configurações salvas.");
       } catch (error) {
         toast(error.message, "error");
       }
@@ -290,43 +292,53 @@
     const runtimeEntries = system?.runtime ? Object.entries(system.runtime) : [];
     root.append(
       pageHeader({
-        eyebrow: "WORKSPACE CONFIGURATION",
-        title: "Settings",
+        eyebrow: "CONFIGURAÇÃO DO WORKSPACE",
+        title: "Configurações",
         description:
-          "Interface preferences are persisted in SQLite. Report and search defaults affect real outputs.",
-        actions: [button("Save settings", save, { variant: "button-primary" })],
+          "As preferências de interface são salvas no SQLite. Os padrões de relatório e pesquisa afetam as saídas reais.",
+        actions: [button("Salvar configurações", save, { variant: "button-primary" })],
       }),
       el(
         "div",
         { class: "settings-layout" },
         panel(
-          { eyebrow: "INTERFACE & DEFAULTS", title: "Preferences" },
+          { eyebrow: "INTERFACE E PADRÕES", title: "Preferências" },
           el("div", { class: "settings-fields" }, ...fields),
           el(
             "div",
             { class: "toolbar-end" },
-            button("Save settings", save, { variant: "button-primary" }),
+            button("Salvar configurações", save, { variant: "button-primary" }),
           ),
         ),
         el(
           "div",
           { class: "settings-side" },
           panel(
-            { eyebrow: "RUNTIME", title: "System diagnostics" },
+            { eyebrow: "EXECUÇÃO", title: "Diagnóstico do sistema" },
             system
               ? G.kvList([
-                  ["Application version", system.version],
-                  ["Schema version", String(system.schema_version)],
+                  ["Versão do aplicativo", system.version],
+                  ["Versão do esquema", String(system.schema_version)],
                   [
-                    "Database",
+                    "Banco de dados",
                     `${system.database.name} · ${formatBytes(system.database.size_bytes)}`,
                   ],
                   [
-                    "Storage",
-                    system.database.file_backed ? "File-backed SQLite" : "In-memory",
+                    "Armazenamento",
+                    system.database.file_backed ? "SQLite em arquivo" : "Em memória",
                   ],
-                  ["Python", system.runtime?.python || "—"],
-                  ["Platform", system.runtime?.platform || "—"],
+                  [
+                    "Python",
+                    system.runtime?.python?.version
+                      ? `${system.runtime.python.version} (mínimo ${system.runtime.python.minimum || "—"}${system.runtime.python.supported === false ? ", não suportado" : ""})`
+                      : "—",
+                  ],
+                  [
+                    "Plataforma",
+                    system.runtime?.platform?.system
+                      ? [system.runtime.platform.system, system.runtime.platform.distribution].filter(Boolean).join(" · ")
+                      : "—",
+                  ],
                   [
                     "SQLite",
                     system.runtime?.sqlite_version
@@ -335,39 +347,39 @@
                   ],
                   [
                     "FTS5",
-                    system.runtime?.fts5 ? "Available" : "Unavailable",
+                    system.runtime?.fts5 === undefined ? "—" : system.runtime.fts5 ? "Disponível" : "Indisponível",
                   ],
                 ])
-              : el("p", { class: "panel-empty" }, "System diagnostics are unavailable."),
+              : el("p", { class: "panel-empty" }, "O diagnóstico do sistema está indisponível."),
           ),
           panel(
-            { eyebrow: "NATIVE ENGINE", title: "Optional accelerators" },
+            { eyebrow: "MOTOR NATIVO", title: "Aceleradores opcionais" },
             system?.native
               ? G.kvList([
                   [
-                    "C file intelligence",
+                    "Análise de arquivos em C",
                     system.native.engines.c_file_intelligence
-                      ? "Loaded"
-                      : "Python fallback",
+                      ? "Carregado"
+                      : "Alternativa em Python",
                   ],
                   [
-                    "C++ graph metrics",
+                    "Métricas de grafo em C++",
                     system.native.engines.cpp_graph_metrics
-                      ? "Loaded"
-                      : "Python fallback",
+                      ? "Carregado"
+                      : "Alternativa em Python",
                   ],
                   [
-                    "Rust similarity",
+                    "Similaridade em Rust",
                     system.native.engines.rust_similarity
-                      ? "Loaded"
-                      : "Python fallback",
+                      ? "Carregado"
+                      : "Alternativa em Python",
                   ],
-                  ["Build directory", system.native.directory],
+                  ["Diretório de build", system.native.directory],
                 ])
-              : el("p", { class: "panel-empty" }, "Native status is unavailable."),
+              : el("p", { class: "panel-empty" }, "O status nativo está indisponível."),
           ),
           panel(
-            { eyebrow: "COUNTS", title: "Stored records" },
+            { eyebrow: "CONTAGENS", title: "Registros armazenados" },
             system
               ? G.kvList(
                   Object.entries(system.counts).map(([key, value]) => [
@@ -375,10 +387,10 @@
                     String(value),
                   ]),
                 )
-              : el("p", { class: "panel-empty" }, "No diagnostics."),
+              : el("p", { class: "panel-empty" }, "Sem diagnósticos."),
           ),
           panel(
-            { eyebrow: "EXTENSIONS", title: "Integrations" },
+            { eyebrow: "EXTENSÕES", title: "Integrações" },
             system && system.integrations.length
               ? el(
                   "ul",
@@ -388,15 +400,15 @@
                       "li",
                       {},
                       el("strong", {}, integration.module_id),
-                      ` · ${integration.mode}`,
+                      ` · ${G.translateText(integration.mode)}`,
                     ),
                   ),
                 )
-              : el("p", { class: "panel-empty" }, "No integrations registered."),
+              : el("p", { class: "panel-empty" }, "Nenhuma integração registrada."),
           ),
           runtimeEntries.length
             ? panel(
-                { eyebrow: "DIAGNOSTIC DETAIL", title: "Runtime fields" },
+                { eyebrow: "DETALHES DO DIAGNÓSTICO", title: "Campos de execução" },
                 el(
                   "pre",
                   { class: "code-block" },
@@ -410,15 +422,15 @@
       ),
       system
         ? panel(
-            { eyebrow: "MIGRATIONS", title: "Schema history", caption: `${system.migrations.length} applied` },
+            { eyebrow: "MIGRAÇÕES", title: "Histórico do esquema", caption: `${system.migrations.length} aplicadas` },
             table({
               columns: [
-                { label: "VERSION", className: "numeric-col", render: (row) => String(row.version) },
-                { label: "DESCRIPTION", render: (row) => row.description },
-                { label: "APPLIED", render: (row) => formatDate(row.applied_at, { time: true }) },
+                { label: "VERSÃO", className: "numeric-col", render: (row) => String(row.version) },
+                { label: "DESCRIÇÃO", render: (row) => G.translateText(row.description) },
+                { label: "APLICADA EM", render: (row) => formatDate(row.applied_at, { time: true }) },
               ],
               rows: system.migrations,
-              emptyMessage: "No migrations recorded.",
+              emptyMessage: "Nenhuma migração registrada.",
             }),
           )
         : null,
@@ -440,31 +452,31 @@
     if (!data) {
       root.append(
         pageHeader({
-          eyebrow: "THREAT INTELLIGENCE",
+          eyebrow: "INTELIGÊNCIA DE AMEAÇAS",
           title: "CISA KEV",
           description:
-            "Known Exploited Vulnerabilities metadata from the public CISA catalog.",
+            "Metadados de vulnerabilidades exploradas conhecidas do catálogo público da CISA.",
         }),
         error && error.status === 404
           ? panel(
-              { eyebrow: "CONNECTOR", title: "No local KEV snapshot" },
+              { eyebrow: "CONECTOR", title: "Nenhum snapshot local do KEV" },
               emptyState({
                 icon: "☰",
-                title: "Refresh the public catalog",
+                title: "Atualize o catálogo público",
                 description:
-                  "The KEV cache is empty. GARBAGE performs one explicit HTTPS request to CISA and stores a validated, hashed snapshot. No background polling occurs.",
+                  "O cache do KEV está vazio. O GARBAGE faz uma única solicitação HTTPS explícita à CISA e armazena um snapshot validado e com hash. Não há consultas em segundo plano.",
                 action: button(
-                  "Refresh CISA KEV",
+                  "Atualizar CISA KEV",
                   () => refresh(root, true),
                   { variant: "button-primary" },
                 ),
               }),
             )
           : panel(
-              { eyebrow: "CONNECTOR", title: "KEV connector unavailable" },
+              { eyebrow: "CONECTOR", title: "Conector do KEV indisponível" },
               errorState(
-                "CISA KEV request failed",
-                error?.message || "The connector did not return data.",
+                "A solicitação ao CISA KEV falhou",
+                error?.message || "O conector não retornou dados.",
                 () => G.refreshView(),
               ),
             ),
@@ -475,8 +487,8 @@
     const search = el("input", {
       class: "input",
       type: "search",
-      placeholder: "Filter by CVE, vendor, product or description",
-      "aria-label": "Filter CISA KEV entries",
+      placeholder: "Filtrar por CVE, fornecedor, produto ou descrição",
+      "aria-label": "Filtrar entradas do CISA KEV",
     });
     const host = el("div");
     function draw() {
@@ -491,7 +503,7 @@
           columns: [
             { label: "CVE", render: (row) => el("code", {}, row.cve_id) },
             {
-              label: "PRODUCT",
+              label: "PRODUTO",
               render: (row) =>
                 el(
                   "div",
@@ -501,7 +513,7 @@
                 ),
             },
             {
-              label: "VULNERABILITY",
+              label: "VULNERABILIDADE",
               render: (row) =>
                 el(
                   "div",
@@ -510,8 +522,8 @@
                   el("span", { class: "muted" }, row.short_description),
                 ),
             },
-            { label: "ADDED", render: (row) => formatDate(row.date_added) },
-            { label: "DUE", render: (row) => formatDate(row.due_date) },
+            { label: "INCLUSÃO", render: (row) => formatDate(row.date_added) },
+            { label: "PRAZO", render: (row) => formatDate(row.due_date) },
             {
               label: "RANSOMWARE",
               render: (row) =>
@@ -519,64 +531,64 @@
             },
           ],
           rows,
-          emptyMessage: "No KEV entries match this filter.",
+          emptyMessage: "Nenhuma entrada do KEV corresponde a este filtro.",
         }),
       );
     }
 
     root.append(
       pageHeader({
-        eyebrow: "THREAT INTELLIGENCE",
+        eyebrow: "INTELIGÊNCIA DE AMEAÇAS",
         title: "CISA KEV",
         description:
-          "Vendor and product exploitation metadata, shown exactly as published by CISA. Absence from KEV does not imply safety.",
-        actions: [button("↻ Refresh catalog", () => refresh(root, false))],
+          "Metadados de exploração por fornecedor e produto, exibidos exatamente como publicados pela CISA. Não constar no KEV não implica segurança.",
+        actions: [button("Atualizar catálogo", () => refresh(root, false))],
       }),
       el(
         "div",
         { class: "metric-grid compact-metrics" },
         metric({
-          label: "CATALOG ENTRIES",
+          label: "ENTRADAS DO CATÁLOGO",
           value: String(data.count),
-          foot: "Validated snapshot",
+          foot: "Snapshot validado",
           icon: "☰",
           tone: "amber",
         }),
         metric({
-          label: "MATCHED",
+          label: "CORRESPONDENTES",
           value: String(data.matched),
-          foot: "Local filter",
+          foot: "Filtro local",
           icon: "⌕",
           tone: "blue",
         }),
         metric({
-          label: "CATALOG VERSION",
+          label: "VERSÃO DO CATÁLOGO",
           value: data.catalog_version,
-          foot: "CISA source",
+          foot: "Fonte CISA",
           icon: "◈",
           tone: "violet",
         }),
         metric({
           label: "SNAPSHOT",
           value: formatDate(data.fetched_at),
-          foot: "Explicit refresh",
+          foot: "Atualização explícita",
           icon: "◷",
           tone: "green",
         }),
       ),
       panel(
-        { eyebrow: "PROVENANCE", title: "Snapshot integrity" },
+        { eyebrow: "PROVENIÊNCIA", title: "Integridade do snapshot" },
         G.kvList([
-          ["Source", el("a", { class: "reference-link", href: data.source_url, target: "_blank", rel: "noopener noreferrer" }, data.source_url)],
-          ["Source updated", formatDate(data.source_updated_at, { time: true })],
-          ["Fetched", formatDate(data.fetched_at, { time: true })],
+          ["Fonte", el("a", { class: "reference-link", href: data.source_url, target: "_blank", rel: "noopener noreferrer" }, data.source_url)],
+          ["Atualização na fonte", formatDate(data.source_updated_at, { time: true })],
+          ["Obtido em", formatDate(data.fetched_at, { time: true })],
           ["SHA-256", el("code", { class: "hash" }, data.sha256)],
         ]),
       ),
       panel(
-        { eyebrow: "VULNERABILITY CATALOG", title: "Known exploited vulnerabilities", actions: [el("span", { class: "panel-caption" }, `${data.items.length} shown`)] },
-        el("div", { class: "toolbar" }, el("div", { class: "search-field" }, el("span", { "aria-hidden": "true" }, "⌕"), search)),
-        data.items.length ? host : emptyState({ icon: "☰", title: "No entries in the snapshot" }),
+        { eyebrow: "CATÁLOGO DE VULNERABILIDADES", title: "Vulnerabilidades exploradas conhecidas", actions: [el("span", { class: "panel-caption" }, `${data.items.length} exibidas`)] },
+        el("div", { class: "toolbar" }, el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search)),
+        data.items.length ? host : emptyState({ icon: "☰", title: "Nenhuma entrada no snapshot" }),
       ),
     );
     draw();
@@ -591,7 +603,7 @@
         method: "POST",
         body: JSON.stringify({ force: !initial }),
       });
-      toast(`CISA KEV refreshed: ${result.count} entries.`);
+      toast(`CISA KEV atualizado: ${result.count} entradas.`);
       await renderKev(root);
     } catch (error) {
       toast(error.message, "error");

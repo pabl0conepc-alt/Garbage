@@ -22,52 +22,52 @@ const shortcutsButton = document.querySelector("#shortcuts-button");
 
 G.NAV = [
   {
-    label: "WORKSPACE",
+    label: "Workspace",
     items: [
-      { view: "overview", label: "Overview", icon: "◫" },
-      { view: "investigations", label: "Investigations", icon: "⌕", module: "investigations" },
-      { view: "activity", label: "Activity timeline", icon: "◷", module: "activity-log" },
+      { view: "overview", label: "Visão geral", icon: "overview" },
+      { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations" },
+      { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log" },
     ],
   },
   {
-    label: "INTELLIGENCE",
+    label: "Inteligência",
     items: [
-      { view: "entities", label: "Entity intelligence", icon: "⬡", module: "entities" },
-      { view: "indicators", label: "IOC analyzer", icon: "⌁", module: "indicator-engine" },
-      { view: "files", label: "File intelligence", icon: "▧", module: "file-intelligence" },
+      { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
+      { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
+      { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
     ],
   },
   {
-    label: "ANALYSIS",
+    label: "Análise",
     items: [
-      { view: "board", label: "Investigation board", icon: "▦", module: "investigation-board" },
-      { view: "graph", label: "Relationship graph", icon: "⟷", module: "relationship-graph" },
+      { view: "board", label: "Quadro de investigação", icon: "board", module: "investigation-board" },
+      { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
     ],
   },
   {
-    label: "EVIDENCE",
+    label: "Evidências",
     items: [
-      { view: "evidence", label: "Evidence manager", icon: "▤", module: "evidence" },
-      { view: "sources", label: "Source manager", icon: "⛁", module: "source-manager" },
+      { view: "evidence", label: "Gerenciador de evidências", icon: "evidence", module: "evidence" },
+      { view: "sources", label: "Gerenciador de fontes", icon: "sources", module: "source-manager" },
     ],
   },
   {
-    label: "THREAT INTELLIGENCE",
+    label: "Inteligência de ameaças",
     items: [
-      { view: "kev", label: "CISA KEV", icon: "☰", module: "cisa-kev" },
+      { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
     ],
   },
   {
-    label: "OUTPUT",
+    label: "Saída",
     items: [
-      { view: "reports", label: "Report center", icon: "⎙", module: "report-center" },
+      { view: "reports", label: "Central de relatórios", icon: "reports", module: "report-center" },
     ],
   },
   {
-    label: "SYSTEM",
+    label: "Sistema",
     items: [
-      { view: "modules", label: "Module manager", icon: "⊞", module: "module-manager" },
-      { view: "settings", label: "Settings", icon: "⚙", module: "settings" },
+      { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager" },
+      { view: "settings", label: "Configurações", icon: "settings", module: "settings" },
     ],
   },
 ];
@@ -75,82 +75,85 @@ G.NAV = [
 G.VIEW_LABELS = Object.fromEntries(
   G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
 );
+G.VIEW_GROUPS = Object.fromEntries(
+  G.NAV.flatMap((group) => group.items.map((item) => [item.view, group.label])),
+);
 
 G.ENTITY_TYPES = [
-  ["person", "Person"],
-  ["username", "Username"],
-  ["profile", "Public profile"],
-  ["domain", "Domain"],
-  ["ipv4", "IPv4 address"],
-  ["ipv6", "IPv6 address"],
-  ["email", "Email"],
-  ["organization", "Organization"],
-  ["file", "File"],
-  ["image", "Image"],
+  ["person", "Pessoa"],
+  ["username", "Nome de usuário"],
+  ["profile", "Perfil público"],
+  ["domain", "Domínio"],
+  ["ipv4", "Endereço IPv4"],
+  ["ipv6", "Endereço IPv6"],
+  ["email", "E-mail"],
+  ["organization", "Organização"],
+  ["file", "Arquivo"],
+  ["image", "Imagem"],
   ["hash", "Hash"],
   ["url", "URL"],
-  ["ioc", "Indicator"],
-  ["other", "Other"],
+  ["ioc", "Indicador"],
+  ["other", "Outro"],
 ];
 G.ENTITY_TYPE_LABELS = Object.fromEntries(G.ENTITY_TYPES);
 G.RELATIONSHIP_TYPES = [
-  ["associated-with", "Associated with"],
-  ["belongs-to", "Belongs to"],
-  ["references", "References"],
-  ["hosted-on", "Hosted on"],
-  ["derived-from", "Derived from"],
-  ["related-to", "Related to"],
-  ["connected-to", "Connected to"],
-  ["communicates-with", "Communicates with"],
-  ["owns", "Owns"],
-  ["uses", "Uses"],
+  ["associated-with", "Associado a"],
+  ["belongs-to", "Pertence a"],
+  ["references", "Referencia"],
+  ["hosted-on", "Hospedado em"],
+  ["derived-from", "Derivado de"],
+  ["related-to", "Relacionado a"],
+  ["connected-to", "Conectado a"],
+  ["communicates-with", "Comunica-se com"],
+  ["owns", "Possui"],
+  ["uses", "Utiliza"],
 ];
 G.RELATIONSHIP_TYPE_LABELS = Object.fromEntries(G.RELATIONSHIP_TYPES);
 G.COLLECTION_BASES = [
-  ["public", "Public"],
-  ["authorized", "Authorized"],
-  ["user-provided", "User-provided"],
+  ["public", "Pública"],
+  ["authorized", "Autorizada"],
+  ["user-provided", "Fornecida pelo usuário"],
 ];
 G.CONFIDENCE_LEVELS = [
-  ["unconfirmed", "Unconfirmed"],
-  ["possible", "Possible"],
-  ["probable", "Probable"],
-  ["confirmed", "Confirmed"],
+  ["unconfirmed", "Não confirmada"],
+  ["possible", "Possível"],
+  ["probable", "Provável"],
+  ["confirmed", "Confirmada"],
 ];
 G.VERIFICATION_STATUSES = [
-  ["not-verified", "Not verified"],
-  ["verified", "Verified"],
-  ["disputed", "Disputed"],
-  ["false-positive", "False positive"],
+  ["not-verified", "Não verificado"],
+  ["verified", "Verificado"],
+  ["disputed", "Contestado"],
+  ["false-positive", "Falso positivo"],
 ];
 G.SOURCE_CATEGORIES = [
-  ["website", "Website"],
-  ["documentation", "Documentation"],
+  ["website", "Site"],
+  ["documentation", "Documentação"],
   ["api", "API"],
-  ["public-database", "Public database"],
-  ["report", "Report"],
-  ["file", "File"],
-  ["other", "Other"],
+  ["public-database", "Base de dados pública"],
+  ["report", "Relatório"],
+  ["file", "Arquivo"],
+  ["other", "Outro"],
 ];
 G.EVIDENCE_TYPES = [
-  ["file", "File"],
-  ["document", "Document"],
-  ["image", "Image"],
-  ["hash", "Hash reference"],
-  ["note", "Analyst note"],
-  ["url", "URL reference"],
+  ["file", "Arquivo"],
+  ["document", "Documento"],
+  ["image", "Imagem"],
+  ["hash", "Referência de hash"],
+  ["note", "Nota do analista"],
+  ["url", "Referência de URL"],
 ];
 G.INDICATOR_TYPE_LABELS = {
-  ipv4: "IPv4 address",
-  ipv6: "IPv6 address",
-  cidr: "CIDR network",
-  domain: "Domain",
+  ipv4: "Endereço IPv4",
+  ipv6: "Endereço IPv6",
+  cidr: "Rede CIDR",
+  domain: "Domínio",
   url: "URL",
-  email: "Email",
+  email: "E-mail",
   md5: "MD5",
   sha1: "SHA-1",
   sha256: "SHA-256",
-  username: "Username",
+  username: "Nome de usuário",
 };
 G.INDICATOR_TYPES = Object.entries(G.INDICATOR_TYPE_LABELS);
 
@@ -212,14 +215,205 @@ G.el = el;
 G.svgEl = svgEl;
 
 /* ------------------------------------------------------------------ */
+/* Icons: one stroke language, 24px grid, 1.6 stroke                  */
+/* ------------------------------------------------------------------ */
+
+const ICON_PATHS = {
+  overview: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
+  investigations: "M3 7.5V18a1.5 1.5 0 0 0 1.5 1.5H11M3 7.5V6a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8A1.5 1.5 0 0 1 20 8v3M3 7.5h17M16.5 19.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18.7 18.7 21 21",
+  activity: "M12 7v5l3 2M12 21a9 9 0 1 0-9-9M3 12h3M3 16.5l2-1",
+  entities: "M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9zM12 3v9M12 12l7.8-4.5M12 12l-7.8-4.5",
+  indicators: "M12 3v4M12 17v4M3 12h4M17 12h4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
+  files: "M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h4.5",
+  board: "M3 4.5h18v15H3zM7 8.5h4v3H7zM14 13h4v3h-4zM11 10l3 4.5",
+  graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
+  evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
+  sources: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2",
+  kev: "M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6zM12 8v5M12 16.2v.3",
+  reports: "M7 3h10v5H7zM5 8h14a2 2 0 0 1 2 2v6h-4M7 16H3v-6a2 2 0 0 1 2-2M7 13h10v8H7z",
+  modules: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM16.75 13.5v6.5M13.5 16.75H20",
+  settings: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4",
+  search: "M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM16 16l5 5",
+  plus: "M12 5v14M5 12h14",
+  close: "M6 6l12 12M18 6 6 18",
+  menu: "M4 7h16M4 12h16M4 17h16",
+  keyboard: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",
+  display: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18",
+  refresh: "M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4",
+  note: "M5 4h14v11l-5 5H5zM14 20v-5h5M8.5 9h7M8.5 12.5h4",
+  upload: "M12 16V4M7 9l5-5 5 5M4 16v3.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V16",
+  empty: "M4 8h16M6 8l1 12h10l1-12M9 8V5h6v3",
+  alert: "M12 3l9.5 17h-19zM12 10v4.5M12 17.5v.3",
+  hash: "M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+  circle: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z",
+  ban: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM6.4 6.4l11.2 11.2",
+  diamond: "M12 3.5 20.5 12 12 20.5 3.5 12z",
+  clock: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l2.5 2",
+  list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
+  dot: "M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
+};
+
+/* Legacy glyphs passed by views are mapped onto the icon set so every
+   empty state, command and panel shares one visual language. */
+const GLYPH_ICONS = {
+  "◫": "overview", "⌕": "search", "◷": "clock", "⬡": "entities", "⌁": "indicators",
+  "▧": "files", "▦": "board", "⟷": "graph", "▤": "evidence", "⛁": "sources",
+  "☰": "list", "⎙": "reports", "⊞": "modules", "⚙": "settings", "＋": "plus",
+  "▣": "evidence", "↻": "refresh", "◐": "display", "◌": "circle", "◨": "display",
+  "⌘": "keyboard", "◈": "diamond", "○": "circle", "⊘": "ban", "◇": "diamond",
+  "·": "dot", "!": "alert",
+};
+
+function icon(name, { size = 18, className = "" } = {}) {
+  const key = ICON_PATHS[name] ? name : GLYPH_ICONS[name] || "dot";
+  const node = svgEl(
+    "svg",
+    {
+      class: `icon ${className}`.trim(),
+      viewBox: "0 0 24 24",
+      width: size,
+      height: size,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "1.6",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      "aria-hidden": "true",
+      focusable: "false",
+    },
+    svgEl("path", { d: ICON_PATHS[key] }),
+  );
+  return node;
+}
+
+function hydrateIcons(root = document) {
+  root.querySelectorAll("[data-icon]").forEach((node) => {
+    if (node.querySelector(":scope > svg.icon")) return;
+    node.prepend(icon(node.dataset.icon));
+  });
+}
+
+G.icon = icon;
+G.hydrateIcons = hydrateIcons;
+
+/* ------------------------------------------------------------------ */
+/* Tooltips: 2000 ms on hover, immediate on keyboard focus,           */
+/* dismissible with Esc and hoverable (WCAG 1.4.13).                  */
+/* ------------------------------------------------------------------ */
+
+const TOOLTIP_DELAY = 2000;
+const tooltipNode = document.querySelector("#tooltip");
+let tooltipTimer = null;
+let tooltipOwner = null;
+let tooltipCount = 0;
+let tooltipPending = null;
+
+function placeTooltip(target) {
+  const rect = target.getBoundingClientRect();
+  const tip = tooltipNode.getBoundingClientRect();
+  const inRail = Boolean(target.closest(".rail"));
+  let left;
+  let top;
+  if (inRail) {
+    left = rect.right + 10;
+    top = rect.top + rect.height / 2 - tip.height / 2;
+  } else {
+    left = rect.left + rect.width / 2 - tip.width / 2;
+    top = rect.bottom + 8;
+    if (top + tip.height > window.innerHeight - 8) top = rect.top - tip.height - 8;
+  }
+  left = Math.max(8, Math.min(left, window.innerWidth - tip.width - 8));
+  top = Math.max(8, Math.min(top, window.innerHeight - tip.height - 8));
+  tooltipNode.style.left = `${Math.round(left)}px`;
+  tooltipNode.style.top = `${Math.round(top)}px`;
+  tooltipNode.dataset.side = inRail ? "right" : "bottom";
+}
+
+function showTooltip(target) {
+  const text = target.dataset.tooltip;
+  if (!text || !tooltipNode) return;
+  if (document.body.classList.contains("nav-open") && target.closest(".rail")) return;
+  tooltipOwner = target;
+  if (!target.dataset.tooltipId) target.dataset.tooltipId = `tip-${++tooltipCount}`;
+  tooltipNode.id = "tooltip";
+  tooltipNode.textContent = text;
+  tooltipNode.hidden = false;
+  tooltipNode.classList.remove("is-visible");
+  placeTooltip(target);
+  const described = (target.getAttribute("aria-describedby") || "").split(" ").filter(Boolean);
+  if (!described.includes("tooltip") && target.getAttribute("aria-label") !== text) {
+    target.setAttribute("aria-describedby", [...described, "tooltip"].join(" "));
+  }
+  requestAnimationFrame(() => tooltipNode.classList.add("is-visible"));
+}
+
+function hideTooltip() {
+  clearTimeout(tooltipTimer);
+  tooltipTimer = null;
+  tooltipPending = null;
+  if (!tooltipNode) return;
+  if (tooltipOwner) {
+    const described = (tooltipOwner.getAttribute("aria-describedby") || "")
+      .split(" ")
+      .filter((id) => id && id !== "tooltip");
+    if (described.length) tooltipOwner.setAttribute("aria-describedby", described.join(" "));
+    else tooltipOwner.removeAttribute("aria-describedby");
+  }
+  tooltipOwner = null;
+  tooltipNode.classList.remove("is-visible");
+  tooltipNode.hidden = true;
+}
+
+function bindTooltips() {
+  if (!tooltipNode) return;
+  document.addEventListener("pointerover", (event) => {
+    if (event.pointerType === "touch") return;
+    if (event.target.closest?.("#tooltip")) {
+      clearTimeout(tooltipTimer);
+      return;
+    }
+    const target = event.target.closest?.("[data-tooltip]");
+    if (target && (target === tooltipOwner || target === tooltipPending)) return;
+    hideTooltip();
+    if (!target) return;
+    tooltipPending = target;
+    tooltipTimer = window.setTimeout(() => {
+      tooltipPending = null;
+      showTooltip(target);
+    }, TOOLTIP_DELAY);
+  });
+  document.addEventListener("pointerleave", hideTooltip);
+  document.addEventListener("focusin", (event) => {
+    const target = event.target.closest?.("[data-tooltip]");
+    hideTooltip();
+    if (target && target.matches(":focus-visible")) showTooltip(target);
+  });
+  document.addEventListener("focusout", (event) => {
+    if (event.target === tooltipOwner) hideTooltip();
+  });
+  document.addEventListener("pointerdown", hideTooltip, true);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && tooltipOwner) hideTooltip();
+  }, true);
+  window.addEventListener("scroll", hideTooltip, true);
+  window.addEventListener("resize", hideTooltip);
+}
+
+G.hideTooltip = hideTooltip;
+
+/* ------------------------------------------------------------------ */
 /* Formatting                                                         */
 /* ------------------------------------------------------------------ */
+
+const LOCALE = "pt-BR";
+G.LOCALE = LOCALE;
 
 function formatDate(value, options = {}) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(LOCALE, {
     dateStyle: options.dateStyle || "medium",
     ...(options.time ? { timeStyle: "short" } : {}),
     timeZone: "UTC",
@@ -231,19 +425,28 @@ function relativeTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   const seconds = Math.round((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
-  if (seconds < 172800) return "yesterday";
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`;
+  if (seconds < 60) return "agora";
+  if (seconds < 3600) return `há ${Math.floor(seconds / 60)} min`;
+  if (seconds < 86400) return `há ${Math.floor(seconds / 3600)} h`;
+  if (seconds < 172800) return "ontem";
+  if (seconds < 604800) return `há ${Math.floor(seconds / 86400)} dias`;
   return formatDate(value);
+}
+
+const numberFormat = new Intl.NumberFormat(LOCALE);
+const decimalFormat = (digits) =>
+  new Intl.NumberFormat(LOCALE, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+function formatNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? numberFormat.format(number) : String(value ?? "—");
 }
 
 function formatBytes(value) {
   const bytes = Number(value) || 0;
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+  if (bytes < 1024) return `${formatNumber(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${decimalFormat(1).format(bytes / 1024)} KiB`;
+  return `${decimalFormat(2).format(bytes / (1024 * 1024))} MiB`;
 }
 
 function shortId(value) {
@@ -265,6 +468,50 @@ function relationshipLabel(value) {
   return G.RELATIONSHIP_TYPE_LABELS[value] || titleCase(value);
 }
 
+/* Presentation labels for enumerated values stored in English. */
+const STATUS_LABELS = {
+  open: "Aberta", closed: "Fechada", cancelled: "Cancelada",
+  enabled: "Ativado", disabled: "Desativado", available: "Disponível", planned: "Planejado",
+  error: "Erro", ok: "OK", info: "Informação", attention: "Atenção", warning: "Alerta",
+  high: "Alta", medium: "Média", low: "Baixa", critical: "Crítica",
+  verified: "Verificado", "not-verified": "Não verificado", disputed: "Contestado",
+  "false-positive": "Falso positivo", unverified: "Não verificado", mismatch: "Divergente",
+  missing: "Ausente", "not-applicable": "Não se aplica", "reference-only": "Somente referência",
+  unconfirmed: "Não confirmada", possible: "Possível", probable: "Provável", confirmed: "Confirmada",
+  public: "Pública", authorized: "Autorizada", "user-provided": "Fornecida pelo usuário",
+  unknown: "Desconhecido", known: "Conhecido",
+  entity: "Entidade", note: "Nota", text: "Texto", group: "Grupo",
+  core: "Essencial", intelligence: "Inteligência", analysis: "Análise", evidence: "Evidências",
+  output: "Saída", system: "Sistema", workspace: "Workspace", connector: "Conector",
+  connectors: "Conectores", "threat-intelligence": "Inteligência de ameaças",
+  created: "Criação", updated: "Atualização", deleted: "Exclusão", linked: "Vínculo",
+  unlinked: "Desvínculo", verified_integrity: "Integridade verificada",
+  observation: "Observação", investigation: "Investigação", relationship: "Relacionamento",
+  source: "Fonte", status: "Status", board: "Quadro", indicator: "Indicador",
+  file: "Arquivo", module: "Módulo", setting: "Configuração", settings: "Configurações",
+  investigations: "Investigações", observations: "Observações", entities: "Entidades",
+  sources: "Fontes", relationships: "Relacionamentos", boards: "Quadros", activity: "Atividades",
+  evidence_records: "Evidências", file_analyses: "Análises de arquivos", indicators: "Indicadores",
+  modules: "Módulos", status_events: "Eventos de status",
+  create: "Criação", update: "Atualização", delete: "Exclusão", link: "Vínculo", unlink: "Desvínculo",
+  verify: "Verificação", import: "Importação", assessment: "Avaliação", analysis: "Análise",
+  high: "Alta", medium: "Média", low: "Baixa",
+};
+
+function statusLabel(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const key = String(value);
+  return (
+    STATUS_LABELS[key] ||
+    STATUS_LABELS[key.toLowerCase()] ||
+    VALUE_LABELS[key] ||
+    G.ENTITY_TYPE_LABELS[key] ||
+    G.SOURCE_CATEGORIES.find(([value]) => value === key)?.[1] ||
+    G.EVIDENCE_TYPES.find(([value]) => value === key)?.[1] ||
+    titleCase(key)
+  );
+}
+
 function indicatorTypeLabel(value) {
   return G.INDICATOR_TYPE_LABELS[value] || titleCase(value);
 }
@@ -273,10 +520,274 @@ G.formatDate = formatDate;
 G.relativeTime = relativeTime;
 G.formatBytes = formatBytes;
 G.shortId = shortId;
-G.titleCase = titleCase;
+G.titleCase = (value) => statusLabel(value);
 G.entityTypeLabel = entityTypeLabel;
 G.relationshipLabel = relationshipLabel;
 G.indicatorTypeLabel = indicatorTypeLabel;
+
+/* ------------------------------------------------------------------ */
+/* Localization of backend-provided text                              */
+/* The API contract, stored rows and CLI output stay in English; only */
+/* the presentation is translated here.                               */
+/* ------------------------------------------------------------------ */
+
+const FIELD_LABELS = {
+  name: "nome", description: "descrição", status: "status", title: "título",
+  content: "conteúdo", identifier: "identificador", reference: "referência",
+  source_reference: "referência da fonte", category: "categoria", label: "rótulo",
+  entity_type: "tipo de entidade", relationship_type: "tipo de relacionamento",
+  confidence: "confiança", verification_status: "status de verificação",
+  collection_basis: "base de coleta", evidence_type: "tipo de evidência",
+  observed_at: "data da observação", accessed_at: "data de acesso", sha256: "SHA-256",
+  original_name: "nome original", investigation_id: "investigação", query: "consulta",
+  value: "valor", text: "texto", limit: "limite", offset: "deslocamento", note: "nota",
+  "entity type": "tipo de entidade", "relationship type": "tipo de relacionamento",
+  "verification status": "status de verificação", "collection basis": "base de coleta",
+  "indicator type": "tipo de indicador", "indicator value": "valor do indicador",
+  "assessment note": "nota de avaliação", "evidence type": "tipo de evidência",
+  "source category": "categoria da fonte", "board name": "nome do quadro",
+};
+
+function fieldLabel_(field) {
+  const label = FIELD_LABELS[field] || field;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+const ERROR_PATTERNS = [
+  [/^(.+) must not be empty$/, (m) => `${fieldLabel_(m[1])}: não pode ficar vazio`],
+  [/^(.+) exceeds (\d+) characters$/, (m) => `${fieldLabel_(m[1])}: excede ${m[2]} caracteres`],
+  [/^(.+) contains unsupported control characters$/, (m) => `${fieldLabel_(m[1])}: contém caracteres de controle não suportados`],
+  [/^(.+) must be one of: (.+)$/, (m) => `${fieldLabel_(m[1])}: deve ser um destes valores: ${m[2]}`],
+  [/^(.+) must be between (.+) and (.+)$/, (m) => `${fieldLabel_(m[1])}: deve estar entre ${m[2]} e ${m[3]}`],
+  [/^(.+) must be an integer$/, (m) => `${fieldLabel_(m[1])}: deve ser um número inteiro`],
+  [/^(.+) must be a number$/, (m) => `${fieldLabel_(m[1])}: deve ser um número`],
+  [/^(.+) must be a string$/, (m) => `${fieldLabel_(m[1])}: deve ser um texto`],
+  [/^(.+) must be finite$/, (m) => `${fieldLabel_(m[1])}: deve ser um número finito`],
+  [/^(.+) must be true or false$/, (m) => `${fieldLabel_(m[1])}: deve ser verdadeiro ou falso`],
+  [/^(.+) must be a boolean$/, (m) => `${fieldLabel_(m[1])}: deve ser verdadeiro ou falso`],
+  [/^identifier must be a valid (.+)$/, (m) => ({ "domain name": "O identificador deve ser um nome de domínio válido", "email address": "O identificador deve ser um endereço de e-mail válido", "IPv4 address": "O identificador deve ser um endereço IPv4 válido", "IPv6 address": "O identificador deve ser um endereço IPv6 válido" })[m[1]] || `Identificador inválido (${m[1]})`],
+  [/^identifier must be an http or https URL$/, () => "O identificador deve ser uma URL http ou https"],
+  [/^another entity already uses this identifier$/, () => "Outra entidade já usa este identificador"],
+  [/^a relationship requires two different entities$/, () => "Um relacionamento exige duas entidades diferentes"],
+  [/^a connection requires two different elements$/, () => "Uma conexão exige dois elementos diferentes"],
+  [/^(?:(\w+) )?entity not found: .+$/, () => "Entidade não encontrada"],
+  [/^investigation not found: .+$/, () => "Investigação não encontrada"],
+  [/^source not found: .+$/, () => "Fonte não encontrada"],
+  [/^evidence not found: .+$/, () => "Evidência não encontrada"],
+  [/^relationship not found: .+$/, () => "Relacionamento não encontrado"],
+  [/^file analysis not found: .+$/, () => "Análise de arquivo não encontrada"],
+  [/^module not found: .+$/, () => "Módulo não encontrado"],
+  [/^investigation board not found$/, () => "Quadro de investigação não encontrado"],
+  [/^Not found$/, () => "Não encontrado"],
+  [/^module is (\w+): (.+); enable it in the module manager first$/, (m) => `O módulo ${G.moduleLabel(m[2])} está ${statusLabel(m[1]).toLowerCase()}; ative-o no gerenciador de módulos primeiro`],
+  [/^(global search|indicator engine) is disabled in the module registry$/, (m) => `${m[1] === "global search" ? "A pesquisa global" : "O motor de indicadores"} está desativado no registro de módulos`],
+  [/^board revision conflict: expected (\d+) but received (\d+); reload the board and retry$/, (m) => `Conflito de revisão do quadro: esperada ${m[1]}, recebida ${m[2]}; recarregue o quadro e tente novamente`],
+  [/^a board is limited to (\d+) elements$/, (m) => `Um quadro é limitado a ${m[1]} elementos`],
+  [/^board name must not be empty$/, () => "O nome do quadro não pode ficar vazio"],
+  [/^duplicate board connection.*$/, () => "Conexão duplicada no quadro"],
+  [/^duplicate board element id.*$/, () => "Elemento duplicado no quadro"],
+  [/^entity is not linked to this investigation$/, () => "A entidade não está vinculada a esta investigação"],
+  [/^source is not linked to this (investigation|entity)$/, (m) => `A fonte não está vinculada a ${m[1] === "entity" ? "esta entidade" : "esta investigação"}`],
+  [/^evidence file exceeds the 4 MiB limit$/, () => "O arquivo de evidência excede o limite de 4 MiB"],
+  [/^evidence file must not be empty$/, () => "O arquivo de evidência não pode estar vazio"],
+  [/^file exceeds the 4 MiB analysis limit$/, () => "O arquivo excede o limite de análise de 4 MiB"],
+  [/^file must not be empty$/, () => "O arquivo não pode estar vazio"],
+  [/^evidence has no stored file( to verify)?$/, () => "A evidência não possui arquivo armazenado"],
+  [/^stored evidence file is missing$/, () => "O arquivo de evidência armazenado não foi encontrado"],
+  [/^file evidence requires a file-backed database$/, () => "Evidências em arquivo exigem um banco de dados em arquivo"],
+  [/^preview is only available for image evidence$/, () => "A prévia só está disponível para evidências de imagem"],
+  [/^uploaded file is not a recognised image format$/, () => "O arquivo enviado não é um formato de imagem reconhecido"],
+  [/^sha256 must be a 64 character hexadecimal digest$/, () => "O SHA-256 deve ter 64 caracteres hexadecimais"],
+  [/^provide sha256 or a source reference$/, () => "Informe o SHA-256 ou uma referência de fonte"],
+  [/^provide a name or an identifier$/, () => "Informe um nome ou um identificador"],
+  [/^provide at least one setting$/, () => "Informe pelo menos uma configuração"],
+  [/^provide a module state$/, () => "Informe o estado do módulo"],
+  [/^no (\w+) fields were provided$/, () => "Nenhum campo foi informado"],
+  [/^at least one of name, description or status is required$/, () => "Informe nome, descrição ou status"],
+  [/^unknown settings: (.+)$/, (m) => `Configurações desconhecidas: ${m[1]}`],
+  [/^value is required$/, () => "Um valor é obrigatório"],
+  [/^Database operation failed$/, () => "A operação no banco de dados falhou"],
+  [/^Only same-origin loopback requests are allowed$/, () => "Somente solicitações de mesma origem em loopback são permitidas"],
+  [/^Request body .+$/, () => "O corpo da solicitação é inválido"],
+  [/^Content-Type must be application\/json$/, () => "O Content-Type deve ser application/json"],
+];
+
+const ACTIVITY_PATTERNS = [
+  [/^Investigation imported from archive: (.+)$/, "Investigação importada de arquivo: $1"],
+  [/^Investigation created: (.+)$/, "Investigação criada: $1"],
+  [/^Investigation created$/, "Investigação criada"],
+  [/^Entity linked: (.+)$/, "Entidade vinculada: $1"],
+  [/^Source linked: (.+)$/, "Fonte vinculada: $1"],
+  [/^Investigation status changed to (\w+)$/, (m) => `Status da investigação alterado para ${statusLabel(m[1]).toLowerCase()}`],
+  [/^Investigation details updated: (.+)$/, "Detalhes da investigação atualizados: $1"],
+  [/^Investigation deleted: (.+)$/, "Investigação excluída: $1"],
+  [/^Investigation board layout saved$/, "Layout do quadro de investigação salvo"],
+  [/^Observation recorded: (.+)$/, "Observação registrada: $1"],
+  [/^Evidence added: (.+)$/, "Evidência adicionada: $1"],
+  [/^Evidence integrity checked: (\w+)$/, (m) => `Integridade da evidência verificada: ${statusLabel(m[1]).toLowerCase()}`],
+  [/^Evidence deleted: (.+)$/, "Evidência excluída: $1"],
+  [/^Source registered: (.+)$/, "Fonte registrada: $1"],
+  [/^Source updated: (.+)$/, "Fonte atualizada: $1"],
+  [/^Source deleted: (.+)$/, "Fonte excluída: $1"],
+  [/^Source linked to investigation$/, "Fonte vinculada à investigação"],
+  [/^Source unlinked from investigation$/, "Fonte desvinculada da investigação"],
+  [/^Source linked to entity$/, "Fonte vinculada à entidade"],
+  [/^Source unlinked from entity$/, "Fonte desvinculada da entidade"],
+  [/^Entity registered: (.+) \((.+)\)$/, "Entidade registrada: $1"],
+  [/^Entity updated: (.+)$/, "Entidade atualizada: $1"],
+  [/^Entity deleted: (.+)$/, "Entidade excluída: $1"],
+  [/^Entity linked to investigation: (.+)$/, "Entidade vinculada à investigação: $1"],
+  [/^Entity unlinked from investigation$/, "Entidade desvinculada da investigação"],
+  [/^Relationship recorded: (.+)$/, (m) => `Relacionamento registrado: ${relationshipLabel(m[1]).toLowerCase()}`],
+  [/^Relationship updated: (.+)$/, (m) => `Relacionamento atualizado: ${relationshipLabel(m[1]).toLowerCase()}`],
+  [/^Relationship deleted$/, "Relacionamento excluído"],
+  [/^Module (.+) set to (\w+)$/, (m) => `Módulo ${m[1]} ${m[2] === "enabled" ? "ativado" : "desativado"}`],
+  [/^Settings updated: (.+)$/, "Configurações atualizadas: $1"],
+  [/^Indicator assessment set to (.+)$/, (m) => `Avaliação do indicador definida como ${statusLabel(m[1]).toLowerCase()}`],
+  [/^File analysed: (.+)$/, "Arquivo analisado: $1"],
+];
+
+function translateActivity(summary) {
+  const text = String(summary || "");
+  for (const [pattern, replacement] of ACTIVITY_PATTERNS) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    return typeof replacement === "function" ? replacement(match) : text.replace(pattern, replacement);
+  }
+  return text;
+}
+
+G.translateActivity = translateActivity;
+
+/* Fixed backend sentences (limitations, findings, schema history). */
+const TEXT_PT = {
+  "Observations are user-entered and have not been independently verified.": "As observações são registradas pelo usuário e não foram verificadas de forma independente.",
+  "This tool records evidence; it does not collect data from external services.": "Esta ferramenta registra evidências; ela não coleta dados de serviços externos.",
+  "Indicator matches are pattern-based and have not been reputation-checked.": "As correspondências de indicadores são baseadas em padrões e não tiveram a reputação verificada.",
+  "Relationships are analyst-entered and keep the verification status recorded for each link.": "Os relacionamentos são registrados pelo analista e mantêm o status de verificação de cada vínculo.",
+  "Evidence digests confirm file identity; they do not establish authenticity, origin or intent.": "Os hashes das evidências confirmam a identidade do arquivo; não estabelecem autenticidade, origem ou intenção.",
+  "The indicator engine is disabled in the module registry; indicators and correlations were not computed.": "O motor de indicadores está desativado no registro de módulos; indicadores e correlações não foram calculados.",
+  "Hardening markers describe compiler and linker choices; they are not a vulnerability verdict.": "Os marcadores de proteção descrevem escolhas de compilador e linker; não são um veredito de vulnerabilidade.",
+  "Absence of a marker is not proof that a mitigation is absent from the running process.": "A ausência de um marcador não prova que a mitigação está ausente do processo em execução.",
+  "Static, read-only inspection only; no execution, emulation or sandbox detonation.": "Somente inspeção estática e de leitura; sem execução, emulação ou detonação em sandbox.",
+  "Archive members are listed, never extracted to disk.": "Os membros de pacotes são listados, nunca extraídos para o disco.",
+  "Parsers cover bounded headers and central directories; malformed files can hide fields.": "Os analisadores cobrem cabeçalhos e diretórios centrais limitados; arquivos malformados podem ocultar campos.",
+  "Embedded indicators are syntactic string matches, not reputation or attribution.": "Indicadores embutidos são correspondências sintáticas em strings, não reputação nem atribuição.",
+  "Hashes identify these exact bytes and do not establish safety or provenance.": "Os hashes identificam exatamente estes bytes e não estabelecem segurança nem proveniência.",
+  "Structural inspection only; no DNS, WHOIS, reputation or attribution lookup.": "Somente inspeção estrutural; sem consulta de DNS, WHOIS, reputação ou atribuição.",
+  "Canonical values are for comparison and may normalize presentation.": "Os valores canônicos servem para comparação e podem normalizar a apresentação.",
+  "Syntactic extraction only; matches are not reputation or attribution.": "Somente extração sintática; correspondências não são reputação nem atribuição.",
+  "Text is analyzed in memory and is not written to the database.": "O texto é analisado em memória e não é gravado no banco de dados.",
+  "The document declares JavaScript, an open action or a launch action. It was not executed.": "O documento declara JavaScript, uma ação de abertura ou de execução. Ele não foi executado.",
+  "The PDF declares encryption; content and metadata may be incomplete.": "O PDF declara criptografia; conteúdo e metadados podem estar incompletos.",
+  "Legacy OLE compound document; structured parsing is limited to format identification.": "Documento composto OLE legado; a análise estruturada se limita à identificação do formato.",
+  "High byte entropy is consistent with compressed, packed or encrypted content; it is not proof of maliciousness.": "Entropia alta é compatível com conteúdo comprimido, empacotado ou criptografado; não é prova de malícia.",
+  "Executable structure was parsed statically. The file was not executed, emulated or detonated.": "A estrutura do executável foi analisada estaticamente. O arquivo não foi executado, emulado nem detonado.",
+  "Baseline evidence ledger schema": "Esquema base do registro de evidências",
+  "Investigation workspace tables and columns": "Tabelas e colunas do workspace de investigação",
+  "Persistent file intelligence analyses": "Análises persistentes de arquivos",
+  "planned, not implemented": "planejado, não implementado",
+  "explicit manual refresh": "atualização manual explícita",
+};
+
+function translateText(value) {
+  const text = String(value ?? "");
+  if (TEXT_PT[text]) return TEXT_PT[text];
+  let match = text.match(/^The filename extension does not match the detected (.+) structure\.$/);
+  if (match) return `A extensão do nome do arquivo não corresponde à estrutura ${match[1]} detectada.`;
+  match = text.match(/^Structural notes: (.+)$/);
+  if (match) return `Observações estruturais: ${match[1]}`;
+  return text;
+}
+
+G.translateText = translateText;
+
+/* Case coverage checks are computed by key; the wording is rebuilt here. */
+const COVERAGE_TEXT = {
+  "observation-sources": ["Observações com proveniência", (n) => n ? `${n} observação(ões) sem referência de fonte.` : "Todas as observações possuem referência de fonte."],
+  "entity-links": ["Entidades vinculadas", (n) => n ? `${n} registro(s) de entidade vinculado(s).` : "Vincule pelo menos uma entidade para que o caso use o registro compartilhado."],
+  "evidence-integrity": ["Integridade das evidências", (n, c) => c.status === "ok" ? "Todas as evidências armazenadas têm hash verificado." : n ? `${n} registro(s) de evidência não verificado(s).` : "Nenhuma evidência anexada a este caso."],
+  "source-records": ["Fontes vinculadas", (n) => n ? `${n} registro(s) de fonte vinculado(s).` : "Registre ou vincule uma fonte para o material utilizado."],
+  relationships: ["Cobertura de relacionamentos", (n) => n ? `${n} relacionamento(s) registrado(s).` : "Nenhum relacionamento entre entidades registrado ainda."],
+  indicators: ["Extração de indicadores", (n) => n ? `${n} indicador(es) único(s) extraído(s).` : "Nenhum indicador foi extraído dos registros atuais."],
+  assessments: ["Avaliação de indicadores", (n) => n ? `${n} indicador(es) ainda sem avaliação do analista.` : "Todos os indicadores extraídos possuem avaliação."],
+  disputed: ["Indicadores contestados", (n) => n ? `${n} indicador(es) contestado(s) ou marcado(s) como falso positivo.` : "Nenhum indicador contestado ou marcado como falso positivo."],
+  correlations: ["Corroboração entre fontes", (n) => n ? `${n} valor(es) aparecem em várias observações.` : "Nenhum valor exato aparece em mais de uma observação ainda."],
+};
+
+G.coverageText = function coverageText(check) {
+  const entry = COVERAGE_TEXT[check.key];
+  if (!entry) return [check.label, check.detail];
+  return [entry[0], entry[1](Number(check.count) || 0, check)];
+};
+
+function translateError(message) {
+  const text = String(message || "").trim();
+  for (const [pattern, render] of ERROR_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) return render(match);
+  }
+  return text;
+}
+
+const MODULE_TEXT = {
+  investigations: ["Investigações", "Ciclo de vida dos casos, observações e linha do tempo de status."],
+  "activity-log": ["Registro de atividades", "Trilha de auditoria somente de acréscimo das alterações do workspace."],
+  entities: ["Inteligência de entidades", "Registro canônico de entidades compartilhado entre casos."],
+  relationships: ["Relacionamentos", "Vínculos entre entidades com status de verificação."],
+  "investigation-board": ["Quadro de investigação", "Quadro visual persistente com cartões, notas, grupos e conexões."],
+  "relationship-graph": ["Grafo de relacionamentos", "Grafo de entidades com filtros, foco e métricas."],
+  evidence: ["Gerenciador de evidências", "Evidências com hash preservado e reverificação de integridade."],
+  "image-intelligence": ["Análise de imagens", "Inspeção de formato, dimensões e hash de imagens enviadas."],
+  "file-intelligence": ["Análise de arquivos", "Inspeção estática limitada de documentos, pacotes, imagens e executáveis, com histórico persistente."],
+  "source-manager": ["Gerenciador de fontes", "Fontes reutilizáveis vinculadas a investigações e entidades."],
+  "indicator-engine": ["Motor de indicadores", "Extração de padrões e correlação por valor exato com proveniência."],
+  "cisa-kev": ["Conector CISA KEV", "Atualização explícita e somente leitura do catálogo público CISA KEV."],
+  "report-center": ["Central de relatórios", "Relatórios estruturados em JSON, HTML, CSV e Markdown a partir de registros reais."],
+  "global-search": ["Pesquisa global", "Pesquisa unificada em casos, entidades, evidências e fontes."],
+  "module-manager": ["Gerenciador de módulos", "Registro controlado dos módulos disponíveis e planejados."],
+  settings: ["Configurações", "Preferências de interface e de relatórios salvas, com efeito real."],
+  "nvd-connector": ["Conector NVD CVE", "Conector planejado de metadados descritivos de CVE do NVD; não implementado."],
+  "external-osint-connectors": ["Conectores OSINT externos", "Consultas externas autorizadas planejadas; nenhum conector foi implementado."],
+  "media-forensics": ["Perícia de mídia", "Análise de mídia mais profunda planejada; hoje existem apenas hash e metadados."],
+};
+
+const MODULE_CATEGORIES = {
+  Core: "Essencial", Workspace: "Workspace", Intelligence: "Inteligência", Analysis: "Análise",
+  Evidence: "Evidências", "Threat Intelligence": "Inteligência de ameaças", Output: "Saída", System: "Sistema",
+};
+
+function moduleLabel(moduleId, fallback) {
+  return MODULE_TEXT[moduleId]?.[0] || fallback || moduleId;
+}
+
+function moduleDescription(moduleId, fallback) {
+  return MODULE_TEXT[moduleId]?.[1] || fallback || "";
+}
+
+const SETTING_TEXT = {
+  "interface.theme": ["Tema da interface", "Paleta escura da estação ou variante de alto contraste."],
+  "interface.density": ["Densidade de informação", "Espaçamento confortável ou layout compacto para telas menores."],
+  "interface.reduce_motion": ["Reduzir movimento", "Desativa transições de painéis e telas."],
+  "board.autosave_delay_ms": ["Atraso do salvamento automático do quadro", "Milissegundos de inatividade antes de salvar o estado do quadro."],
+  "search.result_limit": ["Limite de resultados da pesquisa global", "Número máximo de resultados por grupo na pesquisa global."],
+  "report.include_limitations": ["Incluir limitações nos relatórios", "Acrescenta limitações analíticas explícitas aos relatórios gerados."],
+  "report.include_raw_observations": ["Incluir observações completas", "Inclui o texto completo das observações nos relatórios HTML gerados."],
+};
+
+const VALUE_LABELS = {
+  dark: "Escuro", contrast: "Alto contraste", comfortable: "Confortável", compact: "Compacta",
+  true: "Sim", false: "Não", force: "Força", circular: "Circular", grid: "Grade",
+  unattributed: "Sem atribuição",
+};
+
+G.translateError = translateError;
+G.moduleLabel = moduleLabel;
+G.moduleDescription = moduleDescription;
+G.moduleCategory = (value) => MODULE_CATEGORIES[value] || value;
+G.settingText = (key, label, description) => SETTING_TEXT[key] || [label, description];
+G.statusLabel = statusLabel;
+G.formatNumber = formatNumber;
 
 /* ------------------------------------------------------------------ */
 /* API and feedback                                                   */
@@ -292,7 +803,7 @@ async function api(path, options = {}) {
     payload = await response.json();
   }
   if (!response.ok) {
-    const error = new Error(payload?.error || `Request failed (${response.status})`);
+    const error = new Error(translateError(payload?.error) || `A solicitação falhou (${response.status})`);
     error.status = response.status;
     error.code = payload?.code;
     throw error;
@@ -370,7 +881,7 @@ function badge(text, tone = "neutral") {
 }
 
 function statusBadge(value) {
-  return badge(titleCase(value), STATUS_TONES[value] || "neutral");
+  return badge(statusLabel(value), STATUS_TONES[value] || "neutral");
 }
 
 function pageHeader({ eyebrow, title, description, actions = [] }) {
@@ -416,7 +927,7 @@ function panel({ eyebrow, title, caption, actions = [], className = "" }, ...chi
   );
 }
 
-function metric({ label, value, foot, icon, tone = "blue" }) {
+function metric({ label, value, foot }) {
   return el(
     "article",
     { class: "metric-card" },
@@ -424,38 +935,37 @@ function metric({ label, value, foot, icon, tone = "blue" }) {
       "div",
       { class: "metric-top" },
       el("span", {}, label),
-      icon ? el("span", { class: `metric-icon tone-${tone}`, "aria-hidden": "true" }, icon) : null,
     ),
     el("div", { class: "metric-value" }, value),
     foot ? el("div", { class: "metric-foot" }, foot) : null,
   );
 }
 
-function emptyState({ icon = "◫", title, description, action = null }) {
+function emptyState({ icon: glyph = "empty", title, description, action = null }) {
   return el(
     "div",
     { class: "empty-state" },
-    el("span", { class: "empty-icon", "aria-hidden": "true" }, icon),
+    el("span", { class: "empty-icon" }, icon(glyph, { size: 20 })),
     el("h3", {}, title),
     description ? el("p", {}, description) : null,
     action || null,
   );
 }
 
-function errorState({ title = "Unable to load this view", message, retry = null }) {
+function errorState({ title = "Não foi possível carregar esta tela", message, retry = null }) {
   return el(
     "div",
     { class: "error-state", role: "alert" },
-    el("span", { class: "error-icon", "aria-hidden": "true" }, "!"),
+    el("span", { class: "error-icon" }, icon("alert", { size: 20 })),
     el("h3", {}, title),
-    el("p", {}, message || "The local API returned an error."),
+    el("p", {}, message || "A API local retornou um erro."),
     retry
-      ? el("button", { class: "button button-secondary", type: "button", onClick: retry }, "Try again")
+      ? el("button", { class: "button button-secondary", type: "button", onClick: retry }, "Tentar novamente")
       : null,
   );
 }
 
-function dataTable({ columns, rows, emptyMessage = "No records.", onRowClick = null }) {
+function dataTable({ columns, rows, emptyMessage = "Nenhum registro.", onRowClick = null }) {
   const table = el("table", { class: "data-table" });
   table.append(
     el(
@@ -545,7 +1055,7 @@ function kvList(pairs) {
   return dl;
 }
 
-function loadingBlock(message = "Loading…") {
+function loadingBlock(message = "Carregando…") {
   return el("div", { class: "loading-block", role: "status" }, el("span", { class: "spinner", "aria-hidden": "true" }), message);
 }
 
@@ -566,7 +1076,7 @@ G.sectionHeading = sectionHeading;
 G.kvList = kvList;
 G.loadingBlock = loadingBlock;
 G.inlineError = inlineError;
-G.titleCase = titleCase;
+G.titleCase = (value) => statusLabel(value);
 
 /* ------------------------------------------------------------------ */
 /* Dialogs                                                            */
@@ -577,7 +1087,7 @@ function fieldLabel(field) {
     "span",
     { class: "field-label" },
     field.label,
-    field.optional ? el("span", { class: "optional-label" }, "OPTIONAL") : null,
+    field.optional ? el("span", { class: "optional-label" }, "OPCIONAL") : null,
   );
 }
 
@@ -666,7 +1176,7 @@ function formDialog({
   title,
   description = "",
   fields = [],
-  submitLabel = "Save",
+  submitLabel = "Salvar",
   danger = false,
   onSubmit,
 }) {
@@ -695,7 +1205,7 @@ function formDialog({
           {
             class: "icon-button",
             type: "button",
-            "aria-label": "Close dialog",
+            "aria-label": "Fechar diálogo",
             onClick: () => dialog.close("cancel"),
           },
           "×",
@@ -713,7 +1223,7 @@ function formDialog({
             type: "button",
             onClick: () => dialog.close("cancel"),
           },
-          "Cancel",
+          "Cancelar",
         ),
         submitButton,
       ),
@@ -738,7 +1248,7 @@ function formDialog({
         return !String(values[field.name] ?? "").trim();
       });
       if (missing.length) {
-        errorNode.textContent = `Required: ${missing.map((field) => field.label).join(", ")}`;
+        errorNode.textContent = `Obrigatório: ${missing.map((field) => field.label).join(", ")}`;
         errorNode.hidden = false;
         return;
       }
@@ -757,7 +1267,7 @@ function formDialog({
   });
 }
 
-function confirmDialog({ title, message, confirmLabel = "Confirm", danger = false }) {
+function confirmDialog({ title, message, confirmLabel = "Confirmar", danger = false }) {
   return new Promise((resolve) => {
     let confirmed = false;
     const dialog = el(
@@ -769,7 +1279,7 @@ function confirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
         el(
           "div",
           { class: "dialog-heading" },
-          el("div", {}, el("p", { class: "eyebrow" }, "CONFIRM ACTION"), el("h2", {}, title)),
+          el("div", {}, el("p", { class: "eyebrow" }, "CONFIRMAR AÇÃO"), el("h2", {}, title)),
         ),
         el("p", { class: "confirm-message" }, message),
         el(
@@ -778,7 +1288,7 @@ function confirmDialog({ title, message, confirmLabel = "Confirm", danger = fals
           el(
             "button",
             { class: "button button-secondary", type: "button", onClick: () => dialog.close() },
-            "Cancel",
+            "Cancelar",
           ),
           el(
             "button",
@@ -817,15 +1327,21 @@ function renderNav() {
   for (const group of G.NAV) {
     const items = group.items.filter((item) => moduleEnabled(item.module));
     if (!items.length) continue;
-    const section = el("section", { class: "nav-section" });
-    section.append(el("div", { class: "nav-section-label" }, group.label));
+    const labelId = `nav-group-${G.NAV.indexOf(group)}`;
+    const section = el("section", { class: "nav-section", "aria-labelledby": labelId });
+    section.append(el("div", { class: "nav-section-label", id: labelId }, group.label));
     for (const item of items) {
       section.append(
         el(
           "a",
-          { class: "nav-link", href: `#/${item.view}`, dataset: { view: item.view } },
-          el("span", { class: "nav-icon", "aria-hidden": "true" }, item.icon),
-          el("span", { class: "nav-label" }, item.label),
+          {
+            class: "nav-link",
+            href: `#/${item.view}`,
+            "aria-label": item.label,
+            dataset: { view: item.view, tooltip: item.label },
+          },
+          el("span", { class: "nav-icon" }, icon(item.icon, { size: 20 })),
+          el("span", { class: "nav-label", "aria-hidden": "true" }, item.label),
         ),
       );
     }
@@ -855,6 +1371,9 @@ function markActiveNav(view) {
 function setBreadcrumb(view) {
   const label = G.VIEW_LABELS[view] || titleCase(view);
   document.querySelector("#page-breadcrumb").textContent = label;
+  const group = document.querySelector("#breadcrumb-group");
+  if (group) group.textContent = G.VIEW_GROUPS[view] || "Workspace";
+  document.title = `${label} · GARBAGE`;
 }
 
 function go(...parts) {
@@ -884,6 +1403,9 @@ async function route() {
   G.state.currentParams = params;
   markActiveNav(view);
   setBreadcrumb(view);
+  hideTooltip();
+  viewRoot.dataset.view = view;
+  viewRoot.dataset.detail = params.length ? "true" : "false";
   setLoading(true);
   viewRoot.replaceChildren();
   try {
@@ -891,7 +1413,7 @@ async function route() {
   } catch (error) {
     viewRoot.replaceChildren(
       errorState({
-        title: "This view could not be loaded",
+        title: "Não foi possível carregar esta tela",
         message: error.message,
         retry: () => route(),
       }),
@@ -921,33 +1443,33 @@ G.invalidateInvestigations = function invalidateInvestigations() {
 
 G.newInvestigation = async function newInvestigation() {
   await formDialog({
-    eyebrow: "NEW CASE",
-    title: "Create investigation",
-    description: "Open a case file. Observations stay sourced and unverified.",
+    eyebrow: "NOVO CASO",
+    title: "Criar investigação",
+    description: "Abra um caso. As observações permanecem com fonte registrada e sem verificação.",
     fields: [
       {
         name: "name",
-        label: "Investigation name",
+        label: "Nome da investigação",
         required: true,
         maxlength: 200,
-        placeholder: "e.g. Suspicious infrastructure review",
+        placeholder: "ex.: Revisão de infraestrutura suspeita",
       },
       {
         name: "description",
-        label: "Description",
+        label: "Descrição",
         type: "textarea",
         rows: 3,
-        placeholder: "Scope, context, or analyst objective",
+        placeholder: "Escopo, contexto ou objetivo do analista",
       },
     ],
-    submitLabel: "Create investigation",
+    submitLabel: "Criar investigação",
     onSubmit: async (values) => {
       const created = await api("/api/investigations", {
         method: "POST",
         body: JSON.stringify(values),
       });
       G.invalidateInvestigations();
-      toast("Investigation created.");
+      toast("Investigação criada.");
       go("investigations", created.id);
     },
   });
@@ -959,7 +1481,7 @@ G.newInvestigation = async function newInvestigation() {
 
 let searchTimer = null;
 
-function renderSearchHint(message = "Type at least two characters to search local records.") {
+function renderSearchHint(message = "Digite pelo menos dois caracteres para pesquisar registros locais.") {
   searchResults.replaceChildren(el("p", { class: "search-hint" }, message));
   G.state.searchIndex = -1;
 }
@@ -967,39 +1489,39 @@ function renderSearchHint(message = "Type at least two characters to search loca
 function commandActions() {
   return [
     {
-      label: "New investigation",
+      label: "Nova investigação",
       icon: "＋",
       hint: "N",
-      keywords: "create case open",
+      keywords: "create case open criar caso abrir nova investigação",
       module: "investigations",
       run: () => G.newInvestigation(),
     },
     {
-      label: "Register entity",
+      label: "Registrar entidade",
       icon: "⬡",
-      keywords: "new domain ip person organization",
+      keywords: "new domain ip person organization nova entidade domínio pessoa organização",
       module: "entities",
       run: () => G.entityDialog(),
     },
     {
-      label: "Register source",
+      label: "Registrar fonte",
       icon: "⛁",
-      keywords: "new reference provenance",
+      keywords: "new reference provenance nova fonte referência proveniência",
       module: "source-manager",
       run: () => G.sourceDialog(),
     },
     {
-      label: "Add evidence",
+      label: "Adicionar evidência",
       icon: "▣",
-      keywords: "upload file hash capture",
+      keywords: "upload file hash capture enviar arquivo evidência captura",
       module: "evidence",
       run: () => G.evidenceDialog(),
     },
     {
-      label: "Triage pasted text",
+      label: "Triar texto colado",
       icon: "⌁",
       hint: "T",
-      keywords: "extract indicator ioc paste defang text triage",
+      keywords: "extract indicator ioc paste defang text triage extrair indicador colar texto triagem",
       module: "indicator-engine",
       run: () => {
         go("indicators");
@@ -1007,48 +1529,48 @@ function commandActions() {
       },
     },
     {
-      label: "Open file intelligence",
+      label: "Abrir análise de arquivos",
       icon: "▧",
-      keywords: "analyse analyze upload pdf binary archive",
+      keywords: "analyse analyze upload pdf binary archive analisar arquivo binário",
       module: "file-intelligence",
       run: () => go("files"),
     },
     {
-      label: "Refresh current view",
+      label: "Atualizar tela atual",
       icon: "↻",
       hint: "R",
       keywords: "reload update",
       run: () => G.refreshView(),
     },
     {
-      label: "Toggle compact density",
+      label: "Alternar densidade compacta",
       icon: "▤",
-      keywords: "density spacing compact comfortable layout",
+      keywords: "density spacing compact comfortable layout densidade espaçamento compacta confortável",
       run: () => toggleInterfaceSetting("interface.density", "compact", "comfortable"),
     },
     {
-      label: "Toggle high contrast",
+      label: "Alternar alto contraste",
       icon: "◐",
-      keywords: "theme contrast dark appearance",
+      keywords: "theme contrast dark appearance tema contraste escuro aparência",
       run: () => toggleInterfaceSetting("interface.theme", "contrast", "dark"),
     },
     {
-      label: "Toggle reduced motion",
+      label: "Alternar movimento reduzido",
       icon: "◌",
-      keywords: "motion animation accessibility",
+      keywords: "motion animation accessibility movimento animação acessibilidade",
       run: () => toggleInterfaceSetting("interface.reduce_motion", "true", "false"),
     },
     {
-      label: "Display settings",
+      label: "Preferências de exibição",
       icon: "◨",
-      keywords: "theme density motion appearance",
+      keywords: "theme density motion appearance tema densidade movimento exibição",
       run: () => openDisplayMenu(),
     },
     {
-      label: "Keyboard shortcuts",
+      label: "Atalhos de teclado",
       icon: "⌘",
       hint: "?",
-      keywords: "keys help commands",
+      keywords: "keys help commands teclas ajuda comandos atalhos",
       run: () => G.openShortcuts(),
     },
   ].filter((action) => moduleEnabled(action.module));
@@ -1086,7 +1608,7 @@ function commandButton(item) {
         window.setTimeout(() => item.run(), 0);
       },
     },
-    el("span", { class: "command-result-icon", "aria-hidden": "true" }, item.icon || "›"),
+    el("span", { class: "command-result-icon" }, icon(item.icon || "dot", { size: 16 })),
     el(
       "span",
       { class: "command-result-copy" },
@@ -1106,8 +1628,8 @@ function appendCommandGroup(query, actionLimit = 6, navLimit = 8) {
     .slice(0, navLimit);
   let added = 0;
   for (const [label, items] of [
-    ["QUICK ACTIONS", actions],
-    ["GO TO", navigation],
+    ["AÇÕES RÁPIDAS", actions],
+    ["IR PARA", navigation],
   ]) {
     if (!items.length) continue;
     const section = el(
@@ -1131,7 +1653,7 @@ function renderCommandMenu(query = "") {
   searchResults.replaceChildren();
   G.state.searchIndex = -1;
   const added = appendCommandGroup(query.trim().toLowerCase(), 20, 20);
-  if (!added) renderSearchHint("No matching commands or destinations.");
+  if (!added) renderSearchHint("Nenhum comando ou destino corresponde.");
 }
 
 function navigateSearchItem(item) {
@@ -1153,7 +1675,7 @@ function renderSearchResults(data, query = "") {
   const commandCount = appendCommandGroup(query, 4, 5);
   const groups = (data.groups || []).filter((group) => group.items.length);
   if (!groups.length) {
-    if (!commandCount) renderSearchHint("No matching local records or commands.");
+    if (!commandCount) renderSearchHint("Nenhum registro local ou comando corresponde.");
     return;
   }
   for (const group of groups) {
@@ -1210,7 +1732,7 @@ function moveSearchSelection(delta) {
 
 function openSearch() {
   if (!moduleEnabled("global-search")) {
-    toast("Global search is disabled in the module manager.", "error");
+    toast("A pesquisa global está desativada no gerenciador de módulos.", "error");
     return;
   }
   closeDisplayMenu();
@@ -1253,7 +1775,7 @@ async function setInterfaceSetting(key, value) {
     G.state.settings = result.values;
     applySettings(result.values);
     renderDisplayMenu();
-    toast("Display preferences saved.");
+    toast("Preferências de exibição salvas.");
   } catch (error) {
     toast(error.message, "error");
   }
@@ -1296,20 +1818,20 @@ function renderDisplayMenu() {
     el(
       "div",
       { class: "display-menu-heading" },
-      el("strong", {}, "Display"),
-      el("span", {}, "Saved to this workspace"),
+      el("strong", {}, "Exibição"),
+      el("span", {}, "Salvo neste workspace"),
     ),
-    displayGroup("THEME", [
-      displayChoice("Dark", "interface.theme", "dark", theme === "dark"),
-      displayChoice("High contrast", "interface.theme", "contrast", theme === "contrast"),
+    displayGroup("TEMA", [
+      displayChoice("Escuro", "interface.theme", "dark", theme === "dark"),
+      displayChoice("Alto contraste", "interface.theme", "contrast", theme === "contrast"),
     ]),
-    displayGroup("DENSITY", [
-      displayChoice("Comfortable", "interface.density", "comfortable", density === "comfortable"),
-      displayChoice("Compact", "interface.density", "compact", density === "compact"),
+    displayGroup("DENSIDADE", [
+      displayChoice("Confortável", "interface.density", "comfortable", density === "comfortable"),
+      displayChoice("Compacta", "interface.density", "compact", density === "compact"),
     ]),
-    displayGroup("MOTION", [
-      displayChoice("Full", "interface.reduce_motion", "false", motion !== "true"),
-      displayChoice("Reduced", "interface.reduce_motion", "true", motion === "true"),
+    displayGroup("MOVIMENTO", [
+      displayChoice("Completo", "interface.reduce_motion", "false", motion !== "true"),
+      displayChoice("Reduzido", "interface.reduce_motion", "true", motion === "true"),
     ]),
     el(
       "div",
@@ -1324,7 +1846,7 @@ function renderDisplayMenu() {
             go("settings");
           },
         },
-        "All settings",
+        "Todas as configurações",
       ),
       el(
         "button",
@@ -1336,7 +1858,7 @@ function renderDisplayMenu() {
             G.openShortcuts();
           },
         },
-        "Shortcuts",
+        "Atalhos",
       ),
     ),
   );
@@ -1362,17 +1884,17 @@ function closeDisplayMenu() {
 G.openShortcuts = function openShortcuts() {
   if (document.querySelector(".shortcuts-dialog")) return;
   const rows = [
-    ["Ctrl / ⌘ K", "Open search and commands"],
-    ["/", "Focus search"],
-    ["N", "New investigation"],
-    ["T", "Triage pasted text"],
-    ["R", "Refresh current view"],
-    ["?", "This shortcut guide"],
-    ["Esc", "Close a dialog, menu or drawer"],
+    ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
+    ["/", "Focar a pesquisa"],
+    ["N", "Nova investigação"],
+    ["T", "Triar texto colado"],
+    ["R", "Atualizar tela atual"],
+    ["?", "Este guia de atalhos"],
+    ["Esc", "Fechar diálogo, menu ou painel"],
   ];
   const dialog = el(
     "dialog",
-    { class: "app-dialog shortcuts-dialog", "aria-label": "Keyboard shortcuts" },
+    { class: "app-dialog shortcuts-dialog", "aria-label": "Atalhos de teclado" },
     el(
       "div",
       { class: "dialog-form" },
@@ -1382,17 +1904,17 @@ G.openShortcuts = function openShortcuts() {
         el(
           "div",
           {},
-          el("p", { class: "eyebrow" }, "KEYBOARD"),
-          el("h2", {}, "Move without the mouse"),
+          el("p", { class: "eyebrow" }, "TECLADO"),
+          el("h2", {}, "Navegue sem o mouse"),
           el(
             "p",
             { class: "dialog-description" },
-            "Shortcuts are ignored while typing in a field.",
+            "Os atalhos são ignorados enquanto você digita em um campo.",
           ),
         ),
         el(
           "button",
-          { class: "icon-button", type: "button", "aria-label": "Close", onClick: () => dialog.close() },
+          { class: "icon-button", type: "button", "aria-label": "Fechar", onClick: () => dialog.close() },
           "×",
         ),
       ),
@@ -1411,7 +1933,7 @@ G.openShortcuts = function openShortcuts() {
       el(
         "div",
         { class: "dialog-actions" },
-        el("button", { class: "button button-primary", type: "button", onClick: () => dialog.close() }, "Done"),
+        el("button", { class: "button button-primary", type: "button", onClick: () => dialog.close() }, "Concluir"),
       ),
     ),
   );
@@ -1436,6 +1958,8 @@ function isTypingTarget(target) {
 function bindShell() {
   if (bindShell.bound) return;
   bindShell.bound = true;
+  hydrateIcons();
+  bindTooltips();
   document.querySelector("#nav-groups").addEventListener("click", (event) => {
     if (event.target.closest("a.nav-link")) setMobileNav(false);
   });
@@ -1476,7 +2000,7 @@ function bindShell() {
       renderCommandMenu(query);
       return;
     }
-    searchResults.replaceChildren(loadingBlock("Searching local records…"));
+    searchResults.replaceChildren(loadingBlock("Pesquisando registros locais…"));
     searchTimer = window.setTimeout(() => runSearch(query), 220);
   });
   searchInput.addEventListener("keydown", (event) => {
@@ -1549,8 +2073,8 @@ async function boot() {
     document.querySelector("#nav-groups").replaceChildren();
     viewRoot.replaceChildren(
       errorState({
-        title: "The local workspace is unavailable",
-        message: `${error.message}. Start the server with "python3 -m garbage_intel serve" and retry.`,
+        title: "O workspace local está indisponível",
+        message: `${error.message}. Inicie o servidor com "python3 -m garbage_intel serve" e tente novamente.`,
         retry: () => boot(),
       }),
     );

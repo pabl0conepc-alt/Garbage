@@ -97,7 +97,7 @@
       width: "100%",
       height: "100%",
       role: "img",
-      "aria-label": "Entity relationship graph",
+      "aria-label": "Grafo de relacionamentos entre entidades",
     });
     const view = svgEl("g", { class: "graph-viewport" });
     const edgeLayer = svgEl("g", { class: "graph-edges" });
@@ -117,10 +117,10 @@
         el(
           "div",
           { class: "graph-controls" },
-          button("−", () => zoomBy(0.85), { title: "Zoom out" }),
-          button("＋", () => zoomBy(1.18), { title: "Zoom in" }),
-          button("Fit", () => fit(), { title: "Fit graph" }),
-          button("Reset", () => {
+          button("−", () => zoomBy(0.85), { title: "Diminuir zoom" }),
+          button("＋", () => zoomBy(1.18), { title: "Aumentar zoom" }),
+          button("Ajustar", () => fit(), { title: "Ajustar grafo à tela" }),
+          button("Redefinir", () => {
             focusedId = null;
             selectedId = null;
             viewport = { x: 0, y: 0, zoom: 1 };
@@ -135,8 +135,8 @@
 
     const caseSelect = el(
       "select",
-      { class: "input compact-select", "aria-label": "Filter graph by investigation" },
-      el("option", { value: "" }, "All investigations"),
+      { class: "input compact-select", "aria-label": "Filtrar grafo por investigação" },
+      el("option", { value: "" }, "Todas as investigações"),
       ...(await G.loadInvestigations()).map((item) =>
         el("option", { value: item.id }, item.name),
       ),
@@ -145,22 +145,22 @@
 
     const typeSelect = el(
       "select",
-      { class: "input compact-select", "aria-label": "Filter graph by entity type" },
-      el("option", { value: "" }, "All entity types"),
+      { class: "input compact-select", "aria-label": "Filtrar grafo por tipo de entidade" },
+      el("option", { value: "" }, "Todos os tipos de entidade"),
       ...G.ENTITY_TYPES.map(([value, label]) => el("option", { value }, label)),
     );
     const search = el("input", {
       class: "input",
       type: "search",
-      placeholder: "Filter entities by name or identifier",
-      "aria-label": "Search graph entities",
+      placeholder: "Filtrar entidades por nome ou identificador",
+      "aria-label": "Pesquisar entidades no grafo",
     });
     const layoutSelect = el(
       "select",
-      { class: "input compact-select", "aria-label": "Graph layout" },
-      el("option", { value: "force" }, "Force layout"),
-      el("option", { value: "circle" }, "Circular layout"),
-      el("option", { value: "grid" }, "Grid layout"),
+      { class: "input compact-select", "aria-label": "Layout do grafo" },
+      el("option", { value: "force" }, "Layout por força"),
+      el("option", { value: "circle" }, "Layout circular"),
+      el("option", { value: "grid" }, "Layout em grade"),
     );
 
     async function loadGraph() {
@@ -194,7 +194,7 @@
       } catch (error) {
         if (token !== requestToken) return;
         inspector.replaceChildren(
-          panel({ eyebrow: "GRAPH", title: "Unable to build graph" }, G.inlineError(error.message)),
+          panel({ eyebrow: "GRAFO", title: "Não foi possível montar o grafo" }, G.inlineError(error.message)),
         );
       } finally {
         if (token === requestToken) canvas.classList.remove("is-loading");
@@ -497,32 +497,32 @@
         inspector.replaceChildren(
           panel(
             {
-              eyebrow: "NODE INSPECTOR",
+              eyebrow: "INSPETOR DE NÓ",
               title: node.name,
               actions: [statusBadge(node.verification_status)],
             },
             G.kvList([
-              ["Category", badge(entityTypeLabel(node.entity_type), "info")],
-              ["Identifier", node.identifier || "—"],
-              ["Confidence", titleCase(node.confidence)],
-              ["Relationships", String(node.degree)],
+              ["Categoria", badge(entityTypeLabel(node.entity_type), "info")],
+              ["Identificador", node.identifier || "—"],
+              ["Confiança", titleCase(node.confidence)],
+              ["Relacionamentos", String(node.degree)],
             ]),
             node.description ? el("p", { class: "prose" }, node.description) : null,
             el(
               "div",
               { class: "inspector-actions" },
-              button("Open entity record", () => go("entities", node.id), {
+              button("Abrir registro da entidade", () => go("entities", node.id), {
                 variant: "button-primary",
               }),
               button(
-                focusedId === node.id ? "Clear focus" : "Focus neighborhood",
+                focusedId === node.id ? "Limpar foco" : "Focar vizinhança",
                 () => {
                   focusedId = focusedId === node.id ? null : node.id;
                   render();
                 },
               ),
             ),
-            el("h3", { class: "subheading" }, `Relationships (${related.length})`),
+            el("h3", { class: "subheading" }, `Relacionamentos (${related.length})`),
             related.length
               ? el(
                   "div",
@@ -557,7 +557,7 @@
                           ? el(
                               "a",
                               { class: "table-link", href: `#/investigations/${edge.investigation_id}` },
-                              "Case",
+                              "Caso",
                             )
                           : null,
                       ),
@@ -565,16 +565,16 @@
                     ),
                   ),
                 )
-              : el("p", { class: "panel-empty" }, "No relationships recorded for this entity."),
+              : el("p", { class: "panel-empty" }, "Nenhum relacionamento registrado para esta entidade."),
           ),
           panel(
-            { eyebrow: "FILTERS", title: "Entity layers" },
+            { eyebrow: "FILTROS", title: "Camadas de entidades" },
             el(
               "div",
               { class: "graph-type-list" },
               ...typeLegendNodes(),
             ),
-            button("Show all layers", () => {
+            button("Mostrar todas as camadas", () => {
               visibleTypes = null;
               render();
             }),
@@ -586,47 +586,47 @@
       const graphMetrics = graph.metrics || {};
       const hub = nodes.find((node) => node.id === graphMetrics.max_degree_node);
       const metricRows = [
-        ["Investigation", graph.investigation ? graph.investigation.name : "All cases"],
-        ["Entities shown", String(nodes.length)],
-        ["Relationships shown", String(edges.length)],
-        ["Connected components", String(components)],
+        ["Investigação", graph.investigation ? graph.investigation.name : "Todos os casos"],
+        ["Entidades exibidas", String(nodes.length)],
+        ["Relacionamentos exibidos", String(edges.length)],
+        ["Componentes conectados", String(components)],
       ];
       if (graphMetrics.density !== undefined) {
         metricRows.push(
-          ["Density", `${(Number(graphMetrics.density) * 100).toFixed(1)}%`],
-          ["Isolated entities", String(graphMetrics.isolates ?? 0)],
+          ["Densidade", `${(Number(graphMetrics.density) * 100).toFixed(1)}%`],
+          ["Entidades isoladas", String(graphMetrics.isolates ?? 0)],
           [
-            "Highest degree",
+            "Maior grau",
             `${graphMetrics.max_degree ?? 0}${hub ? ` · ${hub.name}` : ""}`,
           ],
-          ["Reciprocal links", String(graphMetrics.reciprocal_edges ?? 0)],
+          ["Vínculos recíprocos", String(graphMetrics.reciprocal_edges ?? 0)],
         );
       }
       metricRows.push([
         "Layout",
         nodes.length > MAX_FORCE_NODES && layout === "force"
-          ? "Circular (node limit)"
+          ? "Circular (limite de nós)"
           : titleCase(layout),
       ]);
       if (graphMetrics.engine) {
-        metricRows.push(["Metrics engine", graphMetrics.engine]);
+        metricRows.push(["Motor de métricas", graphMetrics.engine]);
       }
       inspector.replaceChildren(
         panel(
-          { eyebrow: "RELATIONSHIP GRAPH", title: "Graph overview" },
+          { eyebrow: "GRAFO DE RELACIONAMENTOS", title: "Visão geral do grafo" },
           G.kvList(metricRows),
           nodes.length
             ? el(
                 "p",
                 { class: "panel-note" },
-                "Relationships remain analyst-entered records. A line means a recorded association, not proof of coordination.",
+                "Relacionamentos continuam sendo registros do analista. Uma linha indica uma associação registrada, não prova de coordenação.",
               )
             : null,
         ),
         panel(
-          { eyebrow: "LAYERS", title: "Entity types" },
+          { eyebrow: "CAMADAS", title: "Tipos de entidade" },
           el("div", { class: "graph-type-list" }, ...typeLegendNodes()),
-          button("Show all layers", () => {
+          button("Mostrar todas as camadas", () => {
             visibleTypes = null;
             render();
           }),
@@ -638,7 +638,7 @@
     function typeLegendNodes() {
       const types = [...new Set(nodes.map((node) => node.entity_type))].sort();
       if (!types.length) {
-        return [el("p", { class: "panel-empty" }, "No entities in the current graph.")];
+        return [el("p", { class: "panel-empty" }, "Nenhuma entidade no grafo atual.")];
       }
       return types.map((type) => {
         const count = nodes.filter((node) => node.entity_type === type).length;
@@ -667,14 +667,14 @@
     function historyPanel() {
       const history = G.state.graphHistory || [];
       return panel(
-        { eyebrow: "HISTORY", title: "Recent graph queries" },
+        { eyebrow: "HISTÓRICO", title: "Consultas recentes ao grafo" },
         history.length
           ? el(
               "div",
               { class: "query-history" },
               ...history.map((entry) =>
                 button(
-                  `${entry.investigation || "All cases"} · ${entry.query || entry.entityType || "full graph"}`,
+                  `${entry.investigation || "Todos os casos"} · ${entry.query || entry.entityType || "grafo completo"}`,
                   () => {
                     investigationId = entry.investigationId || "";
                     entityType = entry.entityType || "";
@@ -687,7 +687,7 @@
                 ),
               ),
             )
-          : el("p", { class: "panel-empty" }, "Filtered graph queries appear here."),
+          : el("p", { class: "panel-empty" }, "Consultas filtradas ao grafo aparecem aqui."),
       );
     }
 
@@ -829,13 +829,13 @@
 
     root.replaceChildren(
       pageHeader({
-        eyebrow: "RELATIONSHIP ANALYSIS",
-        title: "Relationship graph",
+        eyebrow: "ANÁLISE DE RELACIONAMENTOS",
+        title: "Grafo de relacionamentos",
         description:
-          "Entity nodes and analyst-recorded relationships from the shared registry. Edges are associations, not proof.",
+          "Nós de entidades e relacionamentos registrados pelo analista no registro compartilhado. Arestas são associações, não provas.",
         actions: [
-          button("Board", () => go("board", investigationId || undefined)),
-          button("Entities", () => go("entities")),
+          button("Quadro", () => go("board", investigationId || undefined)),
+          button("Entidades", () => go("entities")),
         ],
       }),
       el(
@@ -844,53 +844,10 @@
         caseSelect,
         typeSelect,
         layoutSelect,
-        el("div", { class: "search-field" }, el("span", { "aria-hidden": "true" }, "⌕"), search),
-      ),
-      el(
-        "div",
-        { class: "metric-grid compact-metrics" },
-        G.metric({
-          label: "ENTITIES",
-          value: "—",
-          foot: "Current graph",
-          icon: "⬡",
-          tone: "violet",
-        }),
-        G.metric({
-          label: "RELATIONSHIPS",
-          value: "—",
-          foot: "Recorded links",
-          icon: "⟷",
-          tone: "blue",
-        }),
-        G.metric({
-          label: "COMPONENTS",
-          value: "—",
-          foot: "Disconnected groups",
-          icon: "◫",
-          tone: "green",
-        }),
-        G.metric({
-          label: "LAYOUT",
-          value: "Force",
-          foot: "Client-side simulation",
-          icon: "◈",
-          tone: "amber",
-        }),
+        el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
       ),
       shell,
     );
-
-    // Replace the static metric values once data is loaded.
-    const metrics = root.querySelectorAll(".metric-card .metric-value");
-    const originalRender = render;
-    render = function renderWithMetrics() {
-      originalRender();
-      if (metrics[0]) metrics[0].textContent = String(nodes.length);
-      if (metrics[1]) metrics[1].textContent = String(edges.length);
-      if (metrics[2]) metrics[2].textContent = String(countComponents());
-      if (metrics[3]) metrics[3].textContent = titleCase(layout);
-    };
 
     await loadGraph();
   }

@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-density="comfortable" data-reduce-motion="false">
+<html lang="pt-BR" data-theme="dark" data-density="comfortable" data-reduce-motion="false">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0a0e14">
-    <title>GARBAGE | Intelligence workstation</title>
+    <meta name="theme-color" content="#0B0C0E">
+    <title>GARBAGE | Estação de inteligência</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
@@ -16,27 +17,27 @@
     <script src="/graph.js" defer></script>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to content</a>
+    <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
     <div class="app-shell">
-      <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <aside class="sidebar rail" id="sidebar" aria-label="Navegação principal">
         <div class="sidebar-head">
-          <a class="brand" href="#/overview" aria-label="GARBAGE overview">
-            <span class="brand-mark" aria-hidden="true">G</span>
-            <span class="brand-copy"><strong>GARBAGE</strong><small>INTELLIGENCE WORKSTATION</small></span>
+          <a class="brand" href="#/overview" aria-label="GARBAGE — visão geral" data-tooltip="GARBAGE — Visão geral">
+            <img class="brand-logo" src="/logo-mark.png" alt="" width="30" height="31">
+            <span class="brand-copy"><strong>GARBAGE</strong><small>Estação de inteligência</small></span>
           </a>
-          <button class="icon-button sidebar-close" id="sidebar-close" type="button" aria-label="Close navigation">×</button>
+          <button class="icon-button sidebar-close" id="sidebar-close" type="button" aria-label="Fechar navegação" data-icon="close"></button>
         </div>
-        <nav id="nav-groups" class="nav-groups" aria-label="Workspace modules"></nav>
+        <nav id="nav-groups" class="nav-groups" aria-label="Módulos do workspace"></nav>
         <div class="sidebar-bottom">
-          <button class="sidebar-shortcut" id="shortcuts-button" type="button">
-            <span aria-hidden="true">⌘</span>
-            <span>Keyboard shortcuts</span>
+          <button class="rail-button sidebar-shortcut" id="shortcuts-button" type="button"
+                  aria-label="Atalhos de teclado" data-tooltip="Atalhos de teclado" data-icon="keyboard">
+            <span class="nav-label">Atalhos de teclado</span>
           </button>
-          <div class="local-card">
+          <span class="rail-local" tabindex="0" role="note" aria-label="Workspace local: os dados permanecem nesta máquina. Observações são registradas pelo analista e não verificadas de forma independente."
+                data-tooltip="Workspace local — os dados permanecem nesta máquina. Observações são registradas pelo analista e não verificadas de forma independente.">
             <span class="live-dot" aria-hidden="true"></span>
-            <div><strong>Local workspace</strong><small>Data stays on this machine</small></div>
-          </div>
-          <p class="sidebar-footnote">Observations are analyst-recorded and not independently verified.</p>
+            <span class="nav-label">Somente local</span>
+          </span>
         </div>
       </aside>
 
@@ -44,26 +45,31 @@
         <header class="topbar">
           <div class="topbar-start">
             <button class="icon-button mobile-nav-toggle" id="mobile-nav-toggle" type="button"
-                    aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">☰</button>
-            <div class="breadcrumb">
-              <span class="breadcrumb-root">WORKSPACE</span>
-              <span aria-hidden="true">/</span>
-              <strong id="page-breadcrumb">Overview</strong>
-            </div>
+                    aria-label="Abrir navegação" aria-expanded="false" aria-controls="sidebar" data-icon="menu"></button>
+            <nav class="breadcrumb" aria-label="Localização">
+              <span class="breadcrumb-root" id="breadcrumb-group">Workspace</span>
+              <span class="breadcrumb-sep" aria-hidden="true">/</span>
+              <strong id="page-breadcrumb" aria-current="page">Visão geral</strong>
+            </nav>
           </div>
           <div class="topbar-actions">
-            <button class="search-trigger" id="global-search-button" type="button" aria-label="Search workspace and run commands">
-              <span aria-hidden="true">⌕</span>
-              <span class="search-trigger-label">Search or run a command</span>
+            <button class="search-trigger" id="global-search-button" type="button" aria-label="Pesquisar no workspace e executar comandos">
+              <span class="search-trigger-icon" data-icon="search" aria-hidden="true"></span>
+              <span class="search-trigger-label">Pesquisar ou executar comando</span>
               <kbd>Ctrl K</kbd>
             </button>
+            <span class="local-indicator" data-tooltip="O servidor escuta apenas em loopback (127.0.0.1). Nada sai desta máquina." tabindex="0">
+              <span class="live-dot" aria-hidden="true"></span> Local
+            </span>
             <div class="display-wrap">
               <button class="icon-button display-toggle" id="display-toggle" type="button"
-                      aria-label="Display settings" aria-expanded="false" aria-haspopup="true">◐</button>
+                      aria-label="Preferências de exibição" aria-expanded="false" aria-haspopup="true"
+                      data-tooltip="Preferências de exibição" data-icon="display"></button>
               <div class="display-menu" id="display-menu" hidden></div>
             </div>
-            <span class="local-indicator"><span class="live-dot" aria-hidden="true"></span> LOCAL ONLY</span>
-            <button class="button button-primary button-small" id="new-investigation-button" type="button">＋ <span class="new-case-label">New investigation</span></button>
+            <button class="button button-primary button-small" id="new-investigation-button" type="button" aria-label="Nova investigação" data-tooltip="Nova investigação (N)">
+              <span data-icon="plus" aria-hidden="true"></span><span class="new-case-label">Nova investigação</span>
+            </button>
           </div>
         </header>
 
@@ -73,27 +79,29 @@
       </main>
     </div>
 
-    <dialog id="search-dialog" class="command-dialog" aria-label="Workspace search and commands">
+    <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+
+    <dialog id="search-dialog" class="command-dialog" aria-label="Pesquisa e comandos do workspace">
       <div class="command-header">
-        <span class="command-icon" aria-hidden="true">⌕</span>
+        <span class="command-icon" data-icon="search" aria-hidden="true"></span>
         <input id="global-search-input" type="search" autocomplete="off" spellcheck="false"
-               placeholder="Search records or run a command…"
-               aria-label="Search records or run a command">
+               placeholder="Pesquisar registros ou executar um comando…"
+               aria-label="Pesquisar registros ou executar um comando">
         <kbd>ESC</kbd>
       </div>
       <div id="global-search-results" class="command-results"></div>
       <footer class="command-footer">
-        <span>↑ ↓ navigate</span>
-        <span>↵ run</span>
-        <span>? shortcuts</span>
-        <span>Local records only</span>
+        <span>↑ ↓ navegar</span>
+        <span>↵ executar</span>
+        <span>? atalhos</span>
+        <span>Somente registros locais</span>
       </footer>
     </dialog>
 
     <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true"></div>
 
     <noscript>
-      <div class="noscript">GARBAGE requires JavaScript. The local API and database remain available through the CLI.</div>
+      <div class="noscript">O GARBAGE requer JavaScript. A API local e o banco de dados continuam disponíveis pela CLI.</div>
     </noscript>
   </body>
 </html>

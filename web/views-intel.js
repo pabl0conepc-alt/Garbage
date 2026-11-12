@@ -45,7 +45,7 @@
       el("h2", {}, title),
       el("p", {}, message),
     );
-    if (retry) box.append(button("Retry", retry, { variant: "button-primary" }));
+    if (retry) box.append(button("Tentar novamente", retry, { variant: "button-primary" }));
     return box;
   }
 
@@ -63,13 +63,13 @@
     const search = el("input", {
       class: "input",
       type: "search",
-      placeholder: "Search names, identifiers or descriptions",
-      "aria-label": "Search entities",
+      placeholder: "Pesquisar nomes, identificadores ou descrições",
+      "aria-label": "Pesquisar entidades",
     });
     const typeFilter = el(
       "select",
-      { class: "input compact-select", "aria-label": "Filter by entity type" },
-      el("option", { value: "" }, "All categories"),
+      { class: "input compact-select", "aria-label": "Filtrar por tipo de entidade" },
+      el("option", { value: "" }, "Todas as categorias"),
       ...G.ENTITY_TYPES.map(([value, label]) => el("option", { value }, label)),
     );
     const host = el("div");
@@ -84,36 +84,36 @@
           .toLowerCase()
           .includes(query);
       });
-      count.textContent = `${rows.length} of ${data.total} shared records`;
+      count.textContent = `${rows.length} de ${data.total} registros compartilhados`;
       host.replaceChildren(
         table({
           columns: [
-            { label: "CATEGORY", render: (row) => typeChip(row.entity_type) },
-            { label: "NAME", render: (row) => el("strong", {}, row.name) },
+            { label: "CATEGORIA", render: (row) => typeChip(row.entity_type) },
+            { label: "NOME", render: (row) => el("strong", {}, row.name) },
             {
-              label: "IDENTIFIER",
+              label: "IDENTIFICADOR",
               render: (row) =>
                 row.identifier
                   ? el("code", { class: "reference-code" }, row.identifier)
                   : el("span", { class: "muted" }, "—"),
             },
-            { label: "COLLECTION", render: (row) => badge(titleCase(row.collection_basis), "neutral") },
-            { label: "CONFIDENCE", render: (row) => badge(titleCase(row.confidence), "neutral") },
-            { label: "VERIFICATION", render: (row) => statusBadge(row.verification_status) },
+            { label: "COLETA", render: (row) => badge(titleCase(row.collection_basis), "neutral") },
+            { label: "CONFIANÇA", render: (row) => badge(titleCase(row.confidence), "neutral") },
+            { label: "VERIFICAÇÃO", render: (row) => statusBadge(row.verification_status) },
             {
-              label: "CASES",
+              label: "CASOS",
               className: "numeric-col",
               render: (row) => String(row.investigation_count ?? 0),
             },
             {
               label: "",
-              render: (row) => button("Inspect", () => go("entities", row.id)),
+              render: (row) => button("Inspecionar", () => go("entities", row.id)),
             },
           ],
           rows,
           emptyMessage: data.items.length
-            ? "No entities match these filters."
-            : "No entities have been registered.",
+            ? "Nenhuma entidade corresponde a estes filtros."
+            : "Nenhuma entidade foi registrada.",
           onRowClick: (row) => go("entities", row.id),
         }),
       );
@@ -121,12 +121,12 @@
 
     root.append(
       pageHeader({
-        eyebrow: "INTELLIGENCE REGISTRY",
-        title: "Entities",
+        eyebrow: "REGISTRO DE INTELIGÊNCIA",
+        title: "Entidades",
         description:
-          "Canonical records shared across cases, the investigation board and the relationship graph.",
+          "Registros canônicos compartilhados entre casos, o quadro de investigação e o grafo de relacionamentos.",
         actions: [
-          button("＋ Register entity", () => G.entityDialog(), {
+          button("Registrar entidade", () => G.entityDialog(), {
             variant: "button-primary",
           }),
         ],
@@ -135,9 +135,9 @@
         "div",
         { class: "metric-grid compact-metrics" },
         G.metric({
-          label: "TOTAL RECORDS",
+          label: "TOTAL DE REGISTROS",
           value: String(data.total),
-          foot: "Shared registry",
+          foot: "Registro compartilhado",
           icon: "⬡",
           tone: "violet",
         }),
@@ -153,28 +153,28 @@
             G.metric({
               label: entityTypeLabel(type).toUpperCase(),
               value: String(value),
-              foot: "Records",
+              foot: "Registros",
               icon: "·",
               tone: "blue",
             }),
           ),
       ),
       panel(
-        { eyebrow: "REGISTRY", title: "Shared entities", actions: [count] },
+        { eyebrow: "REGISTRO", title: "Entidades compartilhadas", actions: [count] },
         el(
           "div",
           { class: "toolbar" },
-          el("div", { class: "search-field" }, el("span", { "aria-hidden": "true" }, "⌕"), search),
+          el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
           typeFilter,
         ),
         data.items.length
           ? host
           : emptyState({
               icon: "⬡",
-              title: "No entities yet",
+              title: "Nenhuma entidade ainda",
               description:
-                "Register a domain, address, account, organization or file to start correlating.",
-              action: button("Register entity", () => G.entityDialog(), {
+                "Registre um domínio, endereço, conta, organização ou arquivo para começar a correlacionar.",
+              action: button("Registrar entidade", () => G.entityDialog(), {
                 variant: "button-primary",
               }),
             }),
@@ -199,7 +199,7 @@
         entity = await load();
       } catch (error) {
         root.replaceChildren(
-          errorState("Entity unavailable", error.message, () => draw()),
+          errorState("Entidade indisponível", error.message, () => draw()),
         );
         G.setLoading(false);
         return;
@@ -207,15 +207,15 @@
       G.setLoading(false);
       root.replaceChildren(
         pageHeader({
-          eyebrow: "SHARED ENTITY",
+          eyebrow: "ENTIDADE COMPARTILHADA",
           title: entity.name,
-          description: entity.description || "No description recorded.",
+          description: entity.description || "Nenhuma descrição registrada.",
           actions: [
-            button("‹ All entities", () => go("entities")),
-            button("Edit", () => G.entityDialog(entity, { onSaved: () => draw() })),
-            button("Open graph", () => go("graph")),
+            button("‹ Todas as entidades", () => go("entities")),
+            button("Editar", () => G.entityDialog(entity, { onSaved: () => draw() })),
+            button("Abrir grafo", () => go("graph")),
             button(
-              "Delete",
+              "Excluir",
               () => G.deleteEntity(entity, () => go("entities")),
               { variant: "button-danger" },
             ),
@@ -227,65 +227,65 @@
           typeChip(entity.entity_type),
           statusBadge(entity.verification_status),
           el("code", {}, entity.id),
-          el("span", {}, `Registered ${formatDate(entity.created_at, { time: true })}`),
+          el("span", {}, `Registrada em ${formatDate(entity.created_at, { time: true })}`),
         ),
         el(
           "div",
           { class: "detail-grid" },
           panel(
-            { eyebrow: "PROPERTIES", title: "Record data" },
+            { eyebrow: "PROPRIEDADES", title: "Dados do registro" },
             G.kvList([
-              ["Category", typeChip(entity.entity_type)],
-              ["Identifier", entity.identifier ? el("code", { class: "reference-code" }, entity.identifier) : "—"],
-              ["Collection basis", badge(titleCase(entity.collection_basis), "neutral")],
-              ["Confidence", badge(titleCase(entity.confidence), "neutral")],
-              ["Verification", statusBadge(entity.verification_status)],
-              ["Source", referenceNode(entity.source_reference)],
-              ["Created", formatDate(entity.created_at, { time: true })],
-              ["Updated", formatDate(entity.updated_at, { time: true })],
+              ["Categoria", typeChip(entity.entity_type)],
+              ["Identificador", entity.identifier ? el("code", { class: "reference-code" }, entity.identifier) : "—"],
+              ["Base de coleta", badge(titleCase(entity.collection_basis), "neutral")],
+              ["Confiança", badge(titleCase(entity.confidence), "neutral")],
+              ["Verificação", statusBadge(entity.verification_status)],
+              ["Fonte", referenceNode(entity.source_reference)],
+              ["Criação", formatDate(entity.created_at, { time: true })],
+              ["Atualização", formatDate(entity.updated_at, { time: true })],
             ]),
           ),
           panel(
-            { eyebrow: "CASE LINKS", title: `Investigations (${entity.investigations.length})` },
+            { eyebrow: "VÍNCULOS COM CASOS", title: `Investigações (${entity.investigations.length})` },
             entity.investigations.length
               ? table({
                   columns: [
-                    { label: "CASE", render: (row) => caseLink(row.id, row.name) },
+                    { label: "CASO", render: (row) => caseLink(row.id, row.name) },
                     { label: "STATUS", render: (row) => statusBadge(row.status) },
-                    { label: "LINKED", render: (row) => formatDate(row.added_at) },
+                    { label: "VINCULADA EM", render: (row) => formatDate(row.added_at) },
                   ],
                   rows: entity.investigations,
-                  emptyMessage: "Not linked to a case.",
+                  emptyMessage: "Não vinculada a um caso.",
                 })
-              : el("p", { class: "panel-empty" }, "Not linked to a case."),
+              : el("p", { class: "panel-empty" }, "Não vinculada a um caso."),
           ),
           panel(
-            { eyebrow: "PROVENANCE", title: `Sources (${entity.sources.length})` },
+            { eyebrow: "PROVENIÊNCIA", title: `Fontes (${entity.sources.length})` },
             entity.sources.length
               ? table({
                   columns: [
-                    { label: "TITLE", render: (row) => el("strong", {}, row.title) },
-                    { label: "CATEGORY", render: (row) => badge(titleCase(row.category), "neutral") },
-                    { label: "REFERENCE", render: (row) => referenceNode(row.reference) },
+                    { label: "TÍTULO", render: (row) => el("strong", {}, row.title) },
+                    { label: "CATEGORIA", render: (row) => badge(titleCase(row.category), "neutral") },
+                    { label: "REFERÊNCIA", render: (row) => referenceNode(row.reference) },
                   ],
                   rows: entity.sources,
-                  emptyMessage: "No sources linked.",
+                  emptyMessage: "Nenhuma fonte vinculada.",
                 })
-              : el("p", { class: "panel-empty" }, "No sources linked."),
+              : el("p", { class: "panel-empty" }, "Nenhuma fonte vinculada."),
           ),
           panel(
             {
-              eyebrow: "RELATIONSHIP ENGINE",
-              title: `Relationships (${entity.relationships.length})`,
+              eyebrow: "RELACIONAMENTOS",
+              title: `Relacionamentos (${entity.relationships.length})`,
               actions: [
                 button(
-                  "＋ Record relationship",
+                  "Registrar relacionamento",
                   () =>
                     G.relationshipDialog({
                       entities: [entity],
                       onSaved: () => draw(),
                     }),
-                  { disabled: true, title: "Record relationships from a case with at least two entities" },
+                  { disabled: true, title: "Registre relacionamentos a partir de um caso com pelo menos duas entidades" },
                 ),
               ],
             },
@@ -293,12 +293,12 @@
               ? table({
                   columns: [
                     {
-                      label: "DIRECTION",
+                      label: "DIREÇÃO",
                       render: (row) =>
-                        badge(row.direction === "outgoing" ? "Outgoing" : "Incoming", "neutral"),
+                        badge(row.direction === "outgoing" ? "Saída" : "Entrada", "neutral"),
                     },
                     {
-                      label: "RELATED ENTITY",
+                      label: "ENTIDADE RELACIONADA",
                       render: (row) =>
                         el(
                           "div",
@@ -308,16 +308,16 @@
                         ),
                     },
                     {
-                      label: "TYPE",
+                      label: "TIPO",
                       render: (row) => el("span", { class: "relation-type" }, relationshipLabel(row.relationship_type)),
                     },
-                    { label: "VERIFICATION", render: (row) => statusBadge(row.verification_status) },
-                    { label: "CONTEXT", render: (row) => (row.investigation_id ? caseLink(row.investigation_id) : "Shared") },
+                    { label: "VERIFICAÇÃO", render: (row) => statusBadge(row.verification_status) },
+                    { label: "CONTEXTO", render: (row) => (row.investigation_id ? caseLink(row.investigation_id) : "Compartilhado") },
                   ],
                   rows: entity.relationships,
-                  emptyMessage: "No relationships recorded for this entity.",
+                  emptyMessage: "Nenhum relacionamento registrado para esta entidade.",
                 })
-              : el("p", { class: "panel-empty" }, "No relationships recorded."),
+              : el("p", { class: "panel-empty" }, "Nenhum relacionamento registrado."),
           ),
         ),
       );
@@ -336,13 +336,13 @@
     const search = el("input", {
       class: "input",
       type: "search",
-      placeholder: "Filter observed indicators",
-      "aria-label": "Filter indicators",
+      placeholder: "Filtrar indicadores observados",
+      "aria-label": "Filtrar indicadores",
     });
     const typeFilter = el(
       "select",
-      { class: "input compact-select", "aria-label": "Filter indicator type" },
-      el("option", { value: "" }, "All indicator types"),
+      { class: "input compact-select", "aria-label": "Filtrar tipo de indicador" },
+      el("option", { value: "" }, "Todos os tipos de indicador"),
       ...G.INDICATOR_TYPES.map(([value, label]) => el("option", { value }, label)),
     );
     const countLabel = el("span", { class: "panel-caption" });
@@ -352,10 +352,10 @@
       class: "input triage-input",
       id: "triage-text",
       rows: "4",
-      placeholder: "Paste report text, a defanged URL, hashes or a list of indicators…",
-      "aria-label": "Text to triage",
+      placeholder: "Cole texto de relatório, uma URL neutralizada, hashes ou uma lista de indicadores…",
+      "aria-label": "Texto para triagem",
     });
-    const triageButton = button("Extract indicators", () => runTriage(), {
+    const triageButton = button("Extrair indicadores", () => runTriage(), {
       variant: "button-primary",
     });
     const triageHost = el("div", { class: "triage-result" });
@@ -387,14 +387,14 @@
           el(
             "p",
             { class: "panel-empty" },
-            "Select an indicator to inspect its provenance and record an analytical assessment.",
+            "Selecione um indicador para inspecionar sua proveniência e registrar uma avaliação analítica.",
           ),
         );
         return;
       }
       const status = el(
         "select",
-        { class: "input", "aria-label": "Indicator verification status" },
+        { class: "input", "aria-label": "Status de verificação do indicador" },
         ...G.VERIFICATION_STATUSES.map(([value, label]) =>
           el("option", { value, selected: value === item.verification_status }, label),
         ),
@@ -402,7 +402,7 @@
       const note = el("textarea", {
         class: "input",
         rows: 3,
-        placeholder: "Assessment rationale and limitations",
+        placeholder: "Justificativa e limitações da avaliação",
       });
       note.value = item.assessment_note || "";
       const provenance = el("div", { class: "origin-list" });
@@ -421,10 +421,10 @@
               "div",
               { class: "record-meta" },
               origin.investigation_id ? caseLink(origin.investigation_id, origin.investigation_name) : "Workspace",
-              el("span", {}, origin.timestamp ? formatDate(origin.timestamp, { time: true }) : "No timestamp"),
+              el("span", {}, origin.timestamp ? formatDate(origin.timestamp, { time: true }) : "Sem data"),
             ),
             origin.source_reference
-              ? el("div", { class: "record-meta" }, "Source: ", referenceNode(origin.source_reference))
+              ? el("div", { class: "record-meta" }, "Fonte: ", referenceNode(origin.source_reference))
               : null,
           ),
         );
@@ -432,35 +432,35 @@
       detailHost.replaceChildren(
         panel(
           {
-            eyebrow: "INDICATOR PROVENANCE",
+            eyebrow: "PROVENIÊNCIA DO INDICADOR",
             title: item.value,
-            caption: `${indicatorTypeLabel(item.type)} · ${item.origin_count} origin${item.origin_count === 1 ? "" : "s"}`,
+            caption: `${indicatorTypeLabel(item.type)} · ${item.origin_count} ${item.origin_count === 1 ? "origem" : "origens"}`,
           },
           el(
             "div",
             { class: "indicator-summary" },
             G.kvList([
-              ["Type", badge(indicatorTypeLabel(item.type), "info")],
-              ["First seen", item.first_seen ? formatDate(item.first_seen, { time: true }) : "—"],
-              ["Last seen", item.last_seen ? formatDate(item.last_seen, { time: true }) : "—"],
+              ["Tipo", badge(indicatorTypeLabel(item.type), "info")],
+              ["Primeira ocorrência", item.first_seen ? formatDate(item.first_seen, { time: true }) : "—"],
+              ["Última ocorrência", item.last_seen ? formatDate(item.last_seen, { time: true }) : "—"],
               [
-                "Cases",
+                "Casos",
                 item.investigations.length
                   ? item.investigations.map((entry) => caseLink(entry.id, entry.name))
-                  : "Workspace only",
+                  : "Somente workspace",
               ],
             ]),
           ),
-          el("h3", { class: "subheading" }, "Assessment"),
-          el("p", { class: "panel-note" }, "An indicator is not proof of malicious activity. " +
-            "Record what the value supports and what remains unverified."),
-          el("div", { class: "field" }, el("label", {}, "Verification status"), status),
-          el("div", { class: "field" }, el("label", {}, "Assessment note"), note),
+          el("h3", { class: "subheading" }, "Avaliação"),
+          el("p", { class: "panel-note" }, "Um indicador não é prova de atividade maliciosa. " +
+            "Registre o que o valor sustenta e o que permanece sem verificação."),
+          el("div", { class: "field" }, el("label", {}, "Status de verificação"), status),
+          el("div", { class: "field" }, el("label", {}, "Nota de avaliação"), note),
           el(
             "div",
             { class: "toolbar-end" },
             button(
-              "Inspect value",
+              "Inspecionar valor",
               async () => {
                 await inspectIndicator(item.value);
                 inspectorHost.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -468,7 +468,7 @@
               { variant: "button-secondary" },
             ),
             button(
-              "Save assessment",
+              "Salvar avaliação",
               async () => {
                 try {
                   await api("/api/indicators/assessment", {
@@ -480,7 +480,7 @@
                       note: note.value,
                     }),
                   });
-                  toast("Indicator assessment saved.");
+                  toast("Avaliação do indicador salva.");
                   await load();
                   const refreshed = data.items.find(
                     (entry) => entry.type === item.type && entry.value === item.value,
@@ -494,8 +494,8 @@
               { variant: "button-primary" },
             ),
           ),
-          el("h3", { class: "subheading" }, `Provenance (${item.origins.length})`),
-          item.origins.length ? provenance : el("p", { class: "panel-empty" }, "No provenance origins available."),
+          el("h3", { class: "subheading" }, `Proveniência (${item.origins.length})`),
+          item.origins.length ? provenance : el("p", { class: "panel-empty" }, "Nenhuma origem de proveniência disponível."),
         ),
       );
     }
@@ -503,13 +503,13 @@
     async function runTriage() {
       const text = triageText.value.trim();
       if (!text) {
-        toast("Paste some text before extracting indicators.", "error");
+        toast("Cole algum texto antes de extrair indicadores.", "error");
         triageText.focus();
         return;
       }
       triageButton.disabled = true;
-      triageButton.textContent = "Extracting…";
-      triageHost.replaceChildren(loadingBlock("Extracting indicators in memory…"));
+      triageButton.textContent = "Extraindo…";
+      triageHost.replaceChildren(loadingBlock("Extraindo indicadores em memória…"));
       inspectorHost.replaceChildren();
       try {
         const result = await api("/api/intelligence/text", {
@@ -521,7 +521,7 @@
         triageHost.replaceChildren(inlineError(error.message));
       } finally {
         triageButton.disabled = false;
-        triageButton.textContent = "Extract indicators";
+        triageButton.textContent = "Extrair indicadores";
       }
     }
 
@@ -529,11 +529,11 @@
       const summary = el(
         "div",
         { class: "triage-summary" },
-        triageMetric("Unique values", result.unique_count),
-        triageMetric("Occurrences", result.indicator_count),
-        triageMetric("Characters", result.characters),
-        triageMetric("Defanged input", result.defanged ? "Yes" : "No"),
-        triageMetric("Truncated", result.truncated ? "Yes" : "No"),
+        triageMetric("Valores únicos", result.unique_count),
+        triageMetric("Ocorrências", result.indicator_count),
+        triageMetric("Caracteres", result.characters),
+        triageMetric("Entrada neutralizada", result.defanged ? "Sim" : "Não"),
+        triageMetric("Truncado", result.truncated ? "Sim" : "Não"),
       );
       const notices = (result.warnings || []).map((warning) =>
         el("p", { class: "inline-notice" }, warning),
@@ -545,7 +545,7 @@
           el(
             "p",
             { class: "panel-empty" },
-            "No recognized IPv4, IPv6, CIDR, domain, URL, email or hash value was found.",
+            "Nenhum valor reconhecido de IPv4, IPv6, CIDR, domínio, URL, e-mail ou hash foi encontrado.",
           ),
         );
         return;
@@ -555,27 +555,27 @@
         ...notices,
         table({
           columns: [
-            { label: "TYPE", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
+            { label: "TIPO", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
             {
-              label: "VALUE",
+              label: "VALOR",
               render: (row) => el("code", { class: "indicator-value", title: row.value }, row.value),
             },
             {
-              label: "SEEN",
+              label: "VISTO",
               className: "numeric-col",
               render: (row) => String(row.count),
             },
             {
-              label: "CONTEXT",
+              label: "CONTEXTO",
               render: (row) => el("span", { class: "triage-context" }, row.contexts[0] || "—"),
             },
             {
               label: "",
-              render: (row) => button("Inspect", () => inspectIndicator(row.value)),
+              render: (row) => button("Inspecionar", () => inspectIndicator(row.value)),
             },
           ],
           rows: result.items,
-          emptyMessage: "No indicators found.",
+          emptyMessage: "Nenhum indicador encontrado.",
           onRowClick: (row) => inspectIndicator(row.value),
         }),
       );
@@ -591,7 +591,7 @@
     }
 
     async function inspectIndicator(value) {
-      inspectorHost.replaceChildren(loadingBlock("Inspecting value locally…"));
+      inspectorHost.replaceChildren(loadingBlock("Inspecionando valor localmente…"));
       try {
         const result = await api(
           `/api/intelligence/inspect?value=${encodeURIComponent(value)}`,
@@ -611,8 +611,8 @@
           el(
             "div",
             { class: "inspector-match" },
-            badge("Indexed indicator", "success"),
-            el("span", {}, `${indicator.origin_count} origin(s) · ${indicatorTypesLabel(indicator.type)}`),
+            badge("Indicador indexado", "success"),
+            el("span", {}, `${indicator.origin_count} origem(ns) · ${indicatorTypesLabel(indicator.type)}`),
           ),
         );
       }
@@ -621,7 +621,7 @@
           el(
             "div",
             { class: "inspector-match" },
-            badge("Entity", "info"),
+            badge("Entidade", "info"),
             el("span", {}, entity.name),
             entity.investigation_id ? caseLink(entity.investigation_id) : null,
           ),
@@ -632,7 +632,7 @@
           el(
             "div",
             { class: "inspector-match" },
-            badge("Evidence", "warning"),
+            badge("Evidências", "warning"),
             el("span", {}, evidence.title),
             evidence.investigation_id ? caseLink(evidence.investigation_id, evidence.investigation_name) : null,
           ),
@@ -643,7 +643,7 @@
           el(
             "div",
             { class: "inspector-match" },
-            badge("File analysis", "neutral"),
+            badge("Análise de arquivo", "neutral"),
             el("span", {}, analysis.file_name),
             el("span", { class: "muted" }, analysis.format),
           ),
@@ -654,37 +654,37 @@
         ? el(
             "div",
             { class: "inspector-related" },
-            el("h3", { class: "subheading" }, "Local domain lookalikes"),
+            el("h3", { class: "subheading" }, "Domínios semelhantes locais"),
             el(
               "p",
               { class: "panel-note" },
-              "Structural edit-distance candidates from local records only; they are not registered domains and not proof of impersonation.",
+              "Candidatos por distância de edição a partir apenas de registros locais; não são domínios registrados nem prova de falsificação.",
             ),
             ...lookalikeData.items.map((item) =>
               el(
                 "div",
                 { class: "inspector-match" },
-                badge(`distance ${item.distance}`, item.distance === 1 ? "warning" : "neutral"),
+                badge(`distância ${item.distance}`, item.distance === 1 ? "warning" : "neutral"),
                 el("code", {}, item.value),
                 el("span", { class: "muted" }, item.reason),
               ),
             ),
-            el("p", { class: "tool-limit" }, `${lookalikeData.scanned} local candidate(s) scanned · ${lookalikeData.engine}`),
+            el("p", { class: "tool-limit" }, `${lookalikeData.scanned} candidato(s) local(is) verificado(s) · ${lookalikeData.engine}`),
           )
         : null;
       const cooccurring = (local.cooccurring || []).length
         ? el(
             "div",
             { class: "inspector-related" },
-            el("h3", { class: "subheading" }, "Co-occurring values"),
-            el("p", { class: "panel-note" }, "Values found in the same observations; this is co-occurrence, not a proven relationship."),
+            el("h3", { class: "subheading" }, "Valores coocorrentes"),
+            el("p", { class: "panel-note" }, "Valores encontrados nas mesmas observações; isto é coocorrência, não um relacionamento comprovado."),
             ...(local.cooccurring || []).map((item) =>
               el(
                 "div",
                 { class: "inspector-match" },
                 badge(indicatorTypesLabel(item.type), "neutral"),
                 el("code", {}, item.value),
-                el("span", { class: "muted" }, `${item.count} observation(s)`),
+                el("span", { class: "muted" }, `${item.count} observação(ões)`),
               ),
             ),
           )
@@ -699,14 +699,14 @@
             el(
               "div",
               {},
-              el("p", { class: "eyebrow" }, "LOCAL VALUE INSPECTOR"),
+              el("p", { class: "eyebrow" }, "INSPETOR DE VALOR LOCAL"),
               el("h3", {}, result.label),
             ),
             el(
               "div",
               { class: "row-actions" },
-              badge(`${result.match_count} local match(es)`, result.match_count ? "success" : "neutral"),
-              button("Close", () => inspectorHost.replaceChildren(), { variant: "button-secondary" }),
+              badge(`${result.match_count} correspondência(s) local(is)`, result.match_count ? "success" : "neutral"),
+              button("Fechar", () => inspectorHost.replaceChildren(), { variant: "button-secondary" }),
             ),
           ),
           el("code", { class: "inspector-canonical" }, result.canonical || result.input),
@@ -714,14 +714,14 @@
           ...(result.warnings || []).map((warning) =>
             el("p", { class: "inline-notice" }, warning),
           ),
-          el("h3", { class: "subheading" }, "Local exact matches"),
+          el("h3", { class: "subheading" }, "Correspondências locais exatas"),
           matchRows.length
             ? el("div", { class: "inspector-matches" }, ...matchRows)
-            : el("p", { class: "panel-empty" }, "No exact local record matched this value. It may still exist as free text in an observation."),
+            : el("p", { class: "panel-empty" }, "Nenhum registro local corresponde exatamente a este valor. Ele ainda pode existir como texto livre em uma observação."),
           lookalikes,
           cooccurring,
           ...(result.limitations || []).map((limitation) =>
-            el("p", { class: "tool-limit" }, limitation),
+            el("p", { class: "tool-limit" }, G.translateText(limitation)),
           ),
         ),
       );
@@ -737,32 +737,32 @@
 
     function drawTable() {
       const rows = filtered();
-      countLabel.textContent = `${rows.length} of ${data.total} indicators`;
+      countLabel.textContent = `${rows.length} de ${data.total} indicadores`;
       const columns = [
-        { label: "TYPE", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
+        { label: "TIPO", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
         {
-          label: "VALUE",
+          label: "VALOR",
           render: (row) => el("code", { class: "indicator-value", title: row.value }, row.value),
         },
-        { label: "ORIGINS", className: "numeric-col", render: (row) => String(row.origin_count) },
+        { label: "ORIGENS", className: "numeric-col", render: (row) => String(row.origin_count) },
         {
-          label: "CASES",
+          label: "CASOS",
           className: "numeric-col",
           render: (row) => String(row.investigations.length),
         },
         {
-          label: "FIRST SEEN",
+          label: "PRIMEIRA OCORRÊNCIA",
           render: (row) => (row.first_seen ? formatDate(row.first_seen) : "—"),
         },
-        { label: "ASSESSMENT", render: (row) => statusBadge(row.verification_status) },
+        { label: "AVALIAÇÃO", render: (row) => statusBadge(row.verification_status) },
       ];
       tableHost.replaceChildren(
         table({
           columns,
           rows,
           emptyMessage: data.total
-            ? "No indicators match these filters."
-            : "No indicators have been extracted from observations, entities or evidence.",
+            ? "Nenhum indicador corresponde a estes filtros."
+            : "Nenhum indicador foi extraído de observações, entidades ou evidências.",
           onRowClick: (row) => {
             selectedKey = `${row.type}:${row.value}`;
             drawDetail(row);
@@ -777,50 +777,50 @@
 
     root.append(
       pageHeader({
-        eyebrow: "INDICATOR ENGINE",
-        title: "Intelligence search",
+        eyebrow: "MOTOR DE INDICADORES",
+        title: "Pesquisa de inteligência",
         description:
-          "Indicators extracted from observation text, registered entities and evidence digests, unified by exact value.",
-        actions: [button("↻ Rebuild index", () => G.refreshView())],
+          "Indicadores extraídos do texto das observações, de entidades registradas e de hashes de evidências, unificados por valor exato.",
+        actions: [button("Reconstruir índice", () => G.refreshView())],
       }),
       el(
         "div",
         { class: "metric-grid compact-metrics" },
         G.metric({
-          label: "UNIQUE INDICATORS",
+          label: "INDICADORES ÚNICOS",
           value: String(data.total),
-          foot: "Exact-value index",
+          foot: "Índice por valor exato",
           icon: "⌁",
           tone: "amber",
         }),
         G.metric({
-          label: "EXTRACTION ORIGINS",
+          label: "ORIGENS DE EXTRAÇÃO",
           value: String(data.extraction_count),
-          foot: "Text matches + records",
+          foot: "Ocorrências em texto + registros",
           icon: "▤",
           tone: "blue",
         }),
         G.metric({
-          label: "CORRELATIONS",
+          label: "CORRELAÇÕES",
           value: String(data.correlation_count),
-          foot: "Shared exact values",
+          foot: "Valores exatos compartilhados",
           icon: "⟷",
           tone: "violet",
         }),
         G.metric({
-          label: "ENGINE",
-          value: data.indicator_engine ? "Online" : "Offline",
-          foot: "Regex extraction",
+          label: "MOTOR",
+          value: data.indicator_engine ? "Disponível" : "Indisponível",
+          foot: "Extração por expressão regular",
           icon: "◈",
           tone: data.indicator_engine ? "green" : "amber",
         }),
       ),
       panel(
-        { eyebrow: "FIELD TOOL", title: "Text triage", caption: "Runs in memory · nothing is stored" },
+        { eyebrow: "FERRAMENTA", title: "Triagem de texto", caption: "Executado em memória · nada é armazenado" },
         el(
           "p",
           { class: "panel-note" },
-          "Paste report text to extract IPv4, IPv6, CIDR, domain, URL, email and hash values. Defanged notation is refanged before matching; no DNS or reputation lookup is made.",
+          "Cole texto de relatório para extrair valores de IPv4, IPv6, CIDR, domínio, URL, e-mail e hash. A notação neutralizada é restaurada antes da comparação; nenhuma consulta de DNS ou reputação é feita.",
         ),
         el(
           "div",
@@ -830,7 +830,7 @@
             "div",
             { class: "triage-actions" },
             triageButton,
-            el("span", { class: "field-hint" }, "Ctrl/⌘ Enter to run"),
+            el("span", { class: "field-hint" }, "Ctrl/⌘ Enter para executar"),
           ),
         ),
         triageHost,
@@ -841,22 +841,22 @@
         { class: "indicator-layout" },
         panel(
           {
-            eyebrow: "OBSERVED ARTIFACTS",
-            title: "Indicator index",
+            eyebrow: "ARTEFATOS OBSERVADOS",
+            title: "Índice de indicadores",
             actions: [countLabel],
             className: "table-panel",
           },
           el(
             "div",
             { class: "toolbar" },
-            el("div", { class: "search-field" }, el("span", { "aria-hidden": "true" }, "⌕"), search),
+            el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
             typeFilter,
           ),
           data.truncated
             ? el(
                 "p",
                 { class: "inline-notice" },
-                "The index reached its 5,000-observation analysis limit; refine the case or reduce data volume.",
+                "O índice atingiu o limite de análise de 5.000 observações; refine o caso ou reduza o volume de dados.",
               )
             : null,
           tableHost,
@@ -868,35 +868,35 @@
     root.append(
       panel(
         {
-          eyebrow: "CORROBORATION",
-          title: "Cross-source matches",
-          caption: `${data.correlation_count} exact value${data.correlation_count === 1 ? "" : "s"}`,
+          eyebrow: "CORROBORAÇÃO",
+          title: "Correspondências entre fontes",
+          caption: `${data.correlation_count} ${data.correlation_count === 1 ? "valor exato" : "valores exatos"}`,
         },
         el(
           "p",
           { class: "panel-note" },
-          "Only values observed in more than one record are listed. Independent sources are counted by distinct source reference; observation count alone is not corroboration.",
+          "Somente valores observados em mais de um registro são listados. Fontes independentes são contadas por referência de fonte distinta; a contagem de observações sozinha não é corroboração.",
         ),
         data.correlations && data.correlations.length
           ? table({
               columns: [
-                { label: "TYPE", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
+                { label: "TIPO", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
                 {
-                  label: "VALUE",
+                  label: "VALOR",
                   render: (row) => el("code", { class: "indicator-value", title: row.value }, row.value),
                 },
                 {
-                  label: "OBSERVATIONS",
+                  label: "OBSERVAÇÕES",
                   className: "numeric-col",
                   render: (row) => String(row.observation_count),
                 },
                 {
-                  label: "INDEPENDENT SOURCES",
+                  label: "FONTES INDEPENDENTES",
                   className: "numeric-col",
                   render: (row) => String(row.independent_source_count),
                 },
                 {
-                  label: "STRENGTH",
+                  label: "FORÇA",
                   render: (row) =>
                     badge(
                       titleCase(row.strength),
@@ -911,7 +911,7 @@
                 },
               ],
               rows: data.correlations,
-              emptyMessage: "No value has been observed in more than one record yet.",
+              emptyMessage: "Nenhum valor foi observado em mais de um registro ainda.",
               onRowClick: (row) => {
                 selectedKey = `${row.type}:${row.value}`;
                 drawTable();
@@ -920,10 +920,10 @@
           : el(
               "p",
               { class: "panel-empty" },
-              "No cross-source exact match yet. A single observation, even with several values, is not corroboration.",
+              "Nenhuma correspondência exata entre fontes ainda. Uma única observação, mesmo com vários valores, não é corroboração.",
             ),
         data.correlations_truncated
-          ? el("p", { class: "inline-notice" }, "Only the first 200 correlations are shown.")
+          ? el("p", { class: "inline-notice" }, "Somente as primeiras 200 correlações são exibidas.")
           : null,
       ),
     );
@@ -949,8 +949,8 @@
     const search = el("input", {
       class: "input",
       type: "search",
-      placeholder: "Search title, file name or SHA-256",
-      "aria-label": "Search evidence",
+      placeholder: "Pesquisar título, nome de arquivo ou SHA-256",
+      "aria-label": "Pesquisar evidências",
     });
     const countLabel = el("span", { class: "panel-caption" });
     const host = el("div");
@@ -962,12 +962,12 @@
           .toLowerCase()
           .includes(query),
       );
-      countLabel.textContent = `${rows.length} of ${data.total} records`;
+      countLabel.textContent = `${rows.length} de ${data.total} registros`;
       host.replaceChildren(
         table({
           columns: [
             {
-              label: "EVIDENCE",
+              label: "EVIDÊNCIA",
               render: (row) =>
                 el(
                   "div",
@@ -976,22 +976,22 @@
                   el("span", {}, row.original_name || row.evidence_type),
                 ),
             },
-            { label: "CASE", render: (row) => caseLink(row.investigation_id, row.investigation_name) },
-            { label: "TYPE", render: (row) => badge(titleCase(row.evidence_type), "neutral") },
+            { label: "CASO", render: (row) => caseLink(row.investigation_id, row.investigation_name) },
+            { label: "TIPO", render: (row) => badge(titleCase(row.evidence_type), "neutral") },
             {
               label: "SHA-256",
               render: (row) =>
                 el("code", { class: "hash", title: row.sha256 }, row.sha256 ? row.sha256.slice(0, 16) : "—"),
             },
-            { label: "SIZE", render: (row) => formatBytes(row.size_bytes) },
+            { label: "TAMANHO", render: (row) => formatBytes(row.size_bytes) },
             {
-              label: "INTEGRITY",
+              label: "INTEGRIDADE",
               render: (row) =>
                 statusBadge(row.integrity_status === "unverified" ? "not-verified" : row.integrity_status),
             },
-            { label: "RECORDED", render: (row) => formatDate(row.recorded_at) },
+            { label: "REGISTRO", render: (row) => formatDate(row.recorded_at) },
             {
-              label: "ACTIONS",
+              label: "AÇÕES",
               render: (row) =>
                 el(
                   "div",
@@ -1003,18 +1003,18 @@
                           class: "button button-secondary button-small",
                           href: `/api/evidence/${row.id}/download`,
                         },
-                        "Download",
+                        "Baixar",
                       )
                     : null,
                   row.has_file
-                    ? button("Verify", async () => {
+                    ? button("Verificar", async () => {
                         try {
                           const result = await api(`/api/evidence/${row.id}/verify`, {
                             method: "POST",
                             body: JSON.stringify({}),
                           });
                           toast(
-                            result.matches ? "Digest matches." : `Integrity ${result.integrity_status}.`,
+                            result.matches ? "O hash confere." : `Integridade: ${G.statusLabel(result.integrity_status)}.`,
                             result.matches ? "success" : "error",
                           );
                           G.refreshView();
@@ -1028,8 +1028,8 @@
           ],
           rows,
           emptyMessage: data.items.length
-            ? "No evidence matches this search."
-            : "No evidence records exist.",
+            ? "Nenhuma evidência corresponde a esta pesquisa."
+            : "Não há registros de evidência.",
           onRowClick: (row) => go("investigations", row.investigation_id),
         }),
       );
@@ -1037,31 +1037,31 @@
 
     root.append(
       pageHeader({
-        eyebrow: "EVIDENCE MANAGER",
-        title: "Evidence",
+        eyebrow: "GERENCIADOR DE EVIDÊNCIAS",
+        title: "Evidências",
         description:
-          "Hashed copies and analyst references. Originals are preserved; stored files are never executed.",
+          "Cópias com hash e referências do analista. Os originais são preservados; arquivos armazenados nunca são executados.",
         actions: [
-          button("＋ Add evidence", () => G.evidenceDialog(), {
+          button("Adicionar evidência", () => G.evidenceDialog(), {
             variant: "button-primary",
           }),
         ],
       }),
       panel(
-        { eyebrow: "INTEGRITY STORE", title: "Evidence records", actions: [countLabel] },
+        { eyebrow: "ARMAZENAMENTO ÍNTEGRO", title: "Registros de evidência", actions: [countLabel] },
         el(
           "div",
           { class: "toolbar" },
-          el("div", { class: "search-field" }, el("span", { "aria-hidden": "true" }, "⌕"), search),
+          el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
         ),
         data.items.length
           ? host
           : emptyState({
               icon: "▣",
-              title: "No evidence records",
+              title: "Nenhum registro de evidência",
               description:
-                "Attach a file (maximum 4 MiB) or record a reference with its hash.",
-              action: button("Add evidence", () => G.evidenceDialog(), {
+                "Anexe um arquivo (máximo de 4 MiB) ou registre uma referência com seu hash.",
+              action: button("Adicionar evidência", () => G.evidenceDialog(), {
                 variant: "button-primary",
               }),
             }),
@@ -1083,13 +1083,13 @@
     const search = el("input", {
       class: "input",
       type: "search",
-      placeholder: "Search titles, references or notes",
-      "aria-label": "Search sources",
+      placeholder: "Pesquisar títulos, referências ou notas",
+      "aria-label": "Pesquisar fontes",
     });
     const categoryFilter = el(
       "select",
-      { class: "input compact-select", "aria-label": "Filter source category" },
-      el("option", { value: "" }, "All categories"),
+      { class: "input compact-select", "aria-label": "Filtrar categoria da fonte" },
+      el("option", { value: "" }, "Todas as categorias"),
       ...G.SOURCE_CATEGORIES.map(([value, label]) => el("option", { value }, label)),
     );
     const countLabel = el("span", { class: "panel-caption" });
@@ -1102,35 +1102,35 @@
         if (category && row.category !== category) return false;
         return `${row.title} ${row.reference} ${row.description}`.toLowerCase().includes(query);
       });
-      countLabel.textContent = `${rows.length} of ${data.total} sources`;
+      countLabel.textContent = `${rows.length} de ${data.total} fontes`;
       host.replaceChildren(
         table({
           columns: [
             {
-              label: "SOURCE",
+              label: "FONTE",
               render: (row) =>
                 el(
                   "div",
                   { class: "cell-stack" },
                   el("strong", {}, row.title),
-                  el("span", {}, row.description || "No description"),
+                  el("span", {}, row.description || "Sem descrição"),
                 ),
             },
-            { label: "CATEGORY", render: (row) => badge(titleCase(row.category), "neutral") },
-            { label: "REFERENCE", render: (row) => referenceNode(row.reference) },
+            { label: "CATEGORIA", render: (row) => badge(titleCase(row.category), "neutral") },
+            { label: "REFERÊNCIA", render: (row) => referenceNode(row.reference) },
             {
-              label: "CASES",
+              label: "CASOS",
               className: "numeric-col",
               render: (row) => String(row.investigation_count),
             },
-            { label: "ACCESSED", render: (row) => formatDate(row.accessed_at) },
-            { label: "VERIFICATION", render: (row) => statusBadge(row.verification_status) },
-            { label: "", render: (row) => button("Inspect", () => go("sources", row.id)) },
+            { label: "ACESSO", render: (row) => formatDate(row.accessed_at) },
+            { label: "VERIFICAÇÃO", render: (row) => statusBadge(row.verification_status) },
+            { label: "", render: (row) => button("Inspecionar", () => go("sources", row.id)) },
           ],
           rows,
           emptyMessage: data.items.length
-            ? "No sources match these filters."
-            : "No sources have been registered.",
+            ? "Nenhuma fonte corresponde a estes filtros."
+            : "Nenhuma fonte foi registrada.",
           onRowClick: (row) => go("sources", row.id),
         }),
       );
@@ -1138,31 +1138,31 @@
 
     root.append(
       pageHeader({
-        eyebrow: "PROVENANCE",
-        title: "Sources",
+        eyebrow: "PROVENIÊNCIA",
+        title: "Fontes",
         description:
-          "Every observation, entity and report points back to a recorded source and access time.",
+          "Cada observação, entidade e relatório aponta para uma fonte registrada e a data de acesso.",
         actions: [
-          button("＋ Register source", () => G.sourceDialog(), {
+          button("Registrar fonte", () => G.sourceDialog(), {
             variant: "button-primary",
           }),
         ],
       }),
       panel(
-        { eyebrow: "SOURCE REGISTRY", title: "Consulted sources", actions: [countLabel] },
+        { eyebrow: "REGISTRO DE FONTES", title: "Fontes consultadas", actions: [countLabel] },
         el(
           "div",
           { class: "toolbar" },
-          el("div", { class: "search-field" }, el("span", { "aria-hidden": "true" }, "⌕"), search),
+          el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
           categoryFilter,
         ),
         data.items.length
           ? host
           : emptyState({
               icon: "⛁",
-              title: "No sources registered",
-              description: "Record a URL, document or analyst note before citing it in a case.",
-              action: button("Register source", () => G.sourceDialog(), {
+              title: "Nenhuma fonte registrada",
+              description: "Registre uma URL, documento ou nota do analista antes de citá-la em um caso.",
+              action: button("Registrar fonte", () => G.sourceDialog(), {
                 variant: "button-primary",
               }),
             }),
@@ -1187,7 +1187,7 @@
         source = await load();
       } catch (error) {
         root.replaceChildren(
-          errorState("Source unavailable", error.message, () => draw()),
+          errorState("Fonte indisponível", error.message, () => draw()),
         );
         G.setLoading(false);
         return;
@@ -1195,27 +1195,27 @@
       G.setLoading(false);
       root.replaceChildren(
         pageHeader({
-          eyebrow: "SOURCE RECORD",
+          eyebrow: "REGISTRO DA FONTE",
           title: source.title,
-          description: source.description || "No description recorded.",
+          description: source.description || "Nenhuma descrição registrada.",
           actions: [
-            button("‹ All sources", () => go("sources")),
-            button("Edit", () => G.sourceDialog(source, { onSaved: () => draw() })),
+            button("‹ Todas as fontes", () => go("sources")),
+            button("Editar", () => G.sourceDialog(source, { onSaved: () => draw() })),
             button(
-              "Delete",
+              "Excluir",
               async () => {
                 if (
                   !(await confirm({
-                    title: "Delete source",
-                    message: `Delete "${source.title}" from the shared registry?`,
-                    confirmLabel: "Delete source",
+                    title: "Excluir fonte",
+                    message: `Excluir "${source.title}" do registro compartilhado?`,
+                    confirmLabel: "Excluir fonte",
                     danger: true,
                   }))
                 )
                   return;
                 try {
-                  await api(`/api/sources/${source.id}`, { method: "DELETE" });
-                  toast("Source deleted.");
+                  await api(`/api/sources/${source.id}`, { method: "EXCLUIR" });
+                  toast("Fonte excluída.");
                   go("sources");
                 } catch (error) {
                   toast(error.message, "error");
@@ -1231,49 +1231,49 @@
           badge(titleCase(source.category), "neutral"),
           statusBadge(source.verification_status),
           el("code", {}, source.id),
-          el("span", {}, `Accessed ${formatDate(source.accessed_at, { time: true })}`),
+          el("span", {}, `Acessada em ${formatDate(source.accessed_at, { time: true })}`),
         ),
         el(
           "div",
           { class: "detail-grid" },
           panel(
-            { eyebrow: "PROPERTIES", title: "Source data" },
+            { eyebrow: "PROPRIEDADES", title: "Dados da fonte" },
             G.kvList([
-              ["Reference", referenceNode(source.reference)],
-              ["Category", badge(titleCase(source.category), "neutral")],
-              ["Accessed", formatDate(source.accessed_at, { time: true })],
-              ["Verification", statusBadge(source.verification_status)],
-              ["Created", formatDate(source.created_at, { time: true })],
-              ["Updated", formatDate(source.updated_at, { time: true })],
+              ["Referência", referenceNode(source.reference)],
+              ["Categoria", badge(titleCase(source.category), "neutral")],
+              ["Acesso", formatDate(source.accessed_at, { time: true })],
+              ["Verificação", statusBadge(source.verification_status)],
+              ["Criação", formatDate(source.created_at, { time: true })],
+              ["Atualização", formatDate(source.updated_at, { time: true })],
             ]),
           ),
           panel(
-            { eyebrow: "CASE LINKS", title: `Investigations (${source.investigations.length})` },
+            { eyebrow: "VÍNCULOS COM CASOS", title: `Investigações (${source.investigations.length})` },
             source.investigations.length
               ? table({
                   columns: [
-                    { label: "CASE", render: (row) => caseLink(row.id, row.name) },
+                    { label: "CASO", render: (row) => caseLink(row.id, row.name) },
                     { label: "STATUS", render: (row) => statusBadge(row.status) },
-                    { label: "LINKED", render: (row) => formatDate(row.added_at) },
+                    { label: "VINCULADA EM", render: (row) => formatDate(row.added_at) },
                   ],
                   rows: source.investigations,
-                  emptyMessage: "Not linked to a case.",
+                  emptyMessage: "Não vinculada a um caso.",
                 })
-              : el("p", { class: "panel-empty" }, "Not linked to a case."),
+              : el("p", { class: "panel-empty" }, "Não vinculada a um caso."),
           ),
           panel(
-            { eyebrow: "ENTITY LINKS", title: `Entities (${source.entities.length})` },
+            { eyebrow: "VÍNCULOS COM ENTIDADES", title: `Entidades (${source.entities.length})` },
             source.entities.length
               ? table({
                   columns: [
-                    { label: "ENTITY", render: (row) => el("strong", {}, row.name) },
-                    { label: "CATEGORY", render: (row) => typeChip(row.entity_type) },
-                    { label: "LINKED", render: (row) => formatDate(row.added_at) },
+                    { label: "ENTIDADE", render: (row) => el("strong", {}, row.name) },
+                    { label: "CATEGORIA", render: (row) => typeChip(row.entity_type) },
+                    { label: "VINCULADA EM", render: (row) => formatDate(row.added_at) },
                   ],
                   rows: source.entities,
-                  emptyMessage: "Not linked to an entity.",
+                  emptyMessage: "Não vinculada a uma entidade.",
                 })
-              : el("p", { class: "panel-empty" }, "Not linked to an entity."),
+              : el("p", { class: "panel-empty" }, "Não vinculada a uma entidade."),
           ),
         ),
       );
@@ -1297,41 +1297,41 @@
     ];
     root.append(
       pageHeader({
-        eyebrow: "REPORT ENGINE",
-        title: "Reports",
+        eyebrow: "RELATÓRIOS",
+        title: "Central de relatórios",
         description:
-          "Every export is generated from the live case file. Inference and collection basis remain labelled.",
+          "Toda exportação é gerada a partir do caso atual. Inferências e base de coleta permanecem identificadas.",
       }),
       el(
         "div",
         { class: "notice" },
-        "Reports describe sourced observations, not confirmed facts. " +
-          "Review the limitations section before distributing an export.",
+        "Relatórios descrevem observações com fonte, não fatos confirmados. " +
+          "Revise a seção de limitações antes de distribuir uma exportação.",
       ),
       panel(
-        { eyebrow: "CASE REPORTS", title: "Generate exports", caption: `${rows.length} cases` },
+        { eyebrow: "RELATÓRIOS DE CASOS", title: "Gerar exportações", caption: `${rows.length} casos` },
         rows.length
           ? table({
               columns: [
                 {
-                  label: "CASE",
+                  label: "CASO",
                   render: (row) =>
                     el(
                       "div",
                       { class: "cell-stack" },
                       el("strong", {}, row.name),
-                      el("span", {}, row.description || "No description"),
+                      el("span", {}, row.description || "Sem descrição"),
                     ),
                 },
                 { label: "STATUS", render: (row) => statusBadge(row.status) },
                 {
-                  label: "RECORDS",
+                  label: "REGISTROS",
                   render: (row) =>
                     `${row.observation_count} obs · ${row.entity_count} ent · ${row.evidence_count} evid`,
                 },
-                { label: "UPDATED", render: (row) => formatDate(row.updated_at) },
+                { label: "ATUALIZAÇÃO", render: (row) => formatDate(row.updated_at) },
                 {
-                  label: "EXPORT",
+                  label: "EXPORTAR",
                   render: (row) =>
                     el(
                       "div",
@@ -1355,35 +1355,35 @@
                           target: "_blank",
                           rel: "noopener",
                         },
-                        "Print",
+                        "Imprimir",
                       ),
                     ),
                 },
               ],
               rows,
-              emptyMessage: "Create a case before generating reports.",
+              emptyMessage: "Crie um caso antes de gerar relatórios.",
             })
           : emptyState({
               icon: "▤",
-              title: "No cases to report",
-              description: "Report exports become available when an investigation exists.",
-              action: button("Create investigation", () => G.newInvestigation(), {
+              title: "Nenhum caso para relatar",
+              description: "As exportações ficam disponíveis quando existe uma investigação.",
+              action: button("Criar investigação", () => G.newInvestigation(), {
                 variant: "button-primary",
               }),
             }),
       ),
       panel(
-        { eyebrow: "METHOD", title: "What the report engine includes" },
+        { eyebrow: "MÉTODO", title: "O que os relatórios incluem" },
         el(
           "ul",
           { class: "plain-list" },
-          el("li", {}, "Scope, case status and generation timestamp."),
-          el("li", {}, "Sources with references and access times."),
-          el("li", {}, "Observations labelled by collection basis."),
-          el("li", {}, "Entities, relationships and their verification status."),
-          el("li", {}, "Evidence digests, sizes and recorded integrity checks."),
-          el("li", {}, "Extracted indicators and exact-value correlations."),
-          el("li", {}, "Analytical limitations and the distinction between inference and confirmation."),
+          el("li", {}, "Escopo, status do caso e data de geração."),
+          el("li", {}, "Fontes com referências e datas de acesso."),
+          el("li", {}, "Observações identificadas pela base de coleta."),
+          el("li", {}, "Entidades, relacionamentos e seu status de verificação."),
+          el("li", {}, "Hashes, tamanhos e verificações de integridade das evidências."),
+          el("li", {}, "Indicadores extraídos e correlações por valor exato."),
+          el("li", {}, "Limitações analíticas e a distinção entre inferência e confirmação."),
         ),
       ),
     );
