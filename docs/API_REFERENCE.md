@@ -270,8 +270,48 @@ Connectors that contact external services run only when the setting
 - Redirects are followed manually and revalidated; https→http is refused.
 - Hard byte limit, single deadline, identity encoding and a fixed User-Agent.
 
-Built-in connectors in this release are local only: `local-structure`
-(structural facts) and `local-workspace` (exact matches in local records).
+Registered connectors:
+
+| Connector | Accepts | Network | Source | Cache |
+| --- | --- | --- | --- | --- |
+| `local-structure` | all | no | syntax and structure only | — |
+| `local-workspace` | all but CVE | no | local entities, evidence, analyses, indicators | — |
+| `cisa-kev-local` | CVE | no | local CISA KEV snapshot | — |
+| `dns-doh` | domain, URL, email | yes | Cloudflare DNS over HTTPS (A, AAAA, CNAME, MX, NS, TXT, CAA, SPF, DMARC) | 1 h |
+| `cymru-asn` | IPv4, IPv6, ASN | yes | Team Cymru IP-to-ASN via DNS TXT | 24 h |
+| `rdap` | domain, IP, CIDR, ASN | yes | rdap.org bootstrap → authoritative registry | 24 h |
+| `crtsh` | domain, URL, email | yes | crt.sh Certificate Transparency (unexpired) | 24 h |
+| `wayback` | domain, URL | yes | Internet Archive CDX (distinct captures, max 200) | 24 h |
+| `first-epss` | CVE | yes | FIRST EPSS API | 24 h |
+| `tls-certificate` | domain, URL, IP | **contacts target** | one TLS handshake on port 443 | 1 h |
+| `web-fingerprint` | domain, URL, IP | **contacts target** | one HTTPS GET of the page and its same-host favicon | 1 h |
+
+Connectors marked **contacts target** reach the artifact's own servers and run
+only when both `intel.allow_network` and `intel.allow_target_contact` are
+`true` (both default `false`); otherwise their status is
+`target-contact-disabled`. They fetch over HTTPS only (an `http://` artifact is
+upgraded), never guess paths or scan ports, and the web fingerprint refuses to
+send a request over a TLS connection that fails verification. The certificate
+connector still analyses an untrusted certificate by completing a second,
+unverified handshake that sends no data.
+
+Certificates are parsed by `modules/x509.py` (DER, no dependencies): names,
+validity, SANs, key type and size, signature algorithm, SHA-256/SHA-1, SPKI pin
+and AIA/CRL/SCT/EKU extensions. Favicon hashes use MurmurHash3 over base64 text
+(Shodan `http.favicon.hash` compatible).
+
+All network connectors are passive: they ask a public registry, resolver or
+archive about the artifact and never contact the artifact's own servers. The
+DNS resolver and the other sources see the queried value.
+
+RDAP privacy rule: only organisation-level roles are stored (registrar, abuse,
+sponsor, reseller, NOC). On IP network and ASN objects the registrant is the
+address holder and is kept; on domain objects registrant, administrative and
+technical contacts are never stored.
+
+The HTTP client loads the system CA bundle when the interpreter's compiled-in
+default is empty (standalone Python builds on NixOS), so TLS verification works
+without `SSL_CERT_FILE`.
 
 ## Modules
 
