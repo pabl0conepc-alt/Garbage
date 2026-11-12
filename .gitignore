@@ -3,3 +3,6 @@ dist/
 *.cisa-kev-cache.json
 __pycache__/
 *.py[cod]
+
+native/build/
+native/rust/target/

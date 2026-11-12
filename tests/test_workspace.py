@@ -176,6 +176,13 @@ class WorkspaceServiceTests(unittest.TestCase):
             {(item["type"], item["value"]) for item in result["local"]["cooccurring"]},
         )
 
+        lookalikes = inspect_local_indicator(self.database, value="threat.example")
+        self.assertIn(
+            lookalikes["local"]["lookalikes"]["engine"],
+            {"rust-native", "python-fallback"},
+        )
+        self.assertIsInstance(lookalikes["local"]["lookalikes"]["items"], list)
+
         filename = inspect_local_indicator(self.database, value="report.pdf")
         self.assertEqual(filename["kind"], "filename")
         self.assertEqual(filename["match_count"], 0)

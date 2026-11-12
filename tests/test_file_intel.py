@@ -147,11 +147,17 @@ class FileIntelligenceTests(unittest.TestCase):
         self.assertEqual(elf["metadata"]["binary"]["machine"], "x86-64")
         self.assertEqual(elf["metadata"]["binary"]["type"], "DYN")
         self.assertEqual(elf["structure"]["sections"], [])
+        self.assertEqual(elf["hardening"]["format"], "elf")
+        self.assertTrue(elf["hardening"]["checks"])
 
         pe = analyze_bytes(pe64_bytes(), "sample.exe")
         self.assertEqual(pe["format"], "pe")
         self.assertEqual(pe["metadata"]["binary"]["machine"], "x86-64")
         self.assertEqual(pe["metadata"]["binary"]["subsystem"], "Windows console")
+        self.assertEqual(pe["hardening"]["format"], "pe")
+        self.assertIn(
+            "aslr", {check["key"] for check in pe["hardening"]["checks"]}
+        )
 
         macho = analyze_bytes(macho64_bytes(), "sample.bin")
         self.assertEqual(macho["format"], "macho")

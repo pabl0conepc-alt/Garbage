@@ -5,6 +5,23 @@ on:
   pull_request:
 
 jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build C, C++ and Rust helpers
+        run: make -C native
+      - name: Run Rust unit tests
+        run: cargo test --release --manifest-path native/rust/Cargo.toml
+      - name: Compare native engines with Python fallbacks
+        env:
+          GARBAGE_NATIVE_DIR: ${{ github.workspace }}/native/build
+        run: python -m unittest tests.test_native -v
+
   test:
     strategy:
       fail-fast: false

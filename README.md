@@ -22,9 +22,9 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | Entities | Canonical entity registry with aliases, confidence, verification and relationships |
 | Analysis | IPv4, IPv6, CIDR, domain, URL, email and hash extraction with refanging, canonical values, provenance, cross-source correlation and manual assessment |
 | Evidence | Upload, SHA-256 integrity record, verification, download and safe image preview |
-| File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; hashes, entropy, strings, metadata, archive listing, findings and history |
+| File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; hashes, entropy, strings, metadata, archive listing, findings and history; optional C scanner for ELF/PE hardening markers (PIE, NX, RELRO, bind-now, canary, Fortify, ASLR, CFG) |
 | Board | Persisted investigation board with cards, notes, groups, connections, layers, autosave, conflict handling and SVG export |
-| Graph | Relationship graph with type filters, focus, search, pan/zoom, drag and layered export |
+| Graph | Relationship graph with type filters, focus, search, pan/zoom, drag and layered export; optional C++ metrics for components, density, isolates, degrees and reciprocal links |
 | CTI | CISA KEV catalogue with explicit refresh, bounded download, provenance and offline cache |
 | System | Global search, settings, activity log, module registry with capability gating |
 
@@ -91,13 +91,15 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
 - **Indicators** — extracted values grouped by type, with provenance and analyst
   assessment. **Text triage** (`T`) extracts indicators from pasted text in
   memory without storing it. **Inspect value** explains one URL, address, CIDR,
-  domain, hash, email, ASN or filename and lists exact local matches and
-  co-occurring values. **Cross-source matches** show observation count,
+  domain, hash, email, ASN or filename and lists exact local matches,
+  co-occurring values and structural domain lookalikes with a Rust fast path.
+  **Cross-source matches** show observation count,
   independent source count and a corroboration strength. Matches are not
   reputation verdicts.
 - **File intelligence** — select or drop a file up to 4 MiB; results include
-  hashes, format, entropy, strings, metadata, structure, findings and embedded
-  indicators. An analysis can be attached to an open case as evidence.
+  hashes, format, entropy, strings, metadata, structure, findings, binary
+  hardening markers and embedded indicators. An analysis can be attached to an
+  open case as evidence.
 - **Evidence** — upload with acquisition context, verify integrity, preview
   supported images.
 - **Sources** — record where material came from and how it was obtained.
@@ -209,7 +211,8 @@ web/ (vanilla JS) ── same-origin JSON ──> garbage_intel/api.py
                                               │
                                               ├─ validation + module gate
                                               ├─ store / entities / sources / evidence / boards
-                                              ├─ modules/ (indicators, imaging, file_intel, kev)
+                                              ├─ modules/ (indicators, hardening, lookalikes, imaging, file_intel, kev)
+                                              ├─ optional native/ C, C++ and Rust helpers
                                               └─ SQLite + evidence files
 ```
 
@@ -230,10 +233,21 @@ python3 -m compileall -q garbage_intel tests
 for f in web/*.js; do node --check "$f"; done
 ```
 
-Current result: **106 tests pass**. A temporary jsdom smoke test rendered every
-route against a seeded database with zero error states and zero console errors.
-There is no real-browser E2E test and no native component to test. See
+Current result: **115 tests pass** with the native build present; without it,
+the same suite passes with the nine native parity tests skipped. A temporary
+jsdom smoke test rendered every route against a seeded database with zero error
+states and zero console errors. There is no real-browser E2E test. See
 [TESTING.md](docs/TESTING.md) for what is and is not verified.
+
+Optional native helpers:
+
+```sh
+make -C native
+make -C native check
+```
+
+Builds are optional; a missing library automatically uses the tested Python
+fallback. See [native/README.md](native/README.md).
 
 ## Security and limitations
 
@@ -242,8 +256,10 @@ There is no real-browser E2E test and no native component to test. See
 - Static analysis is not antivirus and does not prove a file is safe.
 - No website/domain/IP collectors, external OSINT connectors, automation,
   plugin loader, FTS5 search or PDF export yet.
-- No C, C++ or Rust engine is present. The native contract is documented but
-  not implemented.
+- Native helpers are optional and loaded only from an explicit build directory
+  or `GARBAGE_NATIVE_DIR`; they are never downloaded. Missing, mismatched or
+  malformed libraries fall back to Python. Native code does not execute input,
+  open files or use the network.
 - OpenArchive identity is ambiguous. The only verified reference is **OpenArchive
   Save**, a mobile media-preservation app. GARBAGE does not claim feature parity
   with it or with any unnamed project. Read

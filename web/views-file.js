@@ -309,6 +309,44 @@
           ),
         );
       }
+      if (analysis.hardening?.checks?.length) {
+        const hardening = analysis.hardening;
+        const tone = (status) =>
+          status === "enabled"
+            ? "success"
+            : status === "missing"
+              ? "warning"
+              : "neutral";
+        sections.push(
+          panel(
+            {
+              eyebrow: "BINARY HARDENING",
+              title: `${hardening.enabled_count} enabled · ${hardening.missing_count} not found`,
+              caption: `${hardening.detail} · ${hardening.engine}`,
+            },
+            el(
+              "div",
+              { class: "file-findings" },
+              ...hardening.checks.map((check) =>
+                el(
+                  "div",
+                  { class: "file-finding" },
+                  badge(titleCase(check.status), tone(check.status)),
+                  el(
+                    "div",
+                    {},
+                    el("strong", {}, check.label),
+                    el("p", { class: "panel-note" }, check.detail),
+                  ),
+                ),
+              ),
+            ),
+            ...(hardening.limitations || []).map((limit) =>
+              el("p", { class: "tool-limit" }, limit),
+            ),
+          ),
+        );
+      }
       if (structure.sections?.length) {
         sections.push(
           panel(

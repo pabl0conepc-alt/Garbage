@@ -649,6 +649,29 @@
           ),
         );
       }
+      const lookalikeData = local.lookalikes || {};
+      const lookalikes = lookalikeData.items?.length
+        ? el(
+            "div",
+            { class: "inspector-related" },
+            el("h3", { class: "subheading" }, "Local domain lookalikes"),
+            el(
+              "p",
+              { class: "panel-note" },
+              "Structural edit-distance candidates from local records only; they are not registered domains and not proof of impersonation.",
+            ),
+            ...lookalikeData.items.map((item) =>
+              el(
+                "div",
+                { class: "inspector-match" },
+                badge(`distance ${item.distance}`, item.distance === 1 ? "warning" : "neutral"),
+                el("code", {}, item.value),
+                el("span", { class: "muted" }, item.reason),
+              ),
+            ),
+            el("p", { class: "tool-limit" }, `${lookalikeData.scanned} local candidate(s) scanned · ${lookalikeData.engine}`),
+          )
+        : null;
       const cooccurring = (local.cooccurring || []).length
         ? el(
             "div",
@@ -695,6 +718,7 @@
           matchRows.length
             ? el("div", { class: "inspector-matches" }, ...matchRows)
             : el("p", { class: "panel-empty" }, "No exact local record matched this value. It may still exist as free text in an observation."),
+          lookalikes,
           cooccurring,
           ...(result.limitations || []).map((limitation) =>
             el("p", { class: "tool-limit" }, limitation),

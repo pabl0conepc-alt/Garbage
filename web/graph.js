@@ -583,21 +583,38 @@
         return;
       }
       const components = countComponents();
+      const graphMetrics = graph.metrics || {};
+      const hub = nodes.find((node) => node.id === graphMetrics.max_degree_node);
+      const metricRows = [
+        ["Investigation", graph.investigation ? graph.investigation.name : "All cases"],
+        ["Entities shown", String(nodes.length)],
+        ["Relationships shown", String(edges.length)],
+        ["Connected components", String(components)],
+      ];
+      if (graphMetrics.density !== undefined) {
+        metricRows.push(
+          ["Density", `${(Number(graphMetrics.density) * 100).toFixed(1)}%`],
+          ["Isolated entities", String(graphMetrics.isolates ?? 0)],
+          [
+            "Highest degree",
+            `${graphMetrics.max_degree ?? 0}${hub ? ` · ${hub.name}` : ""}`,
+          ],
+          ["Reciprocal links", String(graphMetrics.reciprocal_edges ?? 0)],
+        );
+      }
+      metricRows.push([
+        "Layout",
+        nodes.length > MAX_FORCE_NODES && layout === "force"
+          ? "Circular (node limit)"
+          : titleCase(layout),
+      ]);
+      if (graphMetrics.engine) {
+        metricRows.push(["Metrics engine", graphMetrics.engine]);
+      }
       inspector.replaceChildren(
         panel(
           { eyebrow: "RELATIONSHIP GRAPH", title: "Graph overview" },
-          G.kvList([
-            ["Investigation", graph.investigation ? graph.investigation.name : "All cases"],
-            ["Entities shown", String(nodes.length)],
-            ["Relationships shown", String(edges.length)],
-            ["Connected components", String(components)],
-            [
-              "Layout",
-              nodes.length > MAX_FORCE_NODES && layout === "force"
-                ? "Circular (node limit)"
-                : titleCase(layout),
-            ],
-          ]),
+          G.kvList(metricRows),
           nodes.length
             ? el(
                 "p",

@@ -178,6 +178,9 @@ class EntityRegistryTests(unittest.TestCase):
         self.assertEqual(len(graph["nodes"]), 2)
         self.assertEqual(len(graph["edges"]), 1)
         self.assertEqual(graph["edges"][0]["relationship_type"], "hosted-on")
+        self.assertEqual(graph["metrics"]["components"], 1)
+        self.assertEqual(graph["metrics"]["edges"], 1)
+        self.assertIn(graph["metrics"]["engine"], {"cpp-native", "python-fallback"})
 
         detail = get_entity(self.database, domain["id"])
         self.assertEqual(len(detail["relationships"]), 1)
