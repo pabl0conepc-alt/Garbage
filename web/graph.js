@@ -10,6 +10,22 @@
   } = G;
 
   const MAX_FORCE_NODES = 220;
+  const TYPE_LAYER_CLASS = {
+    person: "people",
+    username: "accounts",
+    profile: "accounts",
+    email: "accounts",
+    organization: "groups",
+    domain: "domains",
+    url: "domains",
+    ipv4: "ips",
+    ipv6: "ips",
+    file: "files",
+    image: "files",
+    hash: "files",
+    ioc: "other",
+    other: "other",
+  };
   const TYPE_COLORS = {
     person: "#e5b567",
     username: "#e5b567",
@@ -39,6 +55,10 @@
       },
       label,
     );
+  }
+
+  function typeLayerClass(type) {
+    return `layer-${TYPE_LAYER_CLASS[type] || "other"}`;
   }
 
   function updatePath(source, target, zoom) {
@@ -621,7 +641,7 @@
               render();
             },
           }),
-          el("span", { class: "layer-swatch", style: `background:${TYPE_COLORS[type] || TYPE_COLORS.other}` }),
+          el("span", { class: `layer-swatch ${typeLayerClass(type)}` }),
           `${entityTypeLabel(type)} (${count})`,
         );
       });
@@ -686,7 +706,7 @@
           el(
             "span",
             { class: "legend-item" },
-            el("span", { class: "legend-dot", style: `background:${TYPE_COLORS[type]}` }),
+            el("span", { class: `legend-dot ${typeLayerClass(type)}` }),
             entityTypeLabel(type),
           ),
         ),

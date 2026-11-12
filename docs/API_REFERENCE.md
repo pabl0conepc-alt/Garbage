@@ -44,6 +44,7 @@ rejected where the handler validates an allowlist.
 | GET | `/api/investigations/{id}/board` | Board state, creating default if needed |
 | PUT | `/api/investigations/{id}/board` | Save board state with `revision` |
 | GET | `/api/investigations/{id}/graph` | Case-scoped relationship graph |
+| GET | `/api/investigations/{id}/coverage` | Factual case coverage checks |
 
 Case membership:
 
@@ -165,14 +166,56 @@ Limits: 4 MiB decoded, 500 archive entries, 1 MiB GZIP preview, 150 strings,
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/indicators` | Aggregated indicators with assessments |
+| GET | `/api/indicators` | Aggregated indicators, correlations and assessments |
 | POST | `/api/indicators/assessment` | Save analyst assessment |
+| POST | `/api/intelligence/text` | In-memory text triage; no persistence |
+| GET | `/api/intelligence/inspect?value=` | Offline facts and exact local matches |
 | GET | `/api/intel/cisa-kev` | Cached CISA KEV catalogue |
 | POST | `/api/intel/cisa-kev/refresh` | Explicit bounded refresh |
 
 Indicator assessment payload: `{indicator_type, value, verification_status,
 note}`. CISA refresh requires network access; failures are returned as
 structured errors and do not delete the previous snapshot.
+
+Text triage payload:
+
+```json
+{"text": "hxxps://evil[.]example/a and 203.0.113.9"}
+```
+
+Response includes `unique_count`, `indicator_count`, per-type `counts`, grouped
+`items` with `count`/`contexts`, a SHA-256 of the submitted text, `defanged` and
+`truncated`. The text itself is not echoed and is not written to the database.
+The input is capped at 20,000 characters.
+
+Value inspection accepts `value` (up to 2,000 characters) and an optional
+`investigation_id` scope:
+
+```json
+{
+  "kind": "url",
+  "label": "URL",
+  "canonical": "https://evil.example/a",
+  "defanged": true,
+  "facts": [{"label": "Scheme", "value": "https"}],
+  "warnings": ["..."],
+  "local": {
+    "indicator": {"type": "url", "value": "...", "origins": []},
+    "entities": [],
+    "evidence": [],
+    "file_analyses": [],
+    "cooccurring": [{"type": "ipv4", "value": "203.0.113.9", "count": 1}]
+  },
+  "match_count": 1
+}
+```
+
+`kind` is one of `ipv4`, `ipv6`, `cidr`, `domain`, `url`, `email`, `md5`,
+`sha1`, `sha256`, `asn`, `filename`, `multiple` or `unknown`. IPv6 inspection
+includes compressed/expanded forms, IPv4-mapped/6to4/Teredo details, scope and
+zone facts; bracketed IPv6 URL hosts keep their brackets. Inspection makes no
+network request. `local` contains exact matches only; co-occurrence is not a
+proven relationship.
 
 ## Modules
 

@@ -21,6 +21,7 @@ from .db import (
 from .platform_support import runtime_diagnostics
 from .errors import ConflictError, NotFoundError, ValidationError
 from .modules.correlation import correlate_indicators
+from .modules.indicator_tools import inspect_value, triage_text
 from .modules.indicators import extract_indicators
 from .validation import choice, clean_text, search_pattern
 
@@ -28,6 +29,7 @@ from .validation import choice, clean_text, search_pattern
 INDICATOR_TYPE_LABELS = {
     "ipv4": "IPv4 address",
     "ipv6": "IPv6 address",
+    "cidr": "CIDR network",
     "domain": "Domain",
     "url": "URL",
     "email": "Email",
@@ -459,6 +461,8 @@ def _indicator_index(
         "counts": dict(counts),
         "extraction_count": len(findings),
         "correlation_count": len(correlations),
+        "correlations": correlations[:200],
+        "correlations_truncated": len(correlations) > 200,
         "truncated": len(observation_rows) >= 5000,
         "indicator_engine": indicator_engine,
     }
@@ -495,6 +499,311 @@ def unified_indicators(
         "total": total,
         "limit": limit,
         "types": indicator_types(),
+    }
+
+
+def inspect_local_indicator(
+    database: str,
+    *,
+    value: object,
+    investigation_id: str | None = None,
+) -> dict[str, Any]:
+    """Inspect one value and compare it with local, exact-value records."""
+    clean_value = clean_text(value, "indicator value", max_length=2000, required=True)
+    inspection = inspect_value(clean_value)
+    kind = inspection["kind"]
+    canonical = inspection["canonical"]
+    index = _indicator_index(database, investigation_id)
+    matched = next(
+        (
+            item
+            for item in index["items"]
+            if item["type"] == kind and item["value"] == canonical
+        ),
+        None,
+    )
+    if matched is not None:
+        matched = {**matched, "origins": matched["origins"][:20]}
+
+    entities: list[dict[str, Any]] = []
+    evidence: list[dict[str, Any]] = []
+    file_analyses: list[dict[str, Any]] = []
+    cooccurring: list[dict[str, Any]] = []
+    if canonical:
+        with _connection(database) as connection:
+            if kind in {"domain", "ipv4", "ipv6", "url", "email", "username"}:
+                entity_rows = connection.execute(
+                    """SELECT id, entity_type, name, identifier, confidence,
+                              verification_status, updated_at
+                       FROM entities
+                       WHERE lower(identifier) = lower(?)
+                       ORDER BY updated_at DESC LIMIT 20""",
+                    (canonical,),
+                ).fetchall()
+                entities = [dict(row) for row in entity_rows]
+            if kind in {"md5", "sha1", "sha256"}:
+                evidence_rows = connection.execute(
+                    """SELECT e.id, e.investigation_id, e.title, e.evidence_type,
+                              e.sha256, e.integrity_status, e.recorded_at,
+                              i.name AS investigation_name
+                       FROM evidence e
+                       LEFT JOIN investigations i ON i.id = e.investigation_id
+                       WHERE lower(e.sha256) = lower(?)
+                       ORDER BY e.recorded_at DESC LIMIT 20""",
+                    (canonical,),
+                ).fetchall()
+                evidence = [dict(row) for row in evidence_rows]
+            analysis_rows = connection.execute(
+                """SELECT id, investigation_id, file_name, format, sha256, created_at
+                   FROM file_analyses
+                   WHERE lower(sha256) = lower(?)
+                   ORDER BY created_at DESC LIMIT 20""",
+                (canonical,),
+            ).fetchall()
+            file_analyses = [dict(row) for row in analysis_rows]
+
+            if matched is not None:
+                observation_ids = [
+                    origin["origin_id"]
+                    for origin in matched["origins"]
+                    if origin["origin_type"] == "observation"
+                ]
+                if observation_ids:
+                    placeholders = ",".join("?" for _ in observation_ids)
+                    observation_rows = connection.execute(
+                        f"""SELECT id, content, source_reference, collection_basis,
+                                  observed_at, recorded_at
+                           FROM observations WHERE id IN ({placeholders})
+                           LIMIT 50""",
+                        observation_ids,
+                    ).fetchall()
+                    related: dict[tuple[str, str], int] = {}
+                    for row in observation_rows:
+                        for finding in extract_indicators(
+                            [dict(row)], deduplicate=False
+                        ):
+                            key = (finding["type"], finding["value"])
+                            if key == (kind, canonical):
+                                continue
+                            related[key] = related.get(key, 0) + 1
+                    cooccurring = [
+                        {"type": kind_value[0], "value": kind_value[1], "count": count}
+                        for kind_value, count in sorted(
+                            related.items(),
+                            key=lambda item: (-item[1], item[0]),
+                        )[:8]
+                    ]
+
+    return {
+        **inspection,
+        "local": {
+            "indicator": matched,
+            "entities": entities,
+            "evidence": evidence,
+            "file_analyses": file_analyses,
+            "cooccurring": cooccurring,
+        },
+        "match_count": (
+            (1 if matched else 0)
+            + len(entities)
+            + len(evidence)
+            + len(file_analyses)
+        ),
+        "scope": {
+            "investigation_id": investigation_id,
+            "indicator_index_total": index["total"],
+        },
+    }
+
+
+def triage_indicators(database: str, *, text: object) -> dict[str, Any]:
+    """Run the non-persistent text triage tool and expose engine state."""
+    with _connection(database) as connection:
+        enabled = module_enabled(connection, "indicator-engine")
+    if not enabled:
+        raise ConflictError("indicator engine is disabled in the module registry")
+    return triage_text(text)
+
+
+def case_coverage(database: str, investigation_id: str) -> dict[str, Any]:
+    """Return factual completeness checks for one case, not a risk score."""
+    from .store import build_report
+
+    report = build_report(database, investigation_id)
+    observations = report["observations"]
+    entities = report["entities"]
+    evidence = report["evidence"]
+    sources = report["sources"]
+    relationships = report["relationships"]
+    index = _indicator_index(database, investigation_id)
+
+    checks: list[dict[str, Any]] = []
+
+    def add(
+        key: str,
+        label: str,
+        status: str,
+        count: int,
+        detail: str,
+        tab: str,
+    ) -> None:
+        checks.append(
+            {
+                "key": key,
+                "label": label,
+                "status": status,
+                "count": count,
+                "detail": detail,
+                "tab": tab,
+            }
+        )
+
+    missing_sources = sum(1 for item in observations if not item["source_reference"])
+    add(
+        "observation-sources",
+        "Observations with provenance",
+        "attention" if missing_sources else "ok",
+        missing_sources,
+        (
+            f"{missing_sources} observation(s) have no source reference."
+            if missing_sources
+            else "Every observation carries a source reference."
+        ),
+        "overview",
+    )
+
+    add(
+        "entity-links",
+        "Linked entities",
+        "attention" if not entities else "ok",
+        len(entities),
+        (
+            "Link at least one entity so the case can use the shared registry."
+            if not entities
+            else f"{len(entities)} entity record(s) linked."
+        ),
+        "entities",
+    )
+
+    unverified_files = sum(
+        1 for item in evidence if item.get("integrity_status") != "verified"
+    )
+    add(
+        "evidence-integrity",
+        "Evidence integrity",
+        "attention" if not evidence or unverified_files else "ok",
+        unverified_files if evidence else 0,
+        (
+            "No evidence is attached to this case."
+            if not evidence
+            else f"{unverified_files} evidence record(s) are not verified."
+            if unverified_files
+            else "All stored evidence has a verified digest."
+        ),
+        "evidence",
+    )
+
+    add(
+        "source-records",
+        "Linked sources",
+        "attention" if not sources else "ok",
+        len(sources),
+        (
+            "Register or link a source record for the material used."
+            if not sources
+            else f"{len(sources)} source record(s) linked."
+        ),
+        "sources",
+    )
+
+    add(
+        "relationships",
+        "Relationship coverage",
+        "info" if not relationships else "ok",
+        len(relationships),
+        (
+            "No entity relationship is recorded yet."
+            if not relationships
+            else f"{len(relationships)} relationship(s) recorded."
+        ),
+        "relationships",
+    )
+
+    add(
+        "indicators",
+        "Indicator extraction",
+        "info" if not index["total"] else "ok",
+        index["total"],
+        (
+            "No indicator was extracted from the current records."
+            if not index["total"]
+            else f"{index['total']} unique indicator(s) extracted."
+        ),
+        "indicators",
+    )
+
+    unassessed = sum(
+        1 for item in index["items"] if item["verification_status"] == "not-verified"
+    )
+    add(
+        "assessments",
+        "Indicator assessments",
+        "info" if unassessed else "ok",
+        unassessed,
+        (
+            f"{unassessed} indicator(s) still have no analyst assessment."
+            if unassessed
+            else "Every extracted indicator has an assessment."
+        ),
+        "indicators",
+    )
+
+    disputed = sum(
+        1
+        for item in index["items"]
+        if item["verification_status"] in {"disputed", "false-positive"}
+    )
+    add(
+        "disputed",
+        "Disputed indicators",
+        "attention" if disputed else "ok",
+        disputed,
+        (
+            f"{disputed} indicator(s) are disputed or marked false-positive."
+            if disputed
+            else "No indicator is disputed or marked false-positive."
+        ),
+        "indicators",
+    )
+
+    add(
+        "correlations",
+        "Cross-source corroboration",
+        "info" if not index["correlation_count"] else "ok",
+        index["correlation_count"],
+        (
+            "No exact value appears in more than one observation yet."
+            if not index["correlation_count"]
+            else f"{index['correlation_count']} value(s) appear in multiple observations."
+        ),
+        "indicators",
+    )
+
+    summary = Counter(check["status"] for check in checks)
+    return {
+        "investigation_id": investigation_id,
+        "checks": checks,
+        "summary": {
+            "attention": summary["attention"],
+            "info": summary["info"],
+            "ok": summary["ok"],
+            "total": len(checks),
+        },
+        "disclaimer": (
+            "Coverage checks facts present in the case. They do not measure "
+            "analytical quality, risk or guilt, and absence of attention items "
+            "does not prove completeness."
+        ),
     }
 
 

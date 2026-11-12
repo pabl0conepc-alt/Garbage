@@ -84,14 +84,17 @@ from .store import (
     update_investigation,
 )
 from .workspace import (
+    case_coverage,
     get_settings,
     global_search,
+    inspect_local_indicator,
     list_activities,
     list_modules,
     overview,
     set_indicator_assessment,
     set_module_state,
     system_info,
+    triage_indicators,
     unified_indicators,
     update_settings,
 )
@@ -111,6 +114,7 @@ _STATIC_FILES = {
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
+    "favicon.svg": "image/svg+xml",
     "report.js": "text/javascript; charset=utf-8",
 }
 
@@ -1051,6 +1055,42 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    def api_triage_post(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("indicator-engine")
+        unknown = set(payload) - {"text"}
+        if unknown:
+            raise ValidationError(
+                f"unsupported triage fields: {', '.join(sorted(unknown))}"
+            )
+        self._json(
+            200,
+            triage_indicators(self.database_path, text=payload.get("text")),
+        )
+
+    def api_indicator_inspect(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("indicator-engine")
+        value = _query_text(query, "value", "").strip()
+        if not value:
+            raise ValidationError("value is required")
+        self._json(
+            200,
+            inspect_local_indicator(
+                self.database_path,
+                value=value,
+                investigation_id=_query_text(query, "investigation_id", "") or None,
+            ),
+        )
+
+    def api_investigation_coverage(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("investigations")
+        self._json(200, case_coverage(self.database_path, match.group(1)))
+
     def api_indicator_assessment(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
@@ -1389,6 +1429,24 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "GET",
         re.compile(rf"^/api/intelligence/files/{_ID_PATTERN}$"),
         "api_file_analysis_get",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "POST",
+        re.compile(r"^/api/intelligence/text$"),
+        "api_triage_post",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/intelligence/inspect$"),
+        "api_indicator_inspect",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(rf"^/api/investigations/{_ID_PATTERN}/coverage$"),
+        "api_investigation_coverage",
         MAX_BODY_BYTES,
     ),
     ("GET", re.compile(r"^/api/indicators$"), "api_indicators_get", MAX_BODY_BYTES),

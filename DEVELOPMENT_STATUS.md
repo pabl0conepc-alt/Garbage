@@ -21,9 +21,18 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
 - Directed relationships with provenance, confidence, cycle-safe deletion and
   graph payloads.
 - Source registry with verification state, case links and entity links.
-- Exact-value indicator extraction (IPv4, domains, URLs, emails and hashes),
-  deduplication, provenance and manual assessment.
-- Cross-record correlation; explicitly a match, not attribution.
+- Indicator extraction for IPv4, IPv6, CIDR, domains, URLs, emails and
+  hashes; defanged notation is refanged, canonical values are compared, and
+  hosts embedded in a URL/email are not duplicated. Common filename suffixes are
+  not treated as domains. IPv4-mapped IPv6 remains a single value, scoped IPv6
+  keeps its zone, and bracketed IPv6 URLs canonicalize correctly. Provenance and
+  manual assessment are retained.
+- Cross-record correlation with distinct observation and independent-source
+  counts plus a corroboration strength label; explicitly a match, not
+  attribution.
+- Offline text triage (non-persistent), single-value inspection with structural
+  facts and exact local matches, co-occurring values, and factual case coverage
+  checks.
 
 ### Evidence and files
 
@@ -50,6 +59,8 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
   export.
 - Full workstation UI: overview, cases, case file, activity, entities,
   indicators, files, evidence, sources, reports, modules, settings, CISA KEV.
+- Case-scoped indicator tab and coverage review, text triage (`T`), value
+  inspector, cross-source correlation table and independent-source strength.
 - Loading, empty and error states; command palette; global search; dialogs.
 
 ### CTI and distribution
@@ -64,16 +75,24 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
 
 ## Verification performed
 
-- `python3 -m unittest discover -s tests` — **84 tests passed**.
+- `python3 -m unittest discover -s tests` — **106 tests passed**.
 - `python3 -m compileall -q garbage_intel tests` — passed.
 - `node --check` on all browser scripts — passed.
 - jsdom route smoke with a seeded database — every route rendered, **0 failure
   records, 0 console errors**, including board and graph node/edge counts.
+- Separate jsdom tool smoke — text triage, inspector, coverage review and the
+  case indicator tab rendered against the live API with no application errors.
+  A cloud-browser preview was unavailable because the private-preview gate
+  returned 403 before the app, so no new screenshot was produced.
+- Manual cloud-browser inspection at 1440px and 390px — all routes rendered, no
+  horizontal overflow, no console/CSP errors, mobile drawer focus/inert state,
+  command palette, display menu and shortcuts dialog verified.
 - `git diff --check` — passed.
 
 Not verified:
 
-- Real-browser E2E, CSS visual regression, native file picker and drag-and-drop.
+- Automated real-browser E2E, visual regression, native file picker and
+  drag-and-drop. The cloud-browser pass was a manual inspection, not a suite.
 - Windows/macOS execution in this environment. The CI matrix is configured but
   was not observed running here.
 - Any native component; none exists.

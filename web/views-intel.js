@@ -348,12 +348,29 @@
     const countLabel = el("span", { class: "panel-caption" });
     const tableHost = el("div");
     const detailHost = el("div", { class: "indicator-detail" });
+    const triageText = el("textarea", {
+      class: "input triage-input",
+      id: "triage-text",
+      rows: "4",
+      placeholder: "Paste report text, a defanged URL, hashes or a list of indicators…",
+      "aria-label": "Text to triage",
+    });
+    const triageButton = button("Extract indicators", () => runTriage(), {
+      variant: "button-primary",
+    });
+    const triageHost = el("div", { class: "triage-result" });
+    const inspectorHost = el("div", { class: "inspector-host" });
 
     async function load() {
       data = await api("/api/indicators?limit=1000");
     }
 
     await load();
+
+    if (G.state.pendingIndicatorSearch) {
+      search.value = G.state.pendingIndicatorSearch;
+      G.state.pendingIndicatorSearch = "";
+    }
 
     function filtered() {
       const query = search.value.trim().toLowerCase();
@@ -443,6 +460,14 @@
             "div",
             { class: "toolbar-end" },
             button(
+              "Inspect value",
+              async () => {
+                await inspectIndicator(item.value);
+                inspectorHost.scrollIntoView({ behavior: "smooth", block: "center" });
+              },
+              { variant: "button-secondary" },
+            ),
+            button(
               "Save assessment",
               async () => {
                 try {
@@ -473,6 +498,217 @@
           item.origins.length ? provenance : el("p", { class: "panel-empty" }, "No provenance origins available."),
         ),
       );
+    }
+
+    async function runTriage() {
+      const text = triageText.value.trim();
+      if (!text) {
+        toast("Paste some text before extracting indicators.", "error");
+        triageText.focus();
+        return;
+      }
+      triageButton.disabled = true;
+      triageButton.textContent = "Extracting…";
+      triageHost.replaceChildren(loadingBlock("Extracting indicators in memory…"));
+      inspectorHost.replaceChildren();
+      try {
+        const result = await api("/api/intelligence/text", {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        });
+        drawTriage(result);
+      } catch (error) {
+        triageHost.replaceChildren(inlineError(error.message));
+      } finally {
+        triageButton.disabled = false;
+        triageButton.textContent = "Extract indicators";
+      }
+    }
+
+    function drawTriage(result) {
+      const summary = el(
+        "div",
+        { class: "triage-summary" },
+        triageMetric("Unique values", result.unique_count),
+        triageMetric("Occurrences", result.indicator_count),
+        triageMetric("Characters", result.characters),
+        triageMetric("Defanged input", result.defanged ? "Yes" : "No"),
+        triageMetric("Truncated", result.truncated ? "Yes" : "No"),
+      );
+      const notices = (result.warnings || []).map((warning) =>
+        el("p", { class: "inline-notice" }, warning),
+      );
+      if (!result.items.length) {
+        triageHost.replaceChildren(
+          summary,
+          ...notices,
+          el(
+            "p",
+            { class: "panel-empty" },
+            "No recognized IPv4, IPv6, CIDR, domain, URL, email or hash value was found.",
+          ),
+        );
+        return;
+      }
+      triageHost.replaceChildren(
+        summary,
+        ...notices,
+        table({
+          columns: [
+            { label: "TYPE", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
+            {
+              label: "VALUE",
+              render: (row) => el("code", { class: "indicator-value", title: row.value }, row.value),
+            },
+            {
+              label: "SEEN",
+              className: "numeric-col",
+              render: (row) => String(row.count),
+            },
+            {
+              label: "CONTEXT",
+              render: (row) => el("span", { class: "triage-context" }, row.contexts[0] || "—"),
+            },
+            {
+              label: "",
+              render: (row) => button("Inspect", () => inspectIndicator(row.value)),
+            },
+          ],
+          rows: result.items,
+          emptyMessage: "No indicators found.",
+          onRowClick: (row) => inspectIndicator(row.value),
+        }),
+      );
+    }
+
+    function triageMetric(label, value) {
+      return el(
+        "div",
+        { class: "triage-metric" },
+        el("span", {}, label),
+        el("strong", {}, String(value)),
+      );
+    }
+
+    async function inspectIndicator(value) {
+      inspectorHost.replaceChildren(loadingBlock("Inspecting value locally…"));
+      try {
+        const result = await api(
+          `/api/intelligence/inspect?value=${encodeURIComponent(value)}`,
+        );
+        drawInspector(result);
+      } catch (error) {
+        inspectorHost.replaceChildren(inlineError(error.message));
+      }
+    }
+
+    function drawInspector(result) {
+      const local = result.local || {};
+      const indicator = local.indicator;
+      const matchRows = [];
+      if (indicator) {
+        matchRows.push(
+          el(
+            "div",
+            { class: "inspector-match" },
+            badge("Indexed indicator", "success"),
+            el("span", {}, `${indicator.origin_count} origin(s) · ${indicatorTypesLabel(indicator.type)}`),
+          ),
+        );
+      }
+      for (const entity of local.entities || []) {
+        matchRows.push(
+          el(
+            "div",
+            { class: "inspector-match" },
+            badge("Entity", "info"),
+            el("span", {}, entity.name),
+            entity.investigation_id ? caseLink(entity.investigation_id) : null,
+          ),
+        );
+      }
+      for (const evidence of local.evidence || []) {
+        matchRows.push(
+          el(
+            "div",
+            { class: "inspector-match" },
+            badge("Evidence", "warning"),
+            el("span", {}, evidence.title),
+            evidence.investigation_id ? caseLink(evidence.investigation_id, evidence.investigation_name) : null,
+          ),
+        );
+      }
+      for (const analysis of local.file_analyses || []) {
+        matchRows.push(
+          el(
+            "div",
+            { class: "inspector-match" },
+            badge("File analysis", "neutral"),
+            el("span", {}, analysis.file_name),
+            el("span", { class: "muted" }, analysis.format),
+          ),
+        );
+      }
+      const cooccurring = (local.cooccurring || []).length
+        ? el(
+            "div",
+            { class: "inspector-related" },
+            el("h3", { class: "subheading" }, "Co-occurring values"),
+            el("p", { class: "panel-note" }, "Values found in the same observations; this is co-occurrence, not a proven relationship."),
+            ...(local.cooccurring || []).map((item) =>
+              el(
+                "div",
+                { class: "inspector-match" },
+                badge(indicatorTypesLabel(item.type), "neutral"),
+                el("code", {}, item.value),
+                el("span", { class: "muted" }, `${item.count} observation(s)`),
+              ),
+            ),
+          )
+        : null;
+      inspectorHost.replaceChildren(
+        el(
+          "section",
+          { class: "tool-result inspector-card" },
+          el(
+            "div",
+            { class: "inspector-heading" },
+            el(
+              "div",
+              {},
+              el("p", { class: "eyebrow" }, "LOCAL VALUE INSPECTOR"),
+              el("h3", {}, result.label),
+            ),
+            el(
+              "div",
+              { class: "row-actions" },
+              badge(`${result.match_count} local match(es)`, result.match_count ? "success" : "neutral"),
+              button("Close", () => inspectorHost.replaceChildren(), { variant: "button-secondary" }),
+            ),
+          ),
+          el("code", { class: "inspector-canonical" }, result.canonical || result.input),
+          kvListFromFacts(result.facts),
+          ...(result.warnings || []).map((warning) =>
+            el("p", { class: "inline-notice" }, warning),
+          ),
+          el("h3", { class: "subheading" }, "Local exact matches"),
+          matchRows.length
+            ? el("div", { class: "inspector-matches" }, ...matchRows)
+            : el("p", { class: "panel-empty" }, "No exact local record matched this value. It may still exist as free text in an observation."),
+          cooccurring,
+          ...(result.limitations || []).map((limitation) =>
+            el("p", { class: "tool-limit" }, limitation),
+          ),
+        ),
+      );
+    }
+
+    function indicatorTypesLabel(type) {
+      return indicatorTypeLabel(type);
+    }
+
+    function kvListFromFacts(facts) {
+      return G.kvList((facts || []).map((fact) => [fact.label, fact.value]));
     }
 
     function drawTable() {
@@ -555,6 +791,27 @@
           tone: data.indicator_engine ? "green" : "amber",
         }),
       ),
+      panel(
+        { eyebrow: "FIELD TOOL", title: "Text triage", caption: "Runs in memory · nothing is stored" },
+        el(
+          "p",
+          { class: "panel-note" },
+          "Paste report text to extract IPv4, IPv6, CIDR, domain, URL, email and hash values. Defanged notation is refanged before matching; no DNS or reputation lookup is made.",
+        ),
+        el(
+          "div",
+          { class: "triage-tool" },
+          triageText,
+          el(
+            "div",
+            { class: "triage-actions" },
+            triageButton,
+            el("span", { class: "field-hint" }, "Ctrl/⌘ Enter to run"),
+          ),
+        ),
+        triageHost,
+        inspectorHost,
+      ),
       el(
         "div",
         { class: "indicator-layout" },
@@ -584,10 +841,79 @@
       ),
     );
 
+    root.append(
+      panel(
+        {
+          eyebrow: "CORROBORATION",
+          title: "Cross-source matches",
+          caption: `${data.correlation_count} exact value${data.correlation_count === 1 ? "" : "s"}`,
+        },
+        el(
+          "p",
+          { class: "panel-note" },
+          "Only values observed in more than one record are listed. Independent sources are counted by distinct source reference; observation count alone is not corroboration.",
+        ),
+        data.correlations && data.correlations.length
+          ? table({
+              columns: [
+                { label: "TYPE", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
+                {
+                  label: "VALUE",
+                  render: (row) => el("code", { class: "indicator-value", title: row.value }, row.value),
+                },
+                {
+                  label: "OBSERVATIONS",
+                  className: "numeric-col",
+                  render: (row) => String(row.observation_count),
+                },
+                {
+                  label: "INDEPENDENT SOURCES",
+                  className: "numeric-col",
+                  render: (row) => String(row.independent_source_count),
+                },
+                {
+                  label: "STRENGTH",
+                  render: (row) =>
+                    badge(
+                      titleCase(row.strength),
+                      row.strength === "high"
+                        ? "success"
+                        : row.strength === "medium"
+                          ? "info"
+                          : row.strength === "low"
+                            ? "warning"
+                            : "neutral",
+                    ),
+                },
+              ],
+              rows: data.correlations,
+              emptyMessage: "No value has been observed in more than one record yet.",
+              onRowClick: (row) => {
+                selectedKey = `${row.type}:${row.value}`;
+                drawTable();
+              },
+            })
+          : el(
+              "p",
+              { class: "panel-empty" },
+              "No cross-source exact match yet. A single observation, even with several values, is not corroboration.",
+            ),
+        data.correlations_truncated
+          ? el("p", { class: "inline-notice" }, "Only the first 200 correlations are shown.")
+          : null,
+      ),
+    );
+
     drawTable();
     drawDetail(null);
     search.addEventListener("input", drawTable);
     typeFilter.addEventListener("change", drawTable);
+    triageText.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        runTriage();
+      }
+    });
   }
 
   /* ================================================================ */

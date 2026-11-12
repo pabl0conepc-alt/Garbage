@@ -11,13 +11,16 @@ from garbage_intel.store import (
     create_investigation,
 )
 from garbage_intel.workspace import (
+    case_coverage,
     get_settings,
     global_search,
+    inspect_local_indicator,
     list_activities,
     list_modules,
     overview,
     set_indicator_assessment,
     set_module_state,
+    triage_indicators,
     unified_indicators,
     update_settings,
 )
@@ -159,6 +162,48 @@ class WorkspaceServiceTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValidationError, "indicator type must be"):
             unified_indicators(self.database, indicator_type="unknown")
+
+    def test_local_inspector_matches_indicator_origins_and_cooccurrence(self):
+        self.seed()
+        result = inspect_local_indicator(self.database, value="203.0.113.20")
+        self.assertEqual(result["kind"], "ipv4")
+        self.assertGreaterEqual(result["match_count"], 2)
+        self.assertIsNotNone(result["local"]["indicator"])
+        self.assertEqual(result["local"]["indicator"]["origin_count"], 2)
+        self.assertEqual(len(result["local"]["entities"]), 1)
+        self.assertIn(
+            ("domain", "threat.example"),
+            {(item["type"], item["value"]) for item in result["local"]["cooccurring"]},
+        )
+
+        filename = inspect_local_indicator(self.database, value="report.pdf")
+        self.assertEqual(filename["kind"], "filename")
+        self.assertEqual(filename["match_count"], 0)
+
+    def test_text_triage_is_gated_and_does_not_persist_observations(self):
+        before = len(build_report(self.database, self.investigation["id"])["observations"])
+        result = triage_indicators(
+            self.database,
+            text="hxxps://threat[.]example/a and 203.0.113.20",
+        )
+        self.assertEqual(result["unique_count"], 2)
+        after = len(build_report(self.database, self.investigation["id"])["observations"])
+        self.assertEqual(before, after)
+
+        set_module_state(self.database, "indicator-engine", "disabled")
+        with self.assertRaisesRegex(ConflictError, "disabled"):
+            triage_indicators(self.database, text="203.0.113.20")
+
+    def test_case_coverage_reports_factual_attention_items(self):
+        self.seed()
+        coverage = case_coverage(self.database, self.investigation["id"])
+        checks = {check["key"]: check for check in coverage["checks"]}
+        self.assertEqual(checks["evidence-integrity"]["status"], "attention")
+        self.assertEqual(checks["source-records"]["status"], "attention")
+        self.assertEqual(checks["observation-sources"]["status"], "ok")
+        self.assertEqual(checks["entity-links"]["status"], "ok")
+        self.assertEqual(coverage["summary"]["total"], len(coverage["checks"]))
+        self.assertIn("not", coverage["disclaimer"].lower())
 
     def test_global_search_groups_and_activity_log(self):
         self.seed()

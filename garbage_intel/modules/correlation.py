@@ -37,12 +37,32 @@ def correlate_indicators(
     for (kind, value), sources in sorted(groups.items()):
         if len(sources) < 2:
             continue
+        references = {
+            source["source_reference"]
+            for source in sources.values()
+            if source["source_reference"]
+        }
+        independent = len(references)
+        if independent >= 3:
+            strength = "high"
+        elif independent == 2:
+            strength = "medium"
+        elif independent == 1:
+            strength = "low"
+        else:
+            strength = "unattributed"
         correlations.append(
             {
                 "type": kind,
                 "value": value,
                 "match_method": "exact-normalized-value",
                 "observation_count": len(sources),
+                "independent_source_count": independent,
+                "strength": strength,
+                "note": (
+                    "Multiple observations are not independent unless their source "
+                    "references differ."
+                ),
                 "sources": [sources[key] for key in sorted(sources)],
             }
         )
