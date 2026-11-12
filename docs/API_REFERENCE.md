@@ -235,6 +235,84 @@ zone facts; bracketed IPv6 URL hosts keep their brackets. Inspection makes no
 network request. `local` contains exact matches only; co-occurrence is not a
 proven relationship.
 
+## Multi-source intelligence
+
+Module: `intel-orchestrator`. One artifact is detected, then sent in parallel
+to every registered connector that accepts its type.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/intel/connectors` | Registered connectors, availability and health |
+| GET | `/api/intel/detect?value=` | Offline artifact detection (refangs input) |
+| POST | `/api/intel/runs` | Run one artifact against the connectors |
+| GET | `/api/intel/runs?limit=` | Recent runs |
+| GET | `/api/intel/runs/{id}` | One run with per-source status and results |
+
+Run payload: `{value, type?, connectors?, investigation_id?, use_cache?}`.
+`type` is optional; when given it must match the detected type. Supported
+types: `domain`, `ipv4`, `ipv6`, `cidr`, `url`, `email`, `md5`, `sha1`,
+`sha256`, `asn`, `cve`.
+
+Each source reports one status: `ok`, `empty`, `error`, `rate-limited`,
+`network-disabled` or `unsupported`. Each result carries `connector_id`,
+`result_type`, `value`, `data`, `source_url`, `response_sha256`, `cached`,
+`elapsed_ms` and `fetched_at`.
+
+Connectors that contact external services run only when the setting
+`intel.allow_network` is `true` (default `false`). Outbound requests use
+`garbage_intel/net.py`:
+
+- HTTPS only by default, ports 80/443 only, no credentials in URLs.
+- Every resolved address must be globally routable; any private, loopback,
+  link-local, CGNAT, multicast or reserved answer refuses the request.
+- The socket is pinned to the validated address (no DNS rebinding); TLS still
+  verifies the hostname.
+- Redirects are followed manually and revalidated; https→http is refused.
+- Hard byte limit, single deadline, identity encoding and a fixed User-Agent.
+
+Registered connectors:
+
+| Connector | Accepts | Network | Source | Cache |
+| --- | --- | --- | --- | --- |
+| `local-structure` | all | no | syntax and structure only | — |
+| `local-workspace` | all but CVE | no | local entities, evidence, analyses, indicators | — |
+| `cisa-kev-local` | CVE | no | local CISA KEV snapshot | — |
+| `dns-doh` | domain, URL, email | yes | Cloudflare DNS over HTTPS (A, AAAA, CNAME, MX, NS, TXT, CAA, SPF, DMARC) | 1 h |
+| `cymru-asn` | IPv4, IPv6, ASN | yes | Team Cymru IP-to-ASN via DNS TXT | 24 h |
+| `rdap` | domain, IP, CIDR, ASN | yes | rdap.org bootstrap → authoritative registry | 24 h |
+| `crtsh` | domain, URL, email | yes | crt.sh Certificate Transparency (unexpired) | 24 h |
+| `wayback` | domain, URL | yes | Internet Archive CDX (distinct captures, max 200) | 24 h |
+| `first-epss` | CVE | yes | FIRST EPSS API | 24 h |
+| `tls-certificate` | domain, URL, IP | **contacts target** | one TLS handshake on port 443 | 1 h |
+| `web-fingerprint` | domain, URL, IP | **contacts target** | one HTTPS GET of the page and its same-host favicon | 1 h |
+
+Connectors marked **contacts target** reach the artifact's own servers and run
+only when both `intel.allow_network` and `intel.allow_target_contact` are
+`true` (both default `false`); otherwise their status is
+`target-contact-disabled`. They fetch over HTTPS only (an `http://` artifact is
+upgraded), never guess paths or scan ports, and the web fingerprint refuses to
+send a request over a TLS connection that fails verification. The certificate
+connector still analyses an untrusted certificate by completing a second,
+unverified handshake that sends no data.
+
+Certificates are parsed by `modules/x509.py` (DER, no dependencies): names,
+validity, SANs, key type and size, signature algorithm, SHA-256/SHA-1, SPKI pin
+and AIA/CRL/SCT/EKU extensions. Favicon hashes use MurmurHash3 over base64 text
+(Shodan `http.favicon.hash` compatible).
+
+All network connectors are passive: they ask a public registry, resolver or
+archive about the artifact and never contact the artifact's own servers. The
+DNS resolver and the other sources see the queried value.
+
+RDAP privacy rule: only organisation-level roles are stored (registrar, abuse,
+sponsor, reseller, NOC). On IP network and ASN objects the registrant is the
+address holder and is kept; on domain objects registrant, administrative and
+technical contacts are never stored.
+
+The HTTP client loads the system CA bundle when the interpreter's compiled-in
+default is empty (standalone Python builds on NixOS), so TLS verification works
+without `SSL_CERT_FILE`.
+
 ## Modules
 
 | Method | Path | Purpose |

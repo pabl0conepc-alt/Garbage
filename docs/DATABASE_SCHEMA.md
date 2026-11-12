@@ -82,6 +82,37 @@ bounded result: hashes, entropy, strings, metadata, structure, findings,
 indicators and limitations. Summary columns exist for listing and filtering.
 `investigation_id` is optional and cascades on case deletion.
 
+### `intel_runs`
+
+`id`, `investigation_id`, `query_type`, `query_value`, `status`,
+`connector_count`, `result_count`, `started_at`, `finished_at`
+
+One explicit multi-source query. `investigation_id` is optional and set to
+`NULL` when the case is deleted, so the audit record survives.
+
+### `intel_results`
+
+`id`, `run_id`, `connector_id`, `status`, `cached`, `result_type`, `value`,
+`data_json`, `source_url`, `response_sha256`, `error`, `elapsed_ms`,
+`fetched_at`
+
+One row per finding, or one status-only row when a connector returned nothing,
+failed or was skipped. Cascades with its run.
+
+### `intel_cache`
+
+`connector_id`, `query_type`, `query_value`, `payload_json`, `fetched_at`,
+`expires_at`
+
+Per-connector response cache honouring the connector's TTL.
+
+### `intel_source_status`
+
+`connector_id`, `last_status`, `last_error`, `last_latency_ms`, `last_run_at`,
+`success_count`, `error_count`
+
+Health record behind the source status panel.
+
 ### `boards`
 
 `id`, `investigation_id`, `name`, `viewport_x`, `viewport_y`, `zoom`, `layers`,
@@ -145,6 +176,7 @@ Applied migration ledger used to make startup idempotent.
 | 1 | Baseline evidence ledger schema | Original tables, preserved |
 | 2 | Investigation workspace tables and columns | Entities, sources, boards, activities, settings, module registry, extra evidence columns |
 | 3 | Persistent file intelligence analyses | `file_analyses` and case/time index |
+| 4 | Multi-source intelligence runs and source status | `intel_runs`, `intel_results`, `intel_cache`, `intel_source_status` |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

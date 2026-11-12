@@ -94,7 +94,14 @@ Status meanings:
 - No exploit execution, malware persistence, evasion or automated intrusion.
 - No claim that a syntactic indicator is malicious, attributed or verified.
 
-## 5. Open question for the operator
+## 5. Resolution (2026-11-12)
+
+The operator identified the reference as **openarchivex.net** ("OpenArchive
+X"), a commercial OSINT and breach-search service. Its scope and what GARBAGE
+adopts or refuses are recorded in [PLANO_OSINT_CSINT.md](PLANO_OSINT_CSINT.md).
+The section below is kept for history.
+
+## 6. Original open question
 
 If the intended reference is **not** OpenArchive Save, stop and identify the
 exact repository and commit before extending this matrix. The current matrix

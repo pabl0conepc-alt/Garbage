@@ -32,6 +32,7 @@ G.NAV = [
   {
     label: "Inteligência",
     items: [
+      { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
@@ -234,6 +235,7 @@ const ICON_PATHS = {
   modules: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM16.75 13.5v6.5M13.5 16.75H20",
   settings: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4",
   search: "M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM16 16l5 5",
+  radar: "M12 12 19 5M12 21a9 9 0 1 1 6.4-15.4M12 17a5 5 0 1 1 3.5-8.5M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
   plus: "M12 5v14M5 12h14",
   close: "M6 6l12 12M18 6 6 18",
   menu: "M4 7h16M4 12h16M4 17h16",
@@ -494,7 +496,7 @@ const STATUS_LABELS = {
   evidence_records: "Evidências", file_analyses: "Análises de arquivos", indicators: "Indicadores",
   modules: "Módulos", status_events: "Eventos de status",
   create: "Criação", update: "Atualização", delete: "Exclusão", link: "Vínculo", unlink: "Desvínculo",
-  verify: "Verificação", import: "Importação", assessment: "Avaliação", analysis: "Análise",
+  verify: "Verificação", import: "Importação", "intel-run": "Consulta multifonte", assessment: "Avaliação", analysis: "Análise",
   high: "Alta", medium: "Média", low: "Baixa",
 };
 
@@ -554,6 +556,32 @@ function fieldLabel_(field) {
 }
 
 const ERROR_PATTERNS = [
+  [/^refused by network policy: (.+)$/, (m) => `Bloqueado pela política de rede: ${translateError(m[1])}`],
+  [/^TLS verification failed for (.+)$/, (m) => `Falha na verificação TLS de ${m[1]}`],
+  [/^TLS handshake with (.+) failed$/, (m) => `Falha no handshake TLS com ${m[1]}`],
+  [/^TLS handshake timed out$/, () => "O handshake TLS excedeu o tempo limite"],
+  [/^(.+) did not present a certificate$/, (m) => `${m[1]} não apresentou certificado`],
+  [/^connection to (.+) failed$/, (m) => `Falha na conexão com ${m[1]}`],
+  [/^could not resolve host: (.+)$/, (m) => `Não foi possível resolver o host ${m[1]}`],
+  [/^request timed out$/, () => "A solicitação excedeu o tempo limite"],
+  [/^request exceeded its time budget$/, () => "A solicitação excedeu o tempo total permitido"],
+  [/^too many redirects$/, () => "Redirecionamentos demais"],
+  [/^response exceeds the (\d+)-byte limit$/, (m) => `A resposta excede o limite de ${formatNumber(Number(m[1]))} bytes`],
+  [/^destination resolves to a non-public address$/, () => "O destino resolve para um endereço não público"],
+  [/^destination address is not publicly routable$/, () => "O endereço de destino não é público"],
+  [/^destination host is local$/, () => "O host de destino é local"],
+  [/^refused redirect from https to http$/, () => "Redirecionamento de https para http recusado"],
+  [/^the source answered HTTP (\d+)$/, (m) => `A fonte respondeu HTTP ${m[1]}`],
+  [/^the source rate-limited this request \(HTTP 429\)$/, () => "A fonte limitou a taxa desta solicitação (HTTP 429)"],
+  [/^the source returned invalid JSON$/, () => "A fonte retornou JSON inválido"],
+  [/^certificate could not be parsed: (.+)$/, (m) => `Não foi possível interpretar o certificado: ${m[1]}`],
+  [/^connector failed unexpectedly$/, () => "O conector falhou de forma inesperada"],
+  [/^no CISA KEV cache; run an explicit refresh first$/, () => "Sem cache do CISA KEV; faça uma atualização explícita primeiro"],
+  [/^the run has no findings to record$/, () => "A consulta não tem resultados para registrar"],
+  [/^value was detected as (\w+), not (\w+)$/, (m) => `O valor foi detectado como ${m[1]}, não ${m[2]}`],
+  [/^value is not a supported artifact; .+$/, () => "Valor não suportado; use domínio, IP, CIDR, URL, e-mail, hash, ASN ou CVE"],
+  [/^intel run not found: .+$/, () => "Consulta não encontrada"],
+  [/^unknown connectors: (.+)$/, (m) => `Conectores desconhecidos: ${m[1]}`],
   [/^(.+) must not be empty$/, (m) => `${fieldLabel_(m[1])}: não pode ficar vazio`],
   [/^(.+) exceeds (\d+) characters$/, (m) => `${fieldLabel_(m[1])}: excede ${m[2]} caracteres`],
   [/^(.+) contains unsupported control characters$/, (m) => `${fieldLabel_(m[1])}: contém caracteres de controle não suportados`],
@@ -645,6 +673,7 @@ const ACTIVITY_PATTERNS = [
   [/^Settings updated: (.+)$/, "Configurações atualizadas: $1"],
   [/^Indicator assessment set to (.+)$/, (m) => `Avaliação do indicador definida como ${statusLabel(m[1]).toLowerCase()}`],
   [/^File analysed: (.+)$/, "Arquivo analisado: $1"],
+  [/^Multi-source query: (\S+) (.+)$/, "Consulta multifonte: $1 $2"],
 ];
 
 function translateActivity(summary) {
@@ -742,6 +771,7 @@ const MODULE_TEXT = {
   "file-intelligence": ["Análise de arquivos", "Inspeção estática limitada de documentos, pacotes, imagens e executáveis, com histórico persistente."],
   "source-manager": ["Gerenciador de fontes", "Fontes reutilizáveis vinculadas a investigações e entidades."],
   "indicator-engine": ["Motor de indicadores", "Extração de padrões e correlação por valor exato com proveniência."],
+  "intel-orchestrator": ["Inteligência multifonte", "Consulta explícita de um artefato em todos os conectores registrados, com cache, limites de taxa, status das fontes e proveniência."],
   "cisa-kev": ["Conector CISA KEV", "Atualização explícita e somente leitura do catálogo público CISA KEV."],
   "report-center": ["Central de relatórios", "Relatórios estruturados em JSON, HTML, CSV e Markdown a partir de registros reais."],
   "global-search": ["Pesquisa global", "Pesquisa unificada em casos, entidades, evidências e fontes."],
@@ -772,6 +802,9 @@ const SETTING_TEXT = {
   "board.autosave_delay_ms": ["Atraso do salvamento automático do quadro", "Milissegundos de inatividade antes de salvar o estado do quadro."],
   "search.result_limit": ["Limite de resultados da pesquisa global", "Número máximo de resultados por grupo na pesquisa global."],
   "report.include_limitations": ["Incluir limitações nos relatórios", "Acrescenta limitações analíticas explícitas aos relatórios gerados."],
+  "intel.allow_network": ["Permitir que conectores de inteligência usem a rede", "Quando desativado, conectores que acessam serviços externos são ignorados; os conectores locais continuam funcionando."],
+  "intel.allow_target_contact": ["Permitir contato com o alvo", "Quando desativado, conectores que enviam uma requisição ou handshake TLS aos servidores do próprio artefato são ignorados. Também exige rede."],
+  "intel.max_workers": ["Conectores em paralelo", "Número máximo de conectores consultados ao mesmo tempo para um artefato."],
   "report.include_raw_observations": ["Incluir observações completas", "Inclui o texto completo das observações nos relatórios HTML gerados."],
 };
 
@@ -1497,6 +1530,14 @@ function commandActions() {
       run: () => G.newInvestigation(),
     },
     {
+      label: "Pesquisa multifonte",
+      icon: "radar",
+      hint: "M",
+      keywords: "multi source fan out osint dns rdap whois asn crt certificate wayback epss pesquisa fontes consultar",
+      module: "intel-orchestrator",
+      run: () => go("multisearch"),
+    },
+    {
       label: "Registrar entidade",
       icon: "⬡",
       keywords: "new domain ip person organization nova entidade domínio pessoa organização",
@@ -1888,6 +1929,7 @@ G.openShortcuts = function openShortcuts() {
     ["/", "Focar a pesquisa"],
     ["N", "Nova investigação"],
     ["T", "Triar texto colado"],
+    ["M", "Pesquisa multifonte"],
     ["R", "Atualizar tela atual"],
     ["?", "Este guia de atalhos"],
     ["Esc", "Fechar diálogo, menu ou painel"],
@@ -2044,6 +2086,12 @@ function bindShell() {
       event.preventDefault();
       go("indicators");
       window.setTimeout(() => document.querySelector("#triage-text")?.focus(), 200);
+    } else if (
+      event.key.toLowerCase() === "m" && !event.ctrlKey && !event.metaKey && !event.altKey &&
+      moduleEnabled("intel-orchestrator")
+    ) {
+      event.preventDefault();
+      go("multisearch");
     } else if (event.key.toLowerCase() === "r" && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       G.refreshView();
