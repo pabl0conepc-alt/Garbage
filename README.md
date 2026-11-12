@@ -20,7 +20,7 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | Cases | Investigation lifecycle, observations, status timeline, report and JSON/CSV/Markdown/HTML export |
 | Sources | Source registry with references, categories, access time and verification state; links to cases and entities |
 | Entities | Canonical entity registry with aliases, confidence, verification and relationships |
-| Analysis | Exact-value indicator extraction and correlation with provenance; manual indicator assessment |
+| Analysis | IPv4, IPv6, CIDR, domain, URL, email and hash extraction with refanging, canonical values, provenance, cross-source correlation and manual assessment |
 | Evidence | Upload, SHA-256 integrity record, verification, download and safe image preview |
 | File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; hashes, entropy, strings, metadata, archive listing, findings and history |
 | Board | Persisted investigation board with cards, notes, groups, connections, layers, autosave, conflict handling and SVG export |
@@ -82,11 +82,19 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
 
 - **Overview** — counts, recent activity, case health and quick entry points.
 - **Investigations** — create, edit, close and reopen cases; each case file has
-  observations, sources, entities, evidence, report, board and graph tabs.
+  observations, sources, entities, evidence, indicator, timeline, report, board
+  and graph tabs. **Coverage review** lists factual attention items such as
+  observations without a source, unverified evidence or unassessed indicators;
+  it is not a risk score.
 - **Entities** — canonical records shared across cases, with aliases, source
   links and relationships.
 - **Indicators** — extracted values grouped by type, with provenance and analyst
-  assessment. Matches are not reputation verdicts.
+  assessment. **Text triage** (`T`) extracts indicators from pasted text in
+  memory without storing it. **Inspect value** explains one URL, address, CIDR,
+  domain, hash, email, ASN or filename and lists exact local matches and
+  co-occurring values. **Cross-source matches** show observation count,
+  independent source count and a corroboration strength. Matches are not
+  reputation verdicts.
 - **File intelligence** — select or drop a file up to 4 MiB; results include
   hashes, format, entropy, strings, metadata, structure, findings and embedded
   indicators. An analysis can be attached to an open case as evidence.
@@ -110,6 +118,22 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
 
 Closed or cancelled cases are read-only until reopened. Actions that mutate a
 case report structured errors rather than silently succeeding.
+
+## Indicator precision
+
+- Common defanged notation (`hxxp`, `[.]`, `(.)`, `[:]`, `[at]`) is refanged
+  before matching. Text triage reports whether the input was defanged.
+- The host inside a URL or email is not emitted as a second domain indicator.
+  The URL or email is the observed value, and duplication would inflate counts.
+- A final label that is a common non-TLD file suffix (`report.pdf`, `image.png`)
+  is treated as a filename, not a domain. Real TLDs such as `.zip`, `.md`, `.sh`
+  and `.py` are not excluded.
+- IPv6 and CIDR candidates are validated with `ipaddress`; clock times, MAC
+  addresses and malformed ranges are rejected.
+- Correlation counts distinct observations and distinct source references.
+  Two observations from the same source are not called independent evidence.
+- All values remain syntactic. No DNS, WHOIS, reputation or attribution lookup
+  is performed by the indicator tools.
 
 ## File intelligence limits
 
@@ -203,7 +227,7 @@ python3 -m compileall -q garbage_intel tests
 for f in web/*.js; do node --check "$f"; done
 ```
 
-Current result: **84 tests pass**. A temporary jsdom smoke test rendered every
+Current result: **101 tests pass**. A temporary jsdom smoke test rendered every
 route against a seeded database with zero error states and zero console errors.
 There is no real-browser E2E test and no native component to test. See
 [TESTING.md](docs/TESTING.md) for what is and is not verified.

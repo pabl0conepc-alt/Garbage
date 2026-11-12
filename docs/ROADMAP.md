@@ -17,7 +17,7 @@ marks unimplemented capabilities as `planned` and refuses to enable them.
 | 7 | Automation and plugin SDK | Not started (contract documented only) |
 | 8 | Native C/C++/Rust engines | Not started |
 | 9 | Workstation UI | Complete for enabled modules; no UI for planned modules |
-| 10 | Testing and hardening | Partial: 84 Python tests plus jsdom route smoke; no browser E2E in this environment |
+| 10 | Testing and hardening | Partial: 101 Python tests plus jsdom route smoke; no browser E2E in this environment |
 | 11 | Documentation and release | Partial: docs and README updated; branch/PR prepared |
 
 ## Phase 1 — audit
@@ -55,7 +55,9 @@ Delivered:
 - Relationships with direction, confidence, provenance and cycle-safe deletion.
 - Source registry, case links and entity links.
 - Cross-record search grouped by record type.
-- Indicator extraction with source provenance and exact-value correlation.
+- Indicator extraction with source provenance, refanging, IPv6/CIDR support,
+  canonical comparison and exact-value correlation with independent-source
+  strength.
 
 Not delivered:
 
@@ -86,6 +88,8 @@ Not delivered:
 Delivered:
 
 - Manual indicator assessment with confidence and rationale.
+- Offline text triage, single-value inspection with local exact matches,
+  co-occurrence and factual case coverage review.
 - CISA KEV read-only catalogue: explicit refresh, bounded download, offline
   cache, provenance and failure reporting.
 
@@ -136,7 +140,7 @@ Not delivered:
 
 Delivered:
 
-- 84 Python tests passing (`python3 -m unittest discover -s tests`).
+- 101 Python tests passing (`python3 -m unittest discover -s tests`).
 - Compile checks for all Python files.
 - `node --check` for all classic scripts.
 - jsdom smoke over every route with a seeded database: 0 failure records,

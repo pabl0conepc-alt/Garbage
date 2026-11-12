@@ -6,6 +6,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import quote
 
 from garbage_intel.api import _read_web_asset, create_server
 from garbage_intel.store import initialize
@@ -102,6 +103,66 @@ class LocalApiTests(unittest.TestCase):
         self.assertIn("Extracted indicators (2)", html_report)
         self.assertIn("Exact-value correlations (1)", html_report)
         connection.close()
+
+    def test_precision_tools_api(self):
+        _, investigation = self.request(
+            "POST",
+            "/api/investigations",
+            {"name": "Tool checks", "description": "Precision tools"},
+        )
+        self.request(
+            "POST",
+            f"/api/investigations/{investigation['id']}/observations",
+            {
+                "title": "Defanged source",
+                "content": "hxxps://evil[.]example/a and 203.0.113.9",
+                "source_reference": "https://example.test/report",
+                "collection_basis": "public",
+            },
+        )
+
+        status, triage = self.request(
+            "POST",
+            "/api/intelligence/text",
+            {"text": "hxxps://evil[.]example/a and 203.0.113.9"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(triage["unique_count"], 2)
+        self.assertTrue(triage["defanged"])
+        self.assertEqual(
+            {item["type"] for item in triage["items"]}, {"url", "ipv4"}
+        )
+
+        status, inspected = self.request(
+            "GET",
+            "/api/intelligence/inspect?value="
+            f"{quote('203.0.113.9')}&investigation_id={investigation['id']}",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(inspected["kind"], "ipv4")
+        self.assertIsNotNone(inspected["local"]["indicator"])
+        self.assertGreaterEqual(inspected["match_count"], 1)
+
+        status, coverage = self.request(
+            "GET", f"/api/investigations/{investigation['id']}/coverage"
+        )
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(coverage["summary"]["attention"], 1)
+        self.assertIn("do not measure", coverage["disclaimer"].lower())
+
+        status, error = self.request(
+            "POST", "/api/intelligence/text", {"text": "  "}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("non-empty", error["error"])
+        status, error = self.request(
+            "POST", "/api/intelligence/text", {"text": "x", "extra": "y"}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("unsupported", error["error"])
+        status, error = self.request("GET", "/api/intelligence/inspect")
+        self.assertEqual(status, 400)
+        self.assertIn("value is required", error["error"])
 
     def test_serves_web_assets_with_security_headers(self):
         connection = http.client.HTTPConnection("127.0.0.1", self.port)

@@ -165,7 +165,10 @@ class FileIntelligenceTests(unittest.TestCase):
         values = {(item["type"], item["value"]) for item in analysis["indicators"]}
         self.assertIn(("email", "analyst@example.org"), values)
         self.assertIn(("ipv4", "203.0.113.9"), values)
-        self.assertIn(("domain", "example.org"), values)
+        self.assertIn(("url", "https://example.org/x"), values)
+        # The host is already represented by each URL/email; emitting it again
+        # would inflate indicator counts.
+        self.assertNotIn(("domain", "example.org"), values)
         self.assertEqual(analysis["analysis_engine"], "python-stdlib")
         self.assertTrue(all("not a reputation" in item["note"] for item in analysis["indicators"]))
 

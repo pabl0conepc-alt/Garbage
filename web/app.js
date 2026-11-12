@@ -143,6 +143,7 @@ G.EVIDENCE_TYPES = [
 G.INDICATOR_TYPE_LABELS = {
   ipv4: "IPv4 address",
   ipv6: "IPv6 address",
+  cidr: "CIDR network",
   domain: "Domain",
   url: "URL",
   email: "Email",
@@ -995,6 +996,17 @@ function commandActions() {
       run: () => G.evidenceDialog(),
     },
     {
+      label: "Triage pasted text",
+      icon: "⌁",
+      hint: "T",
+      keywords: "extract indicator ioc paste defang text triage",
+      module: "indicator-engine",
+      run: () => {
+        go("indicators");
+        window.setTimeout(() => document.querySelector("#triage-text")?.focus(), 200);
+      },
+    },
+    {
       label: "Open file intelligence",
       icon: "▧",
       keywords: "analyse analyze upload pdf binary archive",
@@ -1353,6 +1365,7 @@ G.openShortcuts = function openShortcuts() {
     ["Ctrl / ⌘ K", "Open search and commands"],
     ["/", "Focus search"],
     ["N", "New investigation"],
+    ["T", "Triage pasted text"],
     ["R", "Refresh current view"],
     ["?", "This shortcut guide"],
     ["Esc", "Close a dialog, menu or drawer"],
@@ -1503,6 +1516,10 @@ function bindShell() {
     } else if (event.key.toLowerCase() === "n" && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       G.newInvestigation().catch((error) => toast(error.message, "error"));
+    } else if (event.key.toLowerCase() === "t" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      go("indicators");
+      window.setTimeout(() => document.querySelector("#triage-text")?.focus(), 200);
     } else if (event.key.toLowerCase() === "r" && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       G.refreshView();

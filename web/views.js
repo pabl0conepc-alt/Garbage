@@ -8,7 +8,7 @@
     el, api, toast, confirm, formDialog, pageHeader, panel, metric, badge,
     statusBadge, emptyState, table, tabs, sectionHeading, kvList, loadingBlock,
     inlineError, formatDate, relativeTime, formatBytes, shortId, titleCase,
-    entityTypeLabel, relationshipLabel, go, state, moduleEnabled,
+    entityTypeLabel, relationshipLabel, indicatorTypeLabel, go, state, moduleEnabled,
   } = G;
 
   /* ---------------------------------------------------------------- */
@@ -1222,9 +1222,13 @@
     }
     let activeTab = G.state.caseTab || "overview";
     let report = null;
+    let coverage = null;
 
     async function load() {
-      report = await api(`/api/investigations/${investigationId}/report`);
+      [report, coverage] = await Promise.all([
+        api(`/api/investigations/${investigationId}/report`),
+        api(`/api/investigations/${investigationId}/coverage`),
+      ]);
     }
 
     async function draw() {
@@ -1309,6 +1313,7 @@
             label: "Relationships",
             count: report.relationships.length,
           },
+          { key: "indicators", label: "Indicators" },
           { key: "timeline", label: "Timeline" },
           { key: "report", label: "Report" },
         ],
@@ -1338,6 +1343,15 @@
             statCell("Indicators", report.indicators.length),
             statCell("Correlations", report.correlations.length),
           ),
+          coveragePanel(coverage, () => {
+            activeTab = "overview";
+            G.state.caseTab = "overview";
+            draw();
+          }, (tab) => {
+            activeTab = tab;
+            G.state.caseTab = tab;
+            draw();
+          }),
           panel(
             { eyebrow: "NARRATIVE", title: "Case scope" },
             el("p", { class: "prose" }, investigation.description || "No description recorded."),
@@ -1699,6 +1713,75 @@
         );
         return;
       }
+      if (tab === "indicators") {
+        body.append(loadingBlock("Loading case indicators…"));
+        try {
+          const data = await api(
+            `/api/indicators?investigation_id=${encodeURIComponent(investigation.id)}&limit=1000`,
+          );
+          body.replaceChildren(
+            panel(
+              {
+                eyebrow: "CASE-SCOPED INDEX",
+                title: `Unique indicators (${data.total})`,
+                caption: `${data.extraction_count} text match${data.extraction_count === 1 ? "" : "es"}`,
+                actions: [button("Open IOC analyzer", () => go("indicators"))],
+              },
+              el(
+                "p",
+                { class: "panel-note" },
+                "Hosts embedded in a URL or email are not duplicated. Select a value to triage it in the global IOC analyzer.",
+              ),
+              data.items.length
+                ? table({
+                    columns: [
+                      { label: "TYPE", render: (row) => badge(indicatorTypeLabel(row.type), "info") },
+                      {
+                        label: "VALUE",
+                        render: (row) => el("code", { class: "indicator-value", title: row.value }, row.value),
+                      },
+                      {
+                        label: "ORIGINS",
+                        className: "numeric-col",
+                        render: (row) => String(row.origin_count),
+                      },
+                      {
+                        label: "ASSESSMENT",
+                        render: (row) => statusBadge(row.verification_status),
+                      },
+                      {
+                        label: "FIRST SEEN",
+                        render: (row) => (row.first_seen ? formatDate(row.first_seen) : "—"),
+                      },
+                      {
+                        label: "",
+                        render: (row) =>
+                          button("Triage", () => {
+                            G.state.pendingIndicatorSearch = row.value;
+                            go("indicators");
+                          }),
+                      },
+                    ],
+                    rows: data.items,
+                    emptyMessage: "No indicators were extracted for this case.",
+                    onRowClick: (row) => {
+                      G.state.pendingIndicatorSearch = row.value;
+                      go("indicators");
+                    },
+                  })
+                : emptyState({
+                    icon: "⌁",
+                    title: "No case indicators",
+                    description:
+                      "Indicators are extracted from observations, linked entities and evidence digests.",
+                  }),
+            ),
+          );
+        } catch (error) {
+          body.replaceChildren(inlineError(error.message));
+        }
+        return;
+      }
       if (tab === "timeline") {
         body.append(loadingBlock("Loading timeline…"));
         try {
@@ -1726,6 +1809,42 @@
     }
 
     await draw();
+  }
+
+  function coveragePanel(data, onRefresh, onOpen) {
+    if (!data) return loadingBlock("Reviewing case coverage…");
+    const summary = data.summary || {};
+    return panel(
+      {
+        eyebrow: "CASE HEALTH",
+        title: "Coverage review",
+        caption: `${summary.attention || 0} attention · ${summary.ok || 0} covered`,
+        actions: [button("Refresh", onRefresh)],
+      },
+      el("p", { class: "panel-note" }, data.disclaimer),
+      el(
+        "div",
+        { class: "coverage-grid" },
+        ...data.checks.map((check) =>
+          el(
+            "article",
+            { class: `coverage-item coverage-${check.status}` },
+            el(
+              "div",
+              { class: "coverage-head" },
+              badge(
+                check.status === "attention" ? "Attention" : check.status === "info" ? "Review" : "Covered",
+                check.status === "attention" ? "danger" : check.status === "info" ? "info" : "success",
+              ),
+              check.count ? el("strong", { class: "coverage-count" }, String(check.count)) : null,
+            ),
+            el("h3", {}, check.label),
+            el("p", {}, check.detail),
+            button("Open", () => onOpen(check.tab)),
+          ),
+        ),
+      ),
+    );
   }
 
   function observationList(observations) {
