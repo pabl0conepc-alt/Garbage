@@ -123,7 +123,9 @@ Delivered:
   autosave, conflict handling and SVG export.
 - Relationship graph with type filters, focus, search, pan/zoom, drag and
   layered SVG export.
-- Global search, command palette, toasts, dialogs, loading/error/empty states.
+- Global search and command palette with real quick actions, a persisted display
+  menu, keyboard shortcuts, a mobile navigation drawer, bottom-sheet dialogs,
+  functional compact density and loading/error/empty states.
 
 Not delivered:
 
@@ -139,6 +141,8 @@ Delivered:
 - `node --check` for all classic scripts.
 - jsdom smoke over every route with a seeded database: 0 failure records,
   0 console errors.
+- Manual cloud-browser inspection at desktop and mobile widths: no overflow,
+  no console/CSP errors, command palette, display menu and drawer verified.
 - API tests for module gating, invalid input, authentication-free loopback
   behavior, file-analysis limits and persistence.
 

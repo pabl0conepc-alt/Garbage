@@ -113,6 +113,16 @@ class LocalApiTests(unittest.TestCase):
         self.assertIn('src="/app.js"', page)
         self.assertIn("default-src 'self'", response.getheader("Content-Security-Policy"))
         self.assertEqual(response.getheader("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(response.getheader("Referrer-Policy"), "no-referrer")
+        connection.close()
+
+        connection = http.client.HTTPConnection("127.0.0.1", self.port)
+        connection.request("GET", "/favicon.svg")
+        icon = connection.getresponse()
+        body = icon.read().decode()
+        self.assertEqual(icon.status, 200)
+        self.assertEqual(icon.getheader("Content-Type"), "image/svg+xml")
+        self.assertIn("<svg", body)
         connection.close()
 
     def test_reads_web_assets_from_zipapp(self):

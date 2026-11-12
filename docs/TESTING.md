@@ -45,10 +45,12 @@ search/activity/settings, module gating and file intelligence.
 
 ## 4. What is not verified
 
-- **No real-browser E2E or visual regression.** This environment has no display
-  and the loopback server is not reachable from a remote cloud browser. The UI
-  was exercised with jsdom, which verifies DOM rendering and route behavior but
-  not CSS layout, native file pickers or drag-and-drop.
+- **No automated real-browser E2E or visual regression.** The UI is exercised
+  with jsdom, which verifies DOM rendering and route behavior but not CSS layout,
+  native file pickers or drag-and-drop. A manual cloud-browser inspection was
+  also performed through a temporary loopback preview proxy, covering desktop
+  and mobile layouts, command palette, display menu, shortcuts and drawer focus.
+  That inspection is not a repeatable automated suite.
 - **No native components.** No C, C++ or Rust library exists to test.
 - **No performance/load benchmark.**
 - **No authenticated or multi-user tests**, because authentication is not

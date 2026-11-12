@@ -111,6 +111,7 @@ _STATIC_FILES = {
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
+    "favicon.svg": "image/svg+xml",
     "report.js": "text/javascript; charset=utf-8",
 }
 

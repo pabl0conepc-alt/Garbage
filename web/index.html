@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0a0e14">
     <title>GARBAGE | Intelligence workstation</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
     <script src="/views.js" defer></script>
@@ -15,14 +16,22 @@
     <script src="/graph.js" defer></script>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <div class="app-shell">
-      <aside class="sidebar" aria-label="Primary navigation">
-        <a class="brand" href="#/overview" aria-label="GARBAGE overview">
-          <span class="brand-mark" aria-hidden="true">G</span>
-          <span class="brand-copy"><strong>GARBAGE</strong><small>INTELLIGENCE WORKSTATION</small></span>
-        </a>
+      <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+        <div class="sidebar-head">
+          <a class="brand" href="#/overview" aria-label="GARBAGE overview">
+            <span class="brand-mark" aria-hidden="true">G</span>
+            <span class="brand-copy"><strong>GARBAGE</strong><small>INTELLIGENCE WORKSTATION</small></span>
+          </a>
+          <button class="icon-button sidebar-close" id="sidebar-close" type="button" aria-label="Close navigation">×</button>
+        </div>
         <nav id="nav-groups" class="nav-groups" aria-label="Workspace modules"></nav>
         <div class="sidebar-bottom">
+          <button class="sidebar-shortcut" id="shortcuts-button" type="button">
+            <span aria-hidden="true">⌘</span>
+            <span>Keyboard shortcuts</span>
+          </button>
           <div class="local-card">
             <span class="live-dot" aria-hidden="true"></span>
             <div><strong>Local workspace</strong><small>Data stays on this machine</small></div>
@@ -31,45 +40,57 @@
         </div>
       </aside>
 
-      <main class="main-shell">
+      <main class="main-shell" id="main-content" tabindex="-1">
         <header class="topbar">
-          <div class="breadcrumb">
-            <span class="breadcrumb-root">WORKSPACE</span>
-            <span aria-hidden="true">/</span>
-            <strong id="page-breadcrumb">Overview</strong>
+          <div class="topbar-start">
+            <button class="icon-button mobile-nav-toggle" id="mobile-nav-toggle" type="button"
+                    aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">☰</button>
+            <div class="breadcrumb">
+              <span class="breadcrumb-root">WORKSPACE</span>
+              <span aria-hidden="true">/</span>
+              <strong id="page-breadcrumb">Overview</strong>
+            </div>
           </div>
           <div class="topbar-actions">
-            <button class="search-trigger" id="global-search-button" type="button" aria-label="Search workspace">
+            <button class="search-trigger" id="global-search-button" type="button" aria-label="Search workspace and run commands">
               <span aria-hidden="true">⌕</span>
-              <span class="search-trigger-label">Search workspace</span>
+              <span class="search-trigger-label">Search or run a command</span>
               <kbd>Ctrl K</kbd>
             </button>
+            <div class="display-wrap">
+              <button class="icon-button display-toggle" id="display-toggle" type="button"
+                      aria-label="Display settings" aria-expanded="false" aria-haspopup="true">◐</button>
+              <div class="display-menu" id="display-menu" hidden></div>
+            </div>
             <span class="local-indicator"><span class="live-dot" aria-hidden="true"></span> LOCAL ONLY</span>
-            <button class="button button-primary button-small" id="new-investigation-button" type="button">＋ New investigation</button>
+            <button class="button button-primary button-small" id="new-investigation-button" type="button">＋ <span class="new-case-label">New investigation</span></button>
           </div>
         </header>
 
-        <div id="status" class="toast" role="status" aria-live="polite"></div>
+        <div id="status" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="loading-state" class="loading-bar" aria-hidden="true"></div>
         <div id="view-root" class="view-root" tabindex="-1"></div>
       </main>
     </div>
 
-    <dialog id="search-dialog" class="command-dialog" aria-label="Workspace search">
+    <dialog id="search-dialog" class="command-dialog" aria-label="Workspace search and commands">
       <div class="command-header">
         <span class="command-icon" aria-hidden="true">⌕</span>
         <input id="global-search-input" type="search" autocomplete="off" spellcheck="false"
-               placeholder="Search investigations, entities, evidence, sources, indicators…"
-               aria-label="Search investigations, entities, evidence, sources and indicators">
+               placeholder="Search records or run a command…"
+               aria-label="Search records or run a command">
         <kbd>ESC</kbd>
       </div>
       <div id="global-search-results" class="command-results"></div>
       <footer class="command-footer">
         <span>↑ ↓ navigate</span>
-        <span>↵ open</span>
+        <span>↵ run</span>
+        <span>? shortcuts</span>
         <span>Local records only</span>
       </footer>
     </dialog>
+
+    <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true"></div>
 
     <noscript>
       <div class="noscript">GARBAGE requires JavaScript. The local API and database remain available through the CLI.</div>

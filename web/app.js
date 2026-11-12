@@ -13,6 +13,12 @@ const searchInput = document.querySelector("#global-search-input");
 const searchResults = document.querySelector("#global-search-results");
 const searchButton = document.querySelector("#global-search-button");
 const newInvestigationButton = document.querySelector("#new-investigation-button");
+const mobileNavToggle = document.querySelector("#mobile-nav-toggle");
+const sidebarClose = document.querySelector("#sidebar-close");
+const navBackdrop = document.querySelector("#nav-backdrop");
+const displayToggle = document.querySelector("#display-toggle");
+const displayMenu = document.querySelector("#display-menu");
+const shortcutsButton = document.querySelector("#shortcuts-button");
 
 G.NAV = [
   {
@@ -297,6 +303,8 @@ let toastTimer = null;
 function toast(message, tone = "success") {
   statusNode.textContent = message;
   statusNode.dataset.tone = tone;
+  statusNode.classList.remove("is-visible");
+  void statusNode.offsetWidth;
   statusNode.classList.add("is-visible");
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(
@@ -308,6 +316,8 @@ function toast(message, tone = "success") {
 function setLoading(loading) {
   loadingNode.classList.toggle("is-loading", loading);
   loadingNode.setAttribute("aria-hidden", String(!loading));
+  viewRoot.setAttribute("aria-busy", String(loading));
+  document.body.classList.toggle("is-navigating", loading);
 }
 
 function moduleEnabled(moduleId) {
@@ -854,6 +864,9 @@ function go(...parts) {
 
 async function route() {
   if (!G.views) return;
+  setMobileNav(false);
+  closeDisplayMenu();
+  viewRoot.classList.remove("is-ready");
   for (const cleanup of G.cleanupFns.splice(0)) {
     try {
       cleanup();
@@ -885,6 +898,7 @@ async function route() {
   } finally {
     setLoading(false);
     viewRoot.focus({ preventScroll: true });
+    window.requestAnimationFrame(() => viewRoot.classList.add("is-ready"));
   }
   window.scrollTo({ top: 0, behavior: "auto" });
 }
@@ -949,6 +963,165 @@ function renderSearchHint(message = "Type at least two characters to search loca
   G.state.searchIndex = -1;
 }
 
+function commandActions() {
+  return [
+    {
+      label: "New investigation",
+      icon: "＋",
+      hint: "N",
+      keywords: "create case open",
+      module: "investigations",
+      run: () => G.newInvestigation(),
+    },
+    {
+      label: "Register entity",
+      icon: "⬡",
+      keywords: "new domain ip person organization",
+      module: "entities",
+      run: () => G.entityDialog(),
+    },
+    {
+      label: "Register source",
+      icon: "⛁",
+      keywords: "new reference provenance",
+      module: "source-manager",
+      run: () => G.sourceDialog(),
+    },
+    {
+      label: "Add evidence",
+      icon: "▣",
+      keywords: "upload file hash capture",
+      module: "evidence",
+      run: () => G.evidenceDialog(),
+    },
+    {
+      label: "Open file intelligence",
+      icon: "▧",
+      keywords: "analyse analyze upload pdf binary archive",
+      module: "file-intelligence",
+      run: () => go("files"),
+    },
+    {
+      label: "Refresh current view",
+      icon: "↻",
+      hint: "R",
+      keywords: "reload update",
+      run: () => G.refreshView(),
+    },
+    {
+      label: "Toggle compact density",
+      icon: "▤",
+      keywords: "density spacing compact comfortable layout",
+      run: () => toggleInterfaceSetting("interface.density", "compact", "comfortable"),
+    },
+    {
+      label: "Toggle high contrast",
+      icon: "◐",
+      keywords: "theme contrast dark appearance",
+      run: () => toggleInterfaceSetting("interface.theme", "contrast", "dark"),
+    },
+    {
+      label: "Toggle reduced motion",
+      icon: "◌",
+      keywords: "motion animation accessibility",
+      run: () => toggleInterfaceSetting("interface.reduce_motion", "true", "false"),
+    },
+    {
+      label: "Display settings",
+      icon: "◨",
+      keywords: "theme density motion appearance",
+      run: () => openDisplayMenu(),
+    },
+    {
+      label: "Keyboard shortcuts",
+      icon: "⌘",
+      hint: "?",
+      keywords: "keys help commands",
+      run: () => G.openShortcuts(),
+    },
+  ].filter((action) => moduleEnabled(action.module));
+}
+
+function commandNavItems() {
+  return G.NAV.flatMap((group) =>
+    group.items
+      .filter((item) => moduleEnabled(item.module))
+      .map((item) => ({
+        label: item.label,
+        subtitle: group.label.toLowerCase(),
+        icon: item.icon,
+        keywords: `${item.label} ${group.label}`,
+        run: () => go(item.view),
+      })),
+  );
+}
+
+function matchesCommand(item, query) {
+  if (!query) return true;
+  return `${item.label} ${item.subtitle || ""} ${item.keywords || ""}`
+    .toLowerCase()
+    .includes(query);
+}
+
+function commandButton(item) {
+  return el(
+    "button",
+    {
+      class: "search-result command-result",
+      type: "button",
+      onClick: () => {
+        searchDialog.close();
+        window.setTimeout(() => item.run(), 0);
+      },
+    },
+    el("span", { class: "command-result-icon", "aria-hidden": "true" }, item.icon || "›"),
+    el(
+      "span",
+      { class: "command-result-copy" },
+      el("span", { class: "search-result-title" }, item.label),
+      item.subtitle ? el("span", { class: "search-result-subtitle" }, item.subtitle) : null,
+    ),
+    item.hint ? el("kbd", {}, item.hint) : null,
+  );
+}
+
+function appendCommandGroup(query, actionLimit = 6, navLimit = 8) {
+  const actions = commandActions()
+    .filter((item) => matchesCommand(item, query))
+    .slice(0, actionLimit);
+  const navigation = commandNavItems()
+    .filter((item) => matchesCommand(item, query))
+    .slice(0, navLimit);
+  let added = 0;
+  for (const [label, items] of [
+    ["QUICK ACTIONS", actions],
+    ["GO TO", navigation],
+  ]) {
+    if (!items.length) continue;
+    const section = el(
+      "section",
+      { class: "search-group command-group" },
+      el(
+        "div",
+        { class: "search-group-label" },
+        el("span", {}, label),
+        el("span", { class: "search-group-total" }, String(items.length)),
+      ),
+    );
+    for (const item of items) section.append(commandButton(item));
+    searchResults.append(section);
+    added += items.length;
+  }
+  return added;
+}
+
+function renderCommandMenu(query = "") {
+  searchResults.replaceChildren();
+  G.state.searchIndex = -1;
+  const added = appendCommandGroup(query.trim().toLowerCase(), 20, 20);
+  if (!added) renderSearchHint("No matching commands or destinations.");
+}
+
 function navigateSearchItem(item) {
   if (item.view === "entities" && item.entity_id) go("entities", item.entity_id);
   else if (item.view === "sources" && item.source_id) go("sources", item.source_id);
@@ -958,16 +1131,17 @@ function navigateSearchItem(item) {
   else go(item.view);
 }
 
-function renderSearchResults(data) {
+function renderSearchResults(data, query = "") {
   searchResults.replaceChildren();
   G.state.searchIndex = -1;
   if (data.message) {
     renderSearchHint(data.message);
     return;
   }
+  const commandCount = appendCommandGroup(query, 4, 5);
   const groups = (data.groups || []).filter((group) => group.items.length);
   if (!groups.length) {
-    renderSearchHint("No matching local records.");
+    if (!commandCount) renderSearchHint("No matching local records or commands.");
     return;
   }
   for (const group of groups) {
@@ -1006,7 +1180,7 @@ async function runSearch(query) {
   try {
     const data = await api(`/api/search?q=${encodeURIComponent(query)}`);
     if (searchInput.value.trim() !== query) return;
-    renderSearchResults(data);
+    renderSearchResults(data, query);
   } catch (error) {
     if (searchInput.value.trim() !== query) return;
     searchResults.replaceChildren(inlineError(error.message));
@@ -1027,8 +1201,9 @@ function openSearch() {
     toast("Global search is disabled in the module manager.", "error");
     return;
   }
+  closeDisplayMenu();
   searchInput.value = "";
-  renderSearchHint();
+  renderCommandMenu("");
   searchDialog.showModal();
   window.setTimeout(() => searchInput.focus(), 20);
 }
@@ -1036,19 +1211,248 @@ function openSearch() {
 G.openSearch = openSearch;
 
 /* ------------------------------------------------------------------ */
+/* Mobile navigation                                                  */
+/* ------------------------------------------------------------------ */
+
+function setMobileNav(open) {
+  document.body.classList.toggle("nav-open", open);
+  if (mobileNavToggle) mobileNavToggle.setAttribute("aria-expanded", String(open));
+  if (navBackdrop) navBackdrop.setAttribute("aria-hidden", String(!open));
+  const main = document.querySelector(".main-shell");
+  if (main) main.inert = open;
+  if (open) window.setTimeout(() => sidebarClose?.focus(), 60);
+}
+
+function closeMobileNav({ restoreFocus = false } = {}) {
+  setMobileNav(false);
+  if (restoreFocus) mobileNavToggle?.focus();
+}
+
+/* ------------------------------------------------------------------ */
+/* Display controls                                                   */
+/* ------------------------------------------------------------------ */
+
+async function setInterfaceSetting(key, value) {
+  try {
+    const result = await api("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ [key]: value }),
+    });
+    G.state.settings = result.values;
+    applySettings(result.values);
+    renderDisplayMenu();
+    toast("Display preferences saved.");
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+function toggleInterfaceSetting(key, first, second) {
+  const current = G.state.settings?.[key];
+  setInterfaceSetting(key, current === first ? second : first);
+}
+
+function displayChoice(label, key, value, active) {
+  return el(
+    "button",
+    {
+      class: `display-choice${active ? " is-active" : ""}`,
+      type: "button",
+      "aria-pressed": String(active),
+      onClick: () => setInterfaceSetting(key, value),
+    },
+    label,
+  );
+}
+
+function displayGroup(label, children) {
+  return el(
+    "div",
+    { class: "display-group" },
+    el("span", { class: "display-label" }, label),
+    el("div", { class: "display-options" }, ...children),
+  );
+}
+
+function renderDisplayMenu() {
+  if (!displayMenu) return;
+  const settings = G.state.settings || {};
+  const theme = settings["interface.theme"] || "dark";
+  const density = settings["interface.density"] || "comfortable";
+  const motion = settings["interface.reduce_motion"] || "false";
+  displayMenu.replaceChildren(
+    el(
+      "div",
+      { class: "display-menu-heading" },
+      el("strong", {}, "Display"),
+      el("span", {}, "Saved to this workspace"),
+    ),
+    displayGroup("THEME", [
+      displayChoice("Dark", "interface.theme", "dark", theme === "dark"),
+      displayChoice("High contrast", "interface.theme", "contrast", theme === "contrast"),
+    ]),
+    displayGroup("DENSITY", [
+      displayChoice("Comfortable", "interface.density", "comfortable", density === "comfortable"),
+      displayChoice("Compact", "interface.density", "compact", density === "compact"),
+    ]),
+    displayGroup("MOTION", [
+      displayChoice("Full", "interface.reduce_motion", "false", motion !== "true"),
+      displayChoice("Reduced", "interface.reduce_motion", "true", motion === "true"),
+    ]),
+    el(
+      "div",
+      { class: "display-menu-footer" },
+      el(
+        "button",
+        {
+          class: "display-link",
+          type: "button",
+          onClick: () => {
+            closeDisplayMenu();
+            go("settings");
+          },
+        },
+        "All settings",
+      ),
+      el(
+        "button",
+        {
+          class: "display-link",
+          type: "button",
+          onClick: () => {
+            closeDisplayMenu();
+            G.openShortcuts();
+          },
+        },
+        "Shortcuts",
+      ),
+    ),
+  );
+}
+
+function openDisplayMenu() {
+  if (!displayMenu || !displayToggle) return;
+  renderDisplayMenu();
+  displayMenu.hidden = false;
+  displayToggle.setAttribute("aria-expanded", "true");
+}
+
+function closeDisplayMenu() {
+  if (!displayMenu || !displayToggle) return;
+  displayMenu.hidden = true;
+  displayToggle.setAttribute("aria-expanded", "false");
+}
+
+/* ------------------------------------------------------------------ */
+/* Keyboard shortcuts                                                */
+/* ------------------------------------------------------------------ */
+
+G.openShortcuts = function openShortcuts() {
+  if (document.querySelector(".shortcuts-dialog")) return;
+  const rows = [
+    ["Ctrl / ⌘ K", "Open search and commands"],
+    ["/", "Focus search"],
+    ["N", "New investigation"],
+    ["R", "Refresh current view"],
+    ["?", "This shortcut guide"],
+    ["Esc", "Close a dialog, menu or drawer"],
+  ];
+  const dialog = el(
+    "dialog",
+    { class: "app-dialog shortcuts-dialog", "aria-label": "Keyboard shortcuts" },
+    el(
+      "div",
+      { class: "dialog-form" },
+      el(
+        "div",
+        { class: "dialog-heading" },
+        el(
+          "div",
+          {},
+          el("p", { class: "eyebrow" }, "KEYBOARD"),
+          el("h2", {}, "Move without the mouse"),
+          el(
+            "p",
+            { class: "dialog-description" },
+            "Shortcuts are ignored while typing in a field.",
+          ),
+        ),
+        el(
+          "button",
+          { class: "icon-button", type: "button", "aria-label": "Close", onClick: () => dialog.close() },
+          "×",
+        ),
+      ),
+      el(
+        "div",
+        { class: "shortcut-list" },
+        ...rows.map(([keys, label]) =>
+          el(
+            "div",
+            { class: "shortcut-row" },
+            el("span", {}, label),
+            el("kbd", {}, keys),
+          ),
+        ),
+      ),
+      el(
+        "div",
+        { class: "dialog-actions" },
+        el("button", { class: "button button-primary", type: "button", onClick: () => dialog.close() }, "Done"),
+      ),
+    ),
+  );
+  document.body.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.showModal();
+};
+
+/* ------------------------------------------------------------------ */
 /* Boot                                                               */
 /* ------------------------------------------------------------------ */
+
+function isTypingTarget(target) {
+  return Boolean(
+    target?.closest?.("input, textarea, select, [contenteditable='true']"),
+  );
+}
 
 function bindShell() {
   if (bindShell.bound) return;
   bindShell.bound = true;
-  document.querySelector("#nav-groups").addEventListener("click", () => {
-    /* native anchors handle navigation; active state follows hashchange */
+  document.querySelector("#nav-groups").addEventListener("click", (event) => {
+    if (event.target.closest("a.nav-link")) setMobileNav(false);
   });
   newInvestigationButton.addEventListener("click", () => {
     G.newInvestigation().catch((error) => toast(error.message, "error"));
   });
   searchButton.addEventListener("click", openSearch);
+  mobileNavToggle?.addEventListener("click", () => {
+    setMobileNav(!document.body.classList.contains("nav-open"));
+  });
+  sidebarClose?.addEventListener("click", () => closeMobileNav({ restoreFocus: true }));
+  navBackdrop?.addEventListener("click", () => closeMobileNav({ restoreFocus: true }));
+  displayToggle?.addEventListener("click", () => {
+    if (displayMenu?.hidden) openDisplayMenu();
+    else closeDisplayMenu();
+  });
+  shortcutsButton?.addEventListener("click", () => {
+    setMobileNav(false);
+    G.openShortcuts();
+  });
+  document.addEventListener("click", (event) => {
+    if (displayMenu && !displayMenu.hidden && !event.target.closest(".display-wrap")) {
+      closeDisplayMenu();
+    }
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 760 && document.body.classList.contains("nav-open")) {
+      setMobileNav(false);
+    }
+  });
   searchDialog.addEventListener("click", (event) => {
     if (event.target === searchDialog) searchDialog.close();
   });
@@ -1056,7 +1460,7 @@ function bindShell() {
     clearTimeout(searchTimer);
     const query = searchInput.value.trim();
     if (query.length < 2) {
-      renderSearchHint();
+      renderCommandMenu(query);
       return;
     }
     searchResults.replaceChildren(loadingBlock("Searching local records…"));
@@ -1080,6 +1484,28 @@ function bindShell() {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       openSearch();
+      return;
+    }
+    if (event.key === "Escape") {
+      closeDisplayMenu();
+      if (document.body.classList.contains("nav-open")) {
+        closeMobileNav({ restoreFocus: true });
+      }
+      return;
+    }
+    if (isTypingTarget(event.target) || document.querySelector("dialog[open]")) return;
+    if (event.key === "?") {
+      event.preventDefault();
+      G.openShortcuts();
+    } else if (event.key === "/") {
+      event.preventDefault();
+      openSearch();
+    } else if (event.key.toLowerCase() === "n" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      G.newInvestigation().catch((error) => toast(error.message, "error"));
+    } else if (event.key.toLowerCase() === "r" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      G.refreshView();
     }
   });
 }

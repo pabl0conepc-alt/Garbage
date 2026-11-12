@@ -100,6 +100,13 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
 - **Threat intel** — view the cached CISA KEV catalogue and refresh it
   explicitly. Page loads never contact CISA.
 - **Modules / Settings** — inspect capability state, storage and preferences.
+- **Command palette** (`Ctrl/⌘ K` or `/`) — search local records or run quick actions
+  such as creating a case, registering an entity, adding evidence and switching density.
+- **Display menu** (◐) — persist theme, comfortable/compact density and reduced motion
+  without opening Settings.
+- **Keyboard shortcuts** (`?`) — search, new case, refresh and dialog controls.
+- **Mobile navigation** — a slide-out drawer keeps every module reachable on small screens;
+  dialogs become bottom sheets and tables scroll horizontally.
 
 Closed or cancelled cases are read-only until reopened. Actions that mutate a
 case report structured errors rather than silently succeeding.

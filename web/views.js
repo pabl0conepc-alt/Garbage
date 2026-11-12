@@ -836,7 +836,7 @@
         metric({
           label: "OBSERVATIONS",
           value: totals.observations.toLocaleString(),
-          foot: "Sourced, not independently verified",
+          foot: "Provenance retained",
           icon: "▤",
           tone: "blue",
         }),
@@ -968,6 +968,16 @@
     );
   }
 
+  function barProgress(percent, toneClass, label) {
+    const value = Math.max(0, Math.min(100, Math.round(percent)));
+    return el("progress", {
+      class: `bar-progress ${toneClass}`,
+      max: "100",
+      value: String(value),
+      "aria-label": `${label}: ${value}%`,
+    });
+  }
+
   function indicatorMix(counts, total) {
     const keys = Object.keys(counts);
     if (!keys.length) {
@@ -995,10 +1005,11 @@
           el(
             "div",
             { class: "bar-track" },
-            el("span", {
-              class: `bar-fill tone-${key}`,
-              style: `width: ${Math.max(4, Math.round((counts[key] / max) * 100))}%`,
-            }),
+            barProgress(
+              counts[key] ? Math.max(4, (counts[key] / max) * 100) : 0,
+              `tone-${key}`,
+              G.indicatorTypeLabel(key),
+            ),
           ),
         ),
       );
@@ -1023,10 +1034,7 @@
           el(
             "div",
             { class: "bar-track" },
-            el("span", {
-              class: `bar-fill basis-${key}`,
-              style: `width: ${total ? Math.max(3, Math.round((count / total) * 100)) : 0}%`,
-            }),
+            barProgress(total && count ? Math.max(3, (count / total) * 100) : 0, `basis-${key}`, label),
           ),
         ),
       );

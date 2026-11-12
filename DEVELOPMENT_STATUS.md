@@ -69,11 +69,15 @@ Updated for branch `feature/garbage-universal-intelligence-platform`.
 - `node --check` on all browser scripts — passed.
 - jsdom route smoke with a seeded database — every route rendered, **0 failure
   records, 0 console errors**, including board and graph node/edge counts.
+- Manual cloud-browser inspection at 1440px and 390px — all routes rendered, no
+  horizontal overflow, no console/CSP errors, mobile drawer focus/inert state,
+  command palette, display menu and shortcuts dialog verified.
 - `git diff --check` — passed.
 
 Not verified:
 
-- Real-browser E2E, CSS visual regression, native file picker and drag-and-drop.
+- Automated real-browser E2E, visual regression, native file picker and
+  drag-and-drop. The cloud-browser pass was a manual inspection, not a suite.
 - Windows/macOS execution in this environment. The CI matrix is configured but
   was not observed running here.
 - Any native component; none exists.
