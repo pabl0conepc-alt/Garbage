@@ -300,6 +300,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "report.include_limitations": "true",
     "report.include_raw_observations": "true",
     "intel.allow_network": "false",
+    "intel.allow_target_contact": "false",
     "intel.max_workers": "4",
 }
 
@@ -357,6 +358,13 @@ SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
         "key": "intel.allow_network",
         "label": "Allow intelligence connectors to use the network",
         "description": "When false, connectors that contact external services are skipped; local connectors still run.",
+        "type": "boolean",
+        "options": ["false", "true"],
+    },
+    {
+        "key": "intel.allow_target_contact",
+        "label": "Allow connectors to contact the target",
+        "description": "When false, connectors that send a request or TLS handshake to the artifact's own servers are skipped. Requires network access too.",
         "type": "boolean",
         "options": ["false", "true"],
     },

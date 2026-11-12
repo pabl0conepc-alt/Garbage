@@ -52,6 +52,7 @@ RESULT_STATUSES = (
     "error",
     "rate-limited",
     "network-disabled",
+    "target-contact-disabled",
     "unsupported",
 )
 MAX_FINDINGS_PER_CONNECTOR = 200
@@ -89,6 +90,9 @@ class Connector:
     accepts: tuple[str, ...]
     run: ConnectorFunction
     network: bool = False
+    # True when the connector talks to the artifact's own servers (an HTTP
+    # request or TLS handshake), not to a third-party registry or archive.
+    contacts_target: bool = False
     requires_key: bool = False
     rate_per_minute: int = 60
     ttl_seconds: int = 0
@@ -252,6 +256,7 @@ def list_connectors(database: str) -> dict[str, Any]:
     with _connection(database) as connection:
         require_module(connection, "intel-orchestrator")
         network_allowed = setting_bool(connection, "intel.allow_network", False)
+        target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
         status_rows = {
             row["connector_id"]: dict(row)
             for row in connection.execute("SELECT * FROM intel_source_status")
@@ -261,6 +266,8 @@ def list_connectors(database: str) -> dict[str, Any]:
         status = status_rows.get(connector.connector_id)
         if connector.network and not network_allowed:
             availability = "network-disabled"
+        elif connector.contacts_target and not target_allowed:
+            availability = "target-contact-disabled"
         else:
             availability = "ready"
         items.append(
@@ -271,6 +278,7 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "accepts": list(connector.accepts),
                 "network": connector.network,
                 "requires_key": connector.requires_key,
+                "contacts_target": connector.contacts_target,
                 "rate_per_minute": connector.rate_per_minute,
                 "ttl_seconds": connector.ttl_seconds,
                 "source_url": connector.source_url,
@@ -278,7 +286,12 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "status": status,
             }
         )
-    return {"network_allowed": network_allowed, "items": items, "total": len(items)}
+    return {
+        "network_allowed": network_allowed,
+        "target_contact_allowed": target_allowed,
+        "items": items,
+        "total": len(items),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +360,7 @@ def run_query(
         ).fetchone() is None:
             raise NotFoundError(f"investigation not found: {case_id}")
         network_allowed = setting_bool(connection, "intel.allow_network", False)
+        target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
         workers = setting_int(connection, "intel.max_workers", 4, 1, 16)
         connection.execute(
             """INSERT INTO intel_runs
@@ -374,6 +388,8 @@ def run_query(
             outcomes[connector.connector_id] = ("ok" if hit else "empty", hit, "", 0, True)
         elif connector.network and not network_allowed:
             outcomes[connector.connector_id] = ("network-disabled", [], "", 0, False)
+        elif connector.contacts_target and not target_allowed:
+            outcomes[connector.connector_id] = ("target-contact-disabled", [], "", 0, False)
         elif not RATE_LIMITER.acquire(connector.connector_id, connector.rate_per_minute):
             outcomes[connector.connector_id] = ("rate-limited", [], "", 0, False)
         else:
@@ -500,6 +516,80 @@ def list_runs(database: str, *, limit: int = 25) -> dict[str, Any]:
     return {"items": [dict(row) for row in rows], "total": total}
 
 
+MAX_OBSERVATION_CHARS = 20_000
+
+
+def record_run_observation(
+    database: str,
+    run_id: str,
+    *,
+    investigation_id: object,
+    connector_ids: object = None,
+) -> dict[str, Any]:
+    """Write a run's findings into a case as one sourced observation.
+
+    The observation text lists every finding with its connector and source URL,
+    so the existing indicator extraction and exact-value correlation see it.
+    The observation's own reference points back to the run.
+    """
+    from .store import add_observation
+
+    if not isinstance(investigation_id, str) or not investigation_id:
+        raise ValidationError("investigation_id is required")
+    run = get_run(database, run_id)
+    selected = None
+    if connector_ids not in (None, []):
+        if not isinstance(connector_ids, list) or not all(
+            isinstance(item, str) for item in connector_ids
+        ):
+            raise ValidationError("connectors must be a list of connector ids")
+        selected = set(connector_ids)
+    results = [
+        item
+        for item in run["results"]
+        if selected is None or item["connector_id"] in selected
+    ]
+    if not results:
+        raise ValidationError("the run has no findings to record")
+    lines = [
+        f"Multi-source query {run['query_type']} {run['query_value']} "
+        f"(run {run['id']}, {run['started_at']}).",
+        "Findings are copied from public sources and have not been independently verified.",
+        "Source URLs and response digests are kept in the run record, not in this text,",
+        "so connector endpoints are not mistaken for indicators of the case.",
+        "",
+    ]
+    for item in results:
+        detail = ", ".join(
+            f"{key}={value}"
+            for key, value in sorted(item["data"].items())
+            if value not in (None, "", [], {})
+        )
+        line = f"[{item['connector_id']}] {item['result_type']}: {item['value']}"
+        if detail:
+            line += f" ({detail})"
+        lines.append(line)
+    content = "\n".join(lines)
+    truncated = len(content) > MAX_OBSERVATION_CHARS
+    if truncated:
+        content = content[: MAX_OBSERVATION_CHARS - 40].rsplit("\n", 1)[0]
+        content += "\n[truncated at the observation size limit]"
+    observation = add_observation(
+        database,
+        investigation_id,
+        f"Multi-source query: {run['query_value']}"[:300],
+        content,
+        f"note://garbage/intel-run/{run['id']}",
+        "public",
+    )
+    with _connection(database) as connection:
+        connection.execute(
+            "UPDATE intel_runs SET investigation_id = ? WHERE id = ? AND investigation_id IS NULL",
+            (investigation_id, run["id"]),
+        )
+    return {"observation": observation, "finding_count": len(results), "truncated": truncated}
+
+
 # ---------------------------------------------------------------------------
 # Built-in local connectors (no network)
 
@@ -617,3 +707,4 @@ register_connector(
 # Public network connectors register themselves on import. Imported last so
 # the registry and Finding types above are fully defined.
 from .modules import intel_connectors as _intel_connectors  # noqa: E402,F401
+from .modules import intel_target_connectors as _intel_target_connectors  # noqa: E402,F401

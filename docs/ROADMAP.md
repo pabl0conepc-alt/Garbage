@@ -98,6 +98,9 @@ Delivered:
 - Public keyless connectors (plan phase 2): DNS over HTTPS, Team Cymru
   IP-to-ASN, RDAP (organisation-level only), crt.sh, Wayback CDX, FIRST EPSS
   and the local KEV snapshot.
+- Target-contact connectors (plan phase 4): TLS certificate (own DER parser)
+  and web fingerprint (security headers, cookies, technologies, favicon
+  hash), behind a separate `intel.allow_target_contact` switch.
 
 Not delivered:
 
