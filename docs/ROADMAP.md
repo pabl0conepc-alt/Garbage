@@ -13,7 +13,7 @@ marks unimplemented capabilities as `planned` and refuses to enable them.
 | 3 | Core data and API | Complete |
 | 4 | Entities, sources, relationships, search | Complete for the implemented scope |
 | 5 | Evidence and file/media intelligence | Partial: PDF, documents, archives, images, ELF/PE/Mach-O; no full media forensics |
-| 6 | CTI/OSINT | Partial: manual indicators and CISA KEV; no external OSINT collectors |
+| 6 | CTI/OSINT | Partial: manual indicators, CISA KEV and the multi-source runtime (local connectors); no external OSINT collectors yet — see [PLANO_OSINT_CSINT.md](PLANO_OSINT_CSINT.md) |
 | 7 | Automation and plugin SDK | Not started (contract documented only) |
 | 8 | Native C/C++/Rust engines | Optional helpers implemented with tested Python fallbacks; no benchmark |
 | 9 | Workstation UI | Complete for enabled modules; no UI for planned modules |
@@ -92,6 +92,9 @@ Delivered:
   co-occurrence and factual case coverage review.
 - CISA KEV read-only catalogue: explicit refresh, bounded download, offline
   cache, provenance and failure reporting.
+- Multi-source runtime (plan phase 1): SSRF-safe HTTP client, connector
+  registry, per-connector rate limits, TTL cache, source health, persisted
+  runs with provenance, API routes and the `intel.allow_network` gate.
 
 Not delivered:
 

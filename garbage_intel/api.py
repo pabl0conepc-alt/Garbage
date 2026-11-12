@@ -49,6 +49,7 @@ from .evidence import (
     read_evidence_file,
     verify_evidence,
 )
+from .intel import detect_artifact, get_run, list_connectors, list_runs, run_query
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -1177,6 +1178,58 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         self._json(200, result)
 
+    def api_intel_connectors(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, list_connectors(self.database_path))
+
+    def api_intel_detect(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("intel-orchestrator")
+        value = _query_text(query, "value", "").strip()
+        if not value:
+            raise ValidationError("value is required")
+        self._json(200, detect_artifact(value))
+
+    def api_intel_runs_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, list_runs(self.database_path, limit=_query_int(query, "limit", 25)))
+
+    def api_intel_run_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, get_run(self.database_path, match.group(1)))
+
+    def api_intel_runs_post(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("intel-orchestrator")
+        allowed = {"value", "type", "connectors", "investigation_id", "use_cache"}
+        unknown = set(payload) - allowed
+        if unknown:
+            raise ValidationError(
+                f"unsupported intel run fields: {', '.join(sorted(unknown))}"
+            )
+        use_cache = payload.get("use_cache", True)
+        if not isinstance(use_cache, bool):
+            raise ValidationError("use_cache must be a boolean")
+        self._json(
+            201,
+            run_query(
+                self.database_path,
+                value=payload.get("value"),
+                query_type=payload.get("type"),
+                connector_ids=payload.get("connectors"),
+                investigation_id=payload.get("investigation_id"),
+                use_cache=use_cache,
+            ),
+        )
+
     def api_print_report(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1466,6 +1519,21 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "PATCH",
         re.compile(r"^/api/modules/([A-Za-z0-9-]{1,64})$"),
         "api_module_patch",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/intel/connectors$"),
+        "api_intel_connectors",
+        MAX_BODY_BYTES,
+    ),
+    ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/intel/runs$"), "api_intel_runs_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/intel/runs$"), "api_intel_runs_post", MAX_BODY_BYTES),
+    (
+        "GET",
+        re.compile(rf"^/api/intel/runs/{_ID_PATTERN}$"),
+        "api_intel_run_get",
         MAX_BODY_BYTES,
     ),
     (

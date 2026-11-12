@@ -235,6 +235,44 @@ zone facts; bracketed IPv6 URL hosts keep their brackets. Inspection makes no
 network request. `local` contains exact matches only; co-occurrence is not a
 proven relationship.
 
+## Multi-source intelligence
+
+Module: `intel-orchestrator`. One artifact is detected, then sent in parallel
+to every registered connector that accepts its type.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/intel/connectors` | Registered connectors, availability and health |
+| GET | `/api/intel/detect?value=` | Offline artifact detection (refangs input) |
+| POST | `/api/intel/runs` | Run one artifact against the connectors |
+| GET | `/api/intel/runs?limit=` | Recent runs |
+| GET | `/api/intel/runs/{id}` | One run with per-source status and results |
+
+Run payload: `{value, type?, connectors?, investigation_id?, use_cache?}`.
+`type` is optional; when given it must match the detected type. Supported
+types: `domain`, `ipv4`, `ipv6`, `cidr`, `url`, `email`, `md5`, `sha1`,
+`sha256`, `asn`, `cve`.
+
+Each source reports one status: `ok`, `empty`, `error`, `rate-limited`,
+`network-disabled` or `unsupported`. Each result carries `connector_id`,
+`result_type`, `value`, `data`, `source_url`, `response_sha256`, `cached`,
+`elapsed_ms` and `fetched_at`.
+
+Connectors that contact external services run only when the setting
+`intel.allow_network` is `true` (default `false`). Outbound requests use
+`garbage_intel/net.py`:
+
+- HTTPS only by default, ports 80/443 only, no credentials in URLs.
+- Every resolved address must be globally routable; any private, loopback,
+  link-local, CGNAT, multicast or reserved answer refuses the request.
+- The socket is pinned to the validated address (no DNS rebinding); TLS still
+  verifies the hostname.
+- Redirects are followed manually and revalidated; https→http is refused.
+- Hard byte limit, single deadline, identity encoding and a fixed User-Agent.
+
+Built-in connectors in this release are local only: `local-structure`
+(structural facts) and `local-workspace` (exact matches in local records).
+
 ## Modules
 
 | Method | Path | Purpose |

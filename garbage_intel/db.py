@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -218,6 +218,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "enabled",
     ),
     (
+        "intel-orchestrator",
+        "Multi-source intelligence",
+        "Explicit fan-out of one artifact to registered connectors, with cache, rate limits, source status and provenance.",
+        "Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
         "cisa-kev",
         "CISA KEV connector",
         "Explicit, read-only refresh of the public CISA KEV catalog.",
@@ -291,6 +299,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "search.result_limit": "6",
     "report.include_limitations": "true",
     "report.include_raw_observations": "true",
+    "intel.allow_network": "false",
+    "intel.max_workers": "4",
 }
 
 SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
@@ -342,6 +352,20 @@ SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
         "description": "Include full observation text in generated HTML reports.",
         "type": "boolean",
         "options": ["true", "false"],
+    },
+    {
+        "key": "intel.allow_network",
+        "label": "Allow intelligence connectors to use the network",
+        "description": "When false, connectors that contact external services are skipped; local connectors still run.",
+        "type": "boolean",
+        "options": ["false", "true"],
+    },
+    {
+        "key": "intel.max_workers",
+        "label": "Parallel connector workers",
+        "description": "Maximum connectors queried at the same time for one artifact.",
+        "type": "integer",
+        "options": ["1", "16"],
     },
 )
 
@@ -685,6 +709,60 @@ def _migrate_file_intelligence(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_intelligence_runs(connection: sqlite3.Connection) -> None:
+    """Version 4: multi-source intelligence runs, results, cache and source status."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS intel_runs (
+               id TEXT PRIMARY KEY,
+               investigation_id TEXT REFERENCES investigations(id) ON DELETE SET NULL,
+               query_type TEXT NOT NULL,
+               query_value TEXT NOT NULL,
+               status TEXT NOT NULL,
+               connector_count INTEGER NOT NULL DEFAULT 0,
+               result_count INTEGER NOT NULL DEFAULT 0,
+               started_at TEXT NOT NULL,
+               finished_at TEXT NOT NULL DEFAULT ''
+           );
+           CREATE INDEX IF NOT EXISTS intel_runs_started
+               ON intel_runs(started_at DESC);
+           CREATE TABLE IF NOT EXISTS intel_results (
+               id TEXT PRIMARY KEY,
+               run_id TEXT NOT NULL REFERENCES intel_runs(id) ON DELETE CASCADE,
+               connector_id TEXT NOT NULL,
+               status TEXT NOT NULL,
+               cached INTEGER NOT NULL DEFAULT 0,
+               result_type TEXT NOT NULL DEFAULT '',
+               value TEXT NOT NULL DEFAULT '',
+               data_json TEXT NOT NULL DEFAULT '{}',
+               source_url TEXT NOT NULL DEFAULT '',
+               response_sha256 TEXT NOT NULL DEFAULT '',
+               error TEXT NOT NULL DEFAULT '',
+               elapsed_ms INTEGER NOT NULL DEFAULT 0,
+               fetched_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS intel_results_run
+               ON intel_results(run_id, connector_id);
+           CREATE TABLE IF NOT EXISTS intel_cache (
+               connector_id TEXT NOT NULL,
+               query_type TEXT NOT NULL,
+               query_value TEXT NOT NULL,
+               payload_json TEXT NOT NULL,
+               fetched_at TEXT NOT NULL,
+               expires_at TEXT NOT NULL,
+               PRIMARY KEY (connector_id, query_type, query_value)
+           );
+           CREATE TABLE IF NOT EXISTS intel_source_status (
+               connector_id TEXT PRIMARY KEY,
+               last_status TEXT NOT NULL,
+               last_error TEXT NOT NULL DEFAULT '',
+               last_latency_ms INTEGER NOT NULL DEFAULT 0,
+               last_run_at TEXT NOT NULL,
+               success_count INTEGER NOT NULL DEFAULT 0,
+               error_count INTEGER NOT NULL DEFAULT 0
+           );"""
+    )
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -702,6 +780,7 @@ MIGRATIONS = (
     (1, "Baseline evidence ledger schema", _migrate_ledger),
     (2, "Investigation workspace tables and columns", _migrate_workspace),
     (3, "Persistent file intelligence analyses", _migrate_file_intelligence),
+    (4, "Multi-source intelligence runs and source status", _migrate_intelligence_runs),
 )
 
 
