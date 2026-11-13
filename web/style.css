@@ -5209,3 +5209,152 @@ dialog:focus-visible,
 .attack-suggestion ul { margin: 6px 0; padding-left: 18px; color: var(--text-secondary); font-size: var(--text-xs); }
 .chip-button { padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--text-xs); cursor: pointer; }
 .chip-button:hover, .chip-button.is-active { border-color: var(--text-secondary); color: var(--text); }
+
+/* ==================================================================
+   Floating dock, rounded surfaces, stricter monochrome (2026-11-13)
+   Last layer: wins over the rules above without rewriting them.
+   ================================================================== */
+
+:root,
+[data-theme="contrast"] {
+  --radius: 10px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --dock-gap: 12px;
+
+  /* Status reads through labels and icons; hue is kept only for danger. */
+  --success: #C3C9CF;
+  --warning: #E4E6E8;
+  --danger: #C98A8A;
+  --info: #AEB5BC;
+  --success-soft: rgba(195, 201, 207, 0.1);
+  --warning-soft: rgba(228, 230, 232, 0.1);
+  --danger-soft: rgba(201, 138, 138, 0.12);
+  --info-soft: rgba(174, 181, 188, 0.1);
+
+  /* Entity layers as lightness steps instead of hues. */
+  --layer-people: #F0F1F2;
+  --layer-accounts: #D2D6DA;
+  --layer-domains: #B4BAC0;
+  --layer-ips: #969DA4;
+  --layer-files: #7A8188;
+  --layer-groups: #E1E4E7;
+  --layer-other: #5F666D;
+}
+
+/* ---- Dock ---------------------------------------------------------- */
+
+.app-shell { grid-template-columns: calc(var(--rail-width) + var(--dock-gap) * 2) minmax(0, 1fr); }
+
+.rail {
+  top: var(--dock-gap);
+  height: calc(100vh - var(--dock-gap) * 2);
+  margin: var(--dock-gap) 0 var(--dock-gap) var(--dock-gap);
+  padding: 10px 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xl);
+  background: rgba(21, 24, 27, 0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.rail .sidebar-head,
+.rail .sidebar-bottom { border: 0; }
+.rail .sidebar-head { padding-bottom: 6px; margin-bottom: 2px; }
+
+.rail .nav-section + .nav-section::before { width: 22px; background: rgba(255, 255, 255, 0.1); }
+
+.rail .brand,
+.rail .nav-link,
+.rail .rail-button,
+.rail .rail-local {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), background var(--transition), color var(--transition);
+}
+.rail .rail-local { height: 30px; }
+
+/* Dock magnification, kept small so labels and focus rings stay put. */
+.rail .nav-link:hover,
+.rail .rail-button:hover { transform: scale(1.14); background: rgba(255, 255, 255, 0.08); }
+.rail .nav-link:active { transform: scale(1.04); }
+
+.rail .nav-link.is-active { background: rgba(255, 255, 255, 0.12); color: var(--accent-hover); }
+.rail .nav-link.is-active::before {
+  left: -7px;
+  top: 50%;
+  bottom: auto;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-hover);
+  transform: translateY(-50%);
+}
+
+[data-reduce-motion="true"] .rail .nav-link:hover,
+[data-reduce-motion="true"] .rail .rail-button:hover { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .rail .nav-link:hover, .rail .rail-button:hover { transform: none; }
+}
+
+/* ---- Floating topbar ----------------------------------------------- */
+
+.topbar {
+  top: var(--dock-gap);
+  margin: var(--dock-gap) var(--dock-gap) 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-lg);
+  background: rgba(16, 18, 20, 0.78);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* ---- Rounded surfaces ---------------------------------------------- */
+
+.panel, .metric-card, .notice, .notice-bar, .drop-zone, .empty-state, .code-block, .table-scroll,
+.graph-stage, .graph-canvas, .graph-inspector, .board-canvas, .app-dialog, .dialog-form, .result-group,
+.source-row, .query-panel, .export-card, .yara-match, .attack-cell, .attack-suggestion, .chart-tooltip,
+.toast, .pivot-list, .key-row, .switch-row, .connector-chips, .file-finding {
+  border-radius: var(--radius-lg);
+}
+
+.panel, .metric-card, .graph-stage, .table-scroll, .app-dialog { overflow: hidden; }
+.panel .table-scroll { border-radius: var(--radius); }
+
+.input, select.input, textarea.input, .button, .search-field, .compact-select, .tab, .segmented,
+.layer-toggle, .graph-controls .button, .chip-list code, .attack-tactic {
+  border-radius: var(--radius);
+}
+.segmented-option { border-radius: calc(var(--radius) - 3px); }
+
+.badge, .tab-count, .chip-button, .legend-dot, .query-detected { border-radius: 999px; }
+
+.data-table tbody tr:hover td:first-child { border-top-left-radius: var(--radius-sm); border-bottom-left-radius: var(--radius-sm); }
+.data-table tbody tr:hover td:last-child { border-top-right-radius: var(--radius-sm); border-bottom-right-radius: var(--radius-sm); }
+
+/* Monochrome highlights where a hue used to mark state. */
+.attack-cell.is-linked { border-color: var(--text-primary); background: rgba(255, 255, 255, 0.14); }
+.attack-key.is-linked { border-color: var(--text-primary); background: rgba(255, 255, 255, 0.3); }
+.attack-cell.is-suggested, .attack-key.is-suggested { border-color: var(--text-muted); }
+.cbar-fill { background: var(--text-secondary); }
+
+/* ---- Mobile: the dock becomes a rounded floating drawer ------------ */
+
+@media (max-width: 760px) {
+  .app-shell { display: block; }
+  .rail {
+    inset: 8px auto 8px 8px;
+    height: auto;
+    margin: 0;
+    border-radius: var(--radius-xl);
+    background: rgba(21, 24, 27, 0.92);
+  }
+  .rail .brand, .rail .nav-link, .rail .rail-button, .rail .rail-local { width: auto; height: 40px; }
+  .rail .nav-link:hover, .rail .rail-button:hover { transform: none; }
+  .rail .nav-link.is-active::before { left: 4px; }
+  .topbar { margin: 8px 8px 0; top: 8px; }
+}

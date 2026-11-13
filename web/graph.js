@@ -31,21 +31,23 @@
     ioc: "other",
     other: "other",
   };
+  /* Monochrome: entity families are lightness steps; the community view
+     is the one place hue carries meaning. */
   const TYPE_COLORS = {
-    person: "#C5A36B",
-    username: "#C5A36B",
-    profile: "#B08F5A",
-    email: "#B08F5A",
-    organization: "#A592B5",
-    domain: "#829EB7",
-    url: "#829EB7",
-    ipv4: "#79A98A",
-    ipv6: "#79A98A",
-    file: "#CE7777",
-    image: "#CE7777",
-    hash: "#CE7777",
-    ioc: "#C5A36B",
-    other: "#8A939B",
+    person: "#F0F1F2",
+    username: "#E1E4E7",
+    profile: "#E1E4E7",
+    email: "#D2D6DA",
+    organization: "#C3C8CD",
+    domain: "#B4BAC0",
+    url: "#A5ACB3",
+    ipv4: "#969DA4",
+    ipv6: "#969DA4",
+    file: "#7A8188",
+    image: "#7A8188",
+    hash: "#6C737A",
+    ioc: "#D2D6DA",
+    other: "#5F666D",
   };
   /* Community colours: the validated categorical slots (style.css --viz-N).
      The seven largest communities get a slot; the rest share a neutral

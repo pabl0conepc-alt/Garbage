@@ -693,9 +693,29 @@ const ACTIVITY_PATTERNS = [
   [/^Module (.+) set to (\w+)$/, (m) => `Módulo ${m[1]} ${m[2] === "enabled" ? "ativado" : "desativado"}`],
   [/^Settings updated: (.+)$/, "Configurações atualizadas: $1"],
   [/^Indicator assessment set to (.+)$/, (m) => `Avaliação do indicador definida como ${statusLabel(m[1]).toLowerCase()}`],
+  [/^File analysed: (.+) \((.+)\)$/, (m) => `Arquivo analisado: ${m[1]} (${FORMAT_LABEL_PT[m[2]] || m[2]})`],
   [/^File analysed: (.+)$/, "Arquivo analisado: $1"],
   [/^Multi-source query: (\S+) (.+)$/, "Consulta multifonte: $1 $2"],
+  [/^ATT&CK technique linked: (\S+) (.+)$/, "Técnica ATT&CK vinculada: $1 $2"],
+  [/^ATT&CK technique unlinked: (\S+)$/, "Técnica ATT&CK desvinculada: $1"],
+  [/^MITRE ATT&CK refreshed: version (\S+), (\d+) techniques$/, "MITRE ATT&CK atualizado: versão $1, $2 técnicas"],
+  [/^YARA rule set created: (.+) \((\d+) rules\)$/, "Conjunto de regras YARA criado: $1 ($2 regras)"],
+  [/^YARA rule set updated: (.+)$/, "Conjunto de regras YARA editado: $1"],
+  [/^YARA rule set deleted: (.+)$/, "Conjunto de regras YARA excluído: $1"],
+  [/^API key saved: (.+)$/, "Chave de API salva: $1"],
+  [/^API key removed: (.+)$/, "Chave de API removida: $1"],
 ];
+
+const FORMAT_LABEL_PT = {
+  "PDF document": "documento PDF", "ZIP archive": "arquivo ZIP", "Word document (OOXML)": "Word OOXML",
+  "Excel workbook (OOXML)": "Excel OOXML", "PowerPoint presentation (OOXML)": "PowerPoint OOXML",
+  "Word 97-2003 document": "Word 97-2003", "Excel 97-2003 workbook": "Excel 97-2003",
+  "PowerPoint 97-2003 presentation": "PowerPoint 97-2003", "Outlook message": "mensagem do Outlook",
+  "Windows Installer package": "pacote MSI", "Windows shortcut (LNK)": "atalho LNK", "ISO 9660 disc image": "imagem ISO",
+  "Rich Text Format document": "documento RTF", "PE executable": "executável PE", "ELF executable": "executável ELF",
+  "Mach-O executable": "executável Mach-O", "JPEG image": "imagem JPEG", "PNG image": "imagem PNG",
+  "Plain text": "texto", "Unrecognised binary": "binário não reconhecido", "OLE compound document": "documento OLE",
+};
 
 function translateActivity(summary) {
   const text = String(summary || "");
