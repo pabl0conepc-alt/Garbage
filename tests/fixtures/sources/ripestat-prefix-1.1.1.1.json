@@ -1,0 +1,42 @@
+{
+ "build_version": "v0.12.2-2026.10.23",
+ "cached": false,
+ "data": {
+  "actual_num_related": 0,
+  "announced": true,
+  "asns": [
+   {
+    "asn": 13335,
+    "holder": "CLOUDFLARENET - Cloudflare, Inc."
+   }
+  ],
+  "block": {
+   "desc": "APNIC (Status: ALLOCATED)",
+   "name": "IANA IPv4 Address Space Registry",
+   "resource": "1.0.0.0/8"
+  },
+  "is_less_specific": true,
+  "num_filtered_out": 0,
+  "query_time": "2026-11-12T16:00:00",
+  "related_prefixes": [],
+  "resource": "1.1.1.0/24",
+  "type": "prefix"
+ },
+ "data_call_name": "prefix-overview",
+ "data_call_status": "supported",
+ "messages": [
+  [
+   "warning",
+   "Given resource is not announced but result has been aligned to first-level less-specific (1.1.1.0/24)."
+  ]
+ ],
+ "pipeline": "1478200",
+ "process_time": 118,
+ "query_id": "20261113011016-69131c8f-fd5d-490a-be4e-4439245df34f",
+ "see_also": [],
+ "server_id": "app161",
+ "status": "ok",
+ "status_code": 200,
+ "time": "2026-11-13T01:10:16.463335",
+ "version": "1.3"
+}

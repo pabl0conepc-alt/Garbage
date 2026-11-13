@@ -1,0 +1,29 @@
+{
+ "build_version": "v0.12.2-2026.10.23",
+ "cached": false,
+ "data": {
+  "announced": true,
+  "block": {
+   "desc": "Assigned by ARIN",
+   "name": "IANA 16-bit Autonomous System (AS) Numbers Registry",
+   "resource": "13312-15359"
+  },
+  "holder": "CLOUDFLARENET - Cloudflare, Inc.",
+  "query_endtime": "2026-11-12T16:00:00",
+  "query_starttime": "2026-11-12T16:00:00",
+  "resource": "13335",
+  "type": "as"
+ },
+ "data_call_name": "as-overview",
+ "data_call_status": "supported - based on 2.1",
+ "messages": [],
+ "pipeline": "1478200",
+ "process_time": 218,
+ "query_id": "20261113011018-d6922cfa-e00c-4b70-854b-e8e0f3545a77",
+ "see_also": [],
+ "server_id": "app165",
+ "status": "ok",
+ "status_code": 200,
+ "time": "2026-11-13T01:10:18.651687",
+ "version": "1.3"
+}

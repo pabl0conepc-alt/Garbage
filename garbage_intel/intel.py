@@ -14,13 +14,15 @@ import json
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field, replace
+from functools import partial
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .db import (
     _connection,
+    module_enabled,
     new_id,
     record_activity,
     require_module,
@@ -29,6 +31,7 @@ from .db import (
     utc_now,
 )
 from .errors import NotFoundError, ValidationError
+from .intel_keys import get_secret
 from .modules.indicator_tools import inspect_value
 from .net import NetworkError, NetworkPolicyError
 from .validation import clean_text
@@ -47,12 +50,15 @@ ARTIFACT_TYPES = (
     "cve",
 )
 RESULT_STATUSES = (
+    "pending",
     "ok",
     "empty",
     "error",
     "rate-limited",
     "network-disabled",
     "target-contact-disabled",
+    "key-missing",
+    "module-disabled",
     "unsupported",
 )
 MAX_FINDINGS_PER_CONNECTOR = 200
@@ -77,6 +83,8 @@ class ConnectorContext:
     query_type: str
     query_value: str
     investigation_id: str | None
+    # The operator's key for this connector's provider, when it has one.
+    api_key: str = ""
 
 
 ConnectorFunction = Callable[[ConnectorContext], list[Finding]]
@@ -94,6 +102,9 @@ class Connector:
     # request or TLS handshake), not to a third-party registry or archive.
     contacts_target: bool = False
     requires_key: bool = False
+    # Provider in garbage_intel.intel_keys; with requires_key False the key is
+    # optional and only raises the provider's limits.
+    key_id: str = ""
     rate_per_minute: int = 60
     ttl_seconds: int = 0
     source_url: str = ""
@@ -127,6 +138,9 @@ class RateLimiter:
             self._buckets.clear()
 
 
+# Runs started with wait=False execute here, one thread per run.
+_BACKGROUND = ThreadPoolExecutor(max_workers=4, thread_name_prefix="intel-run")
+
 _REGISTRY: dict[str, Connector] = {}
 _REGISTRY_LOCK = threading.Lock()
 RATE_LIMITER = RateLimiter()
@@ -151,6 +165,25 @@ def unregister_connector(connector_id: str) -> None:
 def connectors() -> list[Connector]:
     with _REGISTRY_LOCK:
         return sorted(_REGISTRY.values(), key=lambda item: item.connector_id)
+
+
+_CONNECTOR_MODULES = {"nvd": "nvd-connector", "cisa-kev-local": "cisa-kev"}
+
+
+def connector_module(connector: Connector) -> str:
+    """Registry module that switches this connector on and off ('' for none)."""
+    if connector.connector_id in _CONNECTOR_MODULES:
+        return _CONNECTOR_MODULES[connector.connector_id]
+    return "external-osint-connectors" if connector.network else ""
+
+
+def _disabled_connectors(connection: Any, selected: list[Connector]) -> set[str]:
+    return {
+        connector.connector_id
+        for connector in selected
+        if connector_module(connector)
+        and not module_enabled(connection, connector_module(connector))
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -257,17 +290,23 @@ def list_connectors(database: str) -> dict[str, Any]:
         require_module(connection, "intel-orchestrator")
         network_allowed = setting_bool(connection, "intel.allow_network", False)
         target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
+        keys = {row["provider_id"] for row in connection.execute("SELECT provider_id FROM intel_api_keys")}
         status_rows = {
             row["connector_id"]: dict(row)
             for row in connection.execute("SELECT * FROM intel_source_status")
         }
+        disabled = _disabled_connectors(connection, connectors())
     items = []
     for connector in connectors():
         status = status_rows.get(connector.connector_id)
-        if connector.network and not network_allowed:
+        if connector.connector_id in disabled:
+            availability = "module-disabled"
+        elif connector.network and not network_allowed:
             availability = "network-disabled"
         elif connector.contacts_target and not target_allowed:
             availability = "target-contact-disabled"
+        elif connector.requires_key and connector.key_id not in keys:
+            availability = "key-missing"
         else:
             availability = "ready"
         items.append(
@@ -278,10 +317,13 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "accepts": list(connector.accepts),
                 "network": connector.network,
                 "requires_key": connector.requires_key,
+                "key_id": connector.key_id,
+                "key_configured": connector.key_id in keys,
                 "contacts_target": connector.contacts_target,
                 "rate_per_minute": connector.rate_per_minute,
                 "ttl_seconds": connector.ttl_seconds,
                 "source_url": connector.source_url,
+                "module_id": connector_module(connector),
                 "availability": availability,
                 "status": status,
             }
@@ -312,6 +354,8 @@ def _run_one(
         findings, status, error = [], "error", str(exc)
     except Exception:  # noqa: BLE001 - a connector must never break the run
         findings, status, error = [], "error", "connector failed unexpectedly"
+    if context.api_key and context.api_key in error:
+        error = error.replace(context.api_key, "***")
     return status, findings, error, int((time.monotonic() - started) * 1000)
 
 
@@ -323,8 +367,14 @@ def run_query(
     connector_ids: object = None,
     investigation_id: object = None,
     use_cache: bool = True,
+    wait: bool = True,
 ) -> dict[str, Any]:
-    """Fan one artifact out to every compatible connector and persist the run."""
+    """Fan one artifact out to every compatible connector and persist the run.
+
+    Each source's results are written as soon as that source answers, so a
+    caller that passes ``wait=False`` gets the run back at once (sources still
+    working are ``pending``) and can poll ``get_run`` for progress.
+    """
     detected = detect_artifact(value)
     kind = detected["type"]
     if query_type not in (None, ""):
@@ -362,6 +412,7 @@ def run_query(
         network_allowed = setting_bool(connection, "intel.allow_network", False)
         target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
         workers = setting_int(connection, "intel.max_workers", 4, 1, 16)
+        disabled = _disabled_connectors(connection, selected)
         connection.execute(
             """INSERT INTO intel_runs
                (id, investigation_id, query_type, query_value, status,
@@ -378,11 +429,18 @@ def run_query(
                         cached[connector.connector_id] = hit
 
     context = ConnectorContext(database, kind, detected["value"], case_id)
+    secrets = {
+        connector.key_id: get_secret(database, connector.key_id)
+        for connector in selected
+        if connector.key_id
+    }
     outcomes: dict[str, tuple[str, list[Finding], str, int, bool]] = {}
     runnable: list[Connector] = []
     for connector in selected:
         if kind not in connector.accepts:
             outcomes[connector.connector_id] = ("unsupported", [], "", 0, False)
+        elif connector.connector_id in disabled:
+            outcomes[connector.connector_id] = ("module-disabled", [], "", 0, False)
         elif connector.connector_id in cached:
             hit = cached[connector.connector_id]
             outcomes[connector.connector_id] = ("ok" if hit else "empty", hit, "", 0, True)
@@ -390,73 +448,157 @@ def run_query(
             outcomes[connector.connector_id] = ("network-disabled", [], "", 0, False)
         elif connector.contacts_target and not target_allowed:
             outcomes[connector.connector_id] = ("target-contact-disabled", [], "", 0, False)
+        elif connector.requires_key and not secrets.get(connector.key_id):
+            outcomes[connector.connector_id] = ("key-missing", [], "", 0, False)
         elif not RATE_LIMITER.acquire(connector.connector_id, connector.rate_per_minute):
             outcomes[connector.connector_id] = ("rate-limited", [], "", 0, False)
         else:
             runnable.append(connector)
 
-    if runnable:
-        with ThreadPoolExecutor(max_workers=min(workers, len(runnable))) as pool:
-            futures = {
-                connector.connector_id: pool.submit(_run_one, connector, context)
-                for connector in runnable
-            }
-            for connector_id, future in futures.items():
-                status, findings, error, elapsed = future.result()
-                outcomes[connector_id] = (status, findings, error, elapsed, False)
-
-    fetched_at = utc_now()
     by_id = {item.connector_id: item for item in selected}
-    result_count = 0
     with _connection(database) as connection:
-        for connector_id, (status, findings, error, elapsed, from_cache) in outcomes.items():
-            connector = by_id[connector_id]
-            if connector in runnable:
-                _record_status(connection, connector_id, status, error, elapsed)
-                if status in {"ok", "empty"} and connector.ttl_seconds > 0:
-                    _cache_put(connection, connector, kind, detected["value"], findings)
-            rows = findings or [None]
-            for finding in rows:
-                if finding is not None:
-                    result_count += 1
-                connection.execute(
-                    """INSERT INTO intel_results
-                       (id, run_id, connector_id, status, cached, result_type, value,
-                        data_json, source_url, response_sha256, error, elapsed_ms,
-                        fetched_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        new_id(),
-                        run_id,
-                        connector_id,
-                        status,
-                        1 if from_cache else 0,
-                        finding.result_type if finding else "",
-                        finding.value if finding else "",
-                        json.dumps(finding.data if finding else {}, sort_keys=True),
-                        (finding.source_url if finding else "") or connector.source_url,
-                        finding.response_sha256 if finding else "",
-                        error,
-                        elapsed,
-                        fetched_at,
-                    ),
-                )
-        statuses = {outcome[0] for outcome in outcomes.values()}
-        run_status = "completed" if "error" not in statuses else "completed-with-errors"
-        connection.execute(
-            """UPDATE intel_runs SET status = ?, result_count = ?, finished_at = ?
-               WHERE id = ?""",
-            (run_status, result_count, fetched_at, run_id),
-        )
-        record_activity(
-            connection,
-            action="intel-run",
-            target_type="intel_run",
-            target_id=run_id,
-            investigation_id=case_id,
-            summary=f"Multi-source query: {kind} {detected['value'][:120]}",
-        )
+        for connector_id, outcome in outcomes.items():
+            _write_outcome(connection, run_id, by_id[connector_id], outcome, kind, detected["value"], ran=False)
+        for connector in runnable:
+            _write_outcome(connection, run_id, connector, ("pending", [], "", 0, False), kind, detected["value"], ran=False)
+
+    job = partial(
+        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers
+    )
+    if wait:
+        job()
+    else:
+        _BACKGROUND.submit(job)
     return get_run(database, run_id)
+
+
+def _write_outcome(
+    connection: Any,
+    run_id: str,
+    connector: Connector,
+    outcome: tuple[str, list[Finding], str, int, bool],
+    kind: str,
+    value: str,
+    *,
+    ran: bool,
+) -> None:
+    status, findings, error, elapsed, from_cache = outcome
+    if ran:
+        _record_status(connection, connector.connector_id, status, error, elapsed)
+        if status in {"ok", "empty"} and connector.ttl_seconds > 0:
+            _cache_put(connection, connector, kind, value, findings)
+    fetched_at = utc_now()
+    for finding in findings or [None]:
+        connection.execute(
+            """INSERT INTO intel_results
+               (id, run_id, connector_id, status, cached, result_type, value,
+                data_json, source_url, response_sha256, error, elapsed_ms,
+                fetched_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                new_id(),
+                run_id,
+                connector.connector_id,
+                status,
+                1 if from_cache else 0,
+                finding.result_type if finding else "",
+                finding.value if finding else "",
+                json.dumps(finding.data if finding else {}, sort_keys=True),
+                (finding.source_url if finding else "") or connector.source_url,
+                finding.response_sha256 if finding else "",
+                error,
+                elapsed,
+                fetched_at,
+            ),
+        )
+
+
+def _finish_run(connection: Any, run_id: str, kind: str, value: str, case_id: str | None) -> None:
+    statuses = {
+        row["status"]
+        for row in connection.execute(
+            "SELECT DISTINCT status FROM intel_results WHERE run_id = ?", (run_id,)
+        )
+    }
+    result_count = connection.execute(
+        """SELECT COUNT(*) FROM intel_results
+           WHERE run_id = ? AND (value <> '' OR result_type <> '')""",
+        (run_id,),
+    ).fetchone()[0]
+    run_status = "completed" if "error" not in statuses else "completed-with-errors"
+    connection.execute(
+        """UPDATE intel_runs SET status = ?, result_count = ?, finished_at = ?
+           WHERE id = ?""",
+        (run_status, result_count, utc_now(), run_id),
+    )
+    record_activity(
+        connection,
+        action="intel-run",
+        target_type="intel_run",
+        target_id=run_id,
+        investigation_id=case_id,
+        summary=f"Multi-source query: {kind} {value[:120]}",
+    )
+
+
+def _execute(
+    database: str,
+    run_id: str,
+    kind: str,
+    value: str,
+    case_id: str | None,
+    runnable: list[Connector],
+    context: ConnectorContext,
+    secrets: dict[str, str],
+    workers: int,
+) -> None:
+    """Run the connectors and write each one's outcome as it completes."""
+    finished: set[str] = set()
+    try:
+        if runnable:
+            with ThreadPoolExecutor(max_workers=min(workers, len(runnable))) as pool:
+                futures = {
+                    pool.submit(
+                        _run_one, connector, replace(context, api_key=secrets.get(connector.key_id, ""))
+                    ): connector
+                    for connector in runnable
+                }
+                for future in as_completed(futures):
+                    connector = futures[future]
+                    status, findings, error, elapsed = future.result()
+                    with _connection(database) as connection:
+                        connection.execute(
+                            "DELETE FROM intel_results WHERE run_id = ? AND connector_id = ? AND status = 'pending'",
+                            (run_id, connector.connector_id),
+                        )
+                        _write_outcome(connection, run_id, connector, (status, findings, error, elapsed, False), kind, value, ran=True)
+                    finished.add(connector.connector_id)
+    finally:
+        with _connection(database) as connection:
+            # Anything still pending here was cut short by an unexpected failure.
+            connection.execute(
+                """UPDATE intel_results SET status = 'error', error = 'the run was interrupted'
+                   WHERE run_id = ? AND status = 'pending'""",
+                (run_id,),
+            )
+            _finish_run(connection, run_id, kind, value, case_id)
+
+
+def recover_interrupted_runs(database: str) -> int:
+    """Close runs left 'running' by a previous process (called at startup)."""
+    with _connection(database) as connection:
+        stale = [row["id"] for row in connection.execute("SELECT id FROM intel_runs WHERE status = 'running'")]
+        for run_id in stale:
+            connection.execute(
+                """UPDATE intel_results SET status = 'error', error = 'the run was interrupted by a restart'
+                   WHERE run_id = ? AND status = 'pending'""",
+                (run_id,),
+            )
+            connection.execute(
+                "UPDATE intel_runs SET status = 'interrupted', finished_at = ? WHERE id = ?",
+                (utc_now(), run_id),
+            )
+    return len(stale)
 
 
 def _decode_result(row: Any) -> dict[str, Any]:
@@ -498,9 +640,14 @@ def get_run(database: str, run_id: str) -> dict[str, Any]:
         )
         if item["value"] or item["result_type"]:
             entry["count"] += 1
+    ordered = sorted(sources.values(), key=lambda item: item["connector_id"])
     return {
         **dict(run),
-        "sources": sorted(sources.values(), key=lambda item: item["connector_id"]),
+        "progress": {
+            "total": len(ordered),
+            "pending": sum(1 for item in ordered if item["status"] == "pending"),
+        },
+        "sources": ordered,
         "results": [item for item in results if item["value"] or item["result_type"]],
     }
 
@@ -607,6 +754,23 @@ PROMOTABLE_TYPES = {
     "asn": "other",
     "as-name": "organization",
     "cidr": "other",
+    "hostname": "domain",
+    "subdomain": "domain",
+    "origin-asn": "other",
+    "as-holder": "organization",
+    "network-owner": "organization",
+    "network-operator": "organization",
+    "announced-prefix": "other",
+    "malicious-url": "url",
+    "final-url": "url",
+    "dns-record": "other",
+    "website": "url",
+    "repository": "url",
+    "repo-homepage": "url",
+    "fork-of": "url",
+    "security-contact-email": "email",
+    "security-contact-url": "url",
+    "security-policy": "url",
 }
 MAX_PROMOTIONS = 50
 
@@ -689,6 +853,11 @@ def promote_results(
                 collection_basis="public",
             )
             created.append(entity)
+        except ValidationError as exc:
+            # One malformed finding (a hostname with an underscore, say)
+            # must not abort the rest of the pivot.
+            skipped.append({"result_id": finding["id"], "reason": f"invalid identifier: {exc}"})
+            continue
         except ConflictError:
             normalized = _normalize_identifier(str(entity_type), identifier)
             with _connection(database) as connection:
@@ -854,3 +1023,6 @@ register_connector(
 # the registry and Finding types above are fully defined.
 from .modules import intel_connectors as _intel_connectors  # noqa: E402,F401
 from .modules import intel_target_connectors as _intel_target_connectors  # noqa: E402,F401
+from .modules import intel_open_connectors as _intel_open_connectors  # noqa: E402,F401
+from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: E402,F401
+from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402,F401

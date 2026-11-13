@@ -1,0 +1,13 @@
+{
+ "anycast": true,
+ "city": "Mountain View",
+ "country": "US",
+ "hostname": "dns.google",
+ "ip": "8.8.8.8",
+ "loc": "37.4056,-122.0775",
+ "org": "AS15169 Google LLC",
+ "postal": "94043",
+ "readme": "https://ipinfo.io/missingauth",
+ "region": "California",
+ "timezone": "America/Los_Angeles"
+}

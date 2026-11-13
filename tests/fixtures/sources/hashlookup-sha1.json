@@ -1,0 +1,27 @@
+{
+ "CRC32": "CBD64CD9",
+ "FileName": ".rela.dyn",
+ "FileSize": "240",
+ "MD5": "131312A96CAD4ACAA7E2631A34A0D47C",
+ "OpSystemCode": {
+  "MfgCode": "1006",
+  "OpSystemCode": "362",
+  "OpSystemName": "TBD",
+  "OpSystemVersion": "none"
+ },
+ "ProductCode": {
+  "ApplicationType": "Operating System",
+  "Language": "English",
+  "MfgCode": "1722",
+  "OpSystemCode": "599",
+  "ProductCode": "163709",
+  "ProductName": "BlackArch Linux",
+  "ProductVersion": "2017.03.01"
+ },
+ "SHA-1": "FFFFFDAC1B1B4C513896C805C2C698D9688BE69F",
+ "SpecialCode": "",
+ "db": "nsrl_modern_rds",
+ "hashlookup:trust": 50,
+ "insert-timestamp": "1647072824.7018976",
+ "source": "NSRL"
+}

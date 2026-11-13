@@ -1,0 +1,75 @@
+{
+ "area_code": null,
+ "asn": "AS13335",
+ "city": "Brisbane",
+ "country_code": "AU",
+ "country_name": "Australia",
+ "data": [
+  {
+   "_shodan": {
+    "module": "dns-tcp"
+   },
+   "port": 53,
+   "timestamp": "2026-11-11T22:59:43.342224",
+   "transport": "tcp"
+  },
+  {
+   "_shodan": {
+    "module": "dns-udp"
+   },
+   "port": 53,
+   "timestamp": "2026-11-12T18:24:02.917132",
+   "transport": "udp"
+  },
+  {
+   "_shodan": {
+    "module": "bittorrent-tracker"
+   },
+   "port": 69,
+   "product": "TFTP",
+   "timestamp": "2026-10-26T16:58:41.460146",
+   "transport": "udp"
+  }
+ ],
+ "domains": [
+  "vastervik.se",
+  "one.one",
+  "commercemtg.com"
+ ],
+ "hostnames": [
+  "guestlogin.vastervik.se",
+  "one.one.one.one",
+  "barracuda-sr.commercemtg.com"
+ ],
+ "ip": 16843009,
+ "ip_str": "1.1.1.1",
+ "isp": "Cloudflare, Inc.",
+ "last_update": "2026-11-12T18:25:53.132023",
+ "latitude": -27.48159,
+ "longitude": 153.0175,
+ "org": "APNIC Research and Development",
+ "os": null,
+ "ports": [
+  161,
+  2082,
+  2083,
+  2052,
+  69,
+  2086,
+  2087,
+  80,
+  8880,
+  8080,
+  4500,
+  53,
+  8443,
+  443,
+  2096,
+  2053
+ ],
+ "region_code": "QLD",
+ "tags": [
+  "vpn",
+  "pqc"
+ ]
+}
