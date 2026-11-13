@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -771,6 +771,25 @@ def _migrate_intelligence_runs(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_file_engines(connection: sqlite3.Connection) -> None:
+    """Version 5: YARA rule sets and similarity digests for file analyses."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS yara_rulesets (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL UNIQUE,
+               description TEXT NOT NULL DEFAULT '',
+               source TEXT NOT NULL,
+               enabled INTEGER NOT NULL DEFAULT 1,
+               rule_count INTEGER NOT NULL DEFAULT 0,
+               rule_names TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL
+           );"""
+    )
+    _ensure_column(connection, "file_analyses", "tlsh", "TEXT")
+    _ensure_column(connection, "file_analyses", "ssdeep", "TEXT")
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -789,6 +808,7 @@ MIGRATIONS = (
     (2, "Investigation workspace tables and columns", _migrate_workspace),
     (3, "Persistent file intelligence analyses", _migrate_file_intelligence),
     (4, "Multi-source intelligence runs and source status", _migrate_intelligence_runs),
+    (5, "YARA rule sets and file similarity digests", _migrate_file_engines),
 )
 
 

@@ -31,6 +31,7 @@ from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
 from .hardening import describe_hardening
 from .imaging import inspect_image
 from .indicators import extract_indicators
+from .yara_rules import scan_with_enabled
 from .legacy_formats import FormatError, analyse_compound, analyse_iso, analyse_lnk, analyse_rtf, detect_legacy
 
 MAX_FILE_BYTES = 4 * 1024 * 1024
@@ -1446,6 +1447,27 @@ def analyze_file(
     investigation_id: str | None = None,
 ) -> dict[str, Any]:
     analysis = analyze_bytes(data, filename)
+    yara = scan_with_enabled(database, data)
+    if yara is not None:
+        analysis["yara"] = yara
+        rules = [f"{item['ruleset']}:{match['rule']}" for item in yara["rulesets"] for match in item["matches"]]
+        if rules:
+            analysis["findings"].append(
+                {
+                    "level": "warning",
+                    "code": "yara-match",
+                    "message": f"YARA rules matched ({len(rules)}): " + ", ".join(rules[:10]) + ". A match means the bytes fit the rule author's pattern; it is not a verdict.",
+                }
+            )
+        failures = [item["ruleset"] for item in yara["rulesets"] if item["error"]]
+        if failures:
+            analysis["findings"].append(
+                {
+                    "level": "note",
+                    "code": "yara-error",
+                    "message": "Some rule sets did not finish: " + ", ".join(failures[:5]) + ".",
+                }
+            )
     if investigation_id:
         investigation_id = clean_text(
             investigation_id, "investigation id", max_length=100
