@@ -27,7 +27,7 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | Seção do prompt | Estado | Observação |
 | --- | --- | --- |
 | 5. Motor global com detecção de tipo | parcial | Detecta domínio, IP, CIDR, URL, e-mail, hashes, ASN e CVE. Falta: imagem/documento como entrada da pesquisa (hoje vão pela Análise de arquivos), repositórios e organizações |
-| 6. Investigação visual | parcial | Existe grafo, painel por nó, pivô, layouts, foco, exportação SVG. Falta: seleção múltipla, fixar/ocultar nós, minimapa, desfazer/refazer, exportação PNG e dos dados do grafo (JSON/GraphML), ícones por tipo no nó, histórico de enriquecimento por nó |
+| 6. Investigação visual | existe (etapa 2) | Seleção múltipla (Shift+clique, área, Ctrl+A) com ações em lote, fixar e ocultar, desfazer/refazer, minimapa, ícones por tipo, histórico de enriquecimento no inspetor, exportação PNG/SVG/GraphML/JSON e importação de GraphML/JSON com prévia |
 | 7. Motor de transformações | existe (Fundação) | Transformações declaradas sobre os conectores: entrada, saídas (tipo de entidade e relação), parâmetros, log por execução, tempo médio medido e histórico por entidade, no painel da entidade e no grafo. Falta o registro por plugin (etapa 5) |
 | 8. SOCMINT | parcial / fora | Dentro do escopo: dados públicos de **organizações e comunidades** (repositórios e organizações do GitHub, metadados públicos de canais e servidores). Fora: perfis e histórico de pessoas |
 | 9. Identidade digital | fora | Ver seção 4 |
@@ -55,6 +55,7 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 3. Os resumos de atividade são gravados em inglês no backend e traduzidos por padrões no front; cada ação nova exige um padrão novo (três estavam faltando e foram corrigidos agora).
 4. O arquivo original analisado não é guardado (só o resultado), então regras YARA novas não podem ser reaplicadas a análises antigas; isso está documentado na tela.
 5. O grafo carrega no máximo 500 entidades e 1000 relacionamentos.
+9. ~~Passar o mouse sobre um nó redesenhava o grafo em laço e engolia cliques; a exportação SVG aplicava estilos por atributo `style`, bloqueado pela CSP, e saía com fundo transparente.~~ Corrigido na etapa 2.
 6. Consultas multifonte são síncronas: a tela espera a fonte mais lenta (crt.sh pode levar ~27 s).
 7. A pesquisa global usa `LIKE`, sem ranking.
 
@@ -79,7 +80,7 @@ coleta automática é feita sobre eles e as exportações CTI os omitem.
 Ordem de trabalho, cada item com testes, verificação no navegador e PR:
 
 1. **Fundação** (feito) — formato de transform (entrada, saída, parâmetros, logs, tempo) sobre os conectores; registro de módulos corrigido e completo; resolução de entidades com níveis exata/provável/fraca.
-2. **Investigação visual** — seleção múltipla, fixar e ocultar, minimapa, desfazer/refazer, exportação PNG e JSON/GraphML (e importação), ícones por tipo, histórico de enriquecimento no painel do nó.
+2. **Investigação visual** (feito) — seleção múltipla, fixar e ocultar, minimapa, desfazer/refazer, exportação PNG e JSON/GraphML (e importação), ícones por tipo, histórico de enriquecimento no painel do nó.
 3. **Pesquisa** — consultas assíncronas com progresso por fonte; FTS5 com ranking na busca global; conectores públicos de organizações e comunidades (GitHub, metadados públicos de canais e servidores).
 4. **Inteligência especializada** — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).
 5. **Plugins** — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.

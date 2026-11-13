@@ -385,6 +385,25 @@ community_size}}}`, computed on the simple undirected graph (duplicates and
 self-loops ignored). `GET /api/graph/path?from=&to=&investigation_id=` returns
 the shortest chain of recorded relationships.
 
+`POST /api/graph/import` with `{content, format: "graphml"|"json", file_name?,
+investigation_id?, commit?}` previews (default, `200`) or commits (`201`) a
+graph built elsewhere. JSON may be this app's export, Cytoscape (`elements`),
+D3 (`nodes`/`links`) or a plain `nodes`/`edges` object; GraphML keys are read
+by `attr.name`, and Maltego type names are mapped. Each node becomes an entity
+or reuses the one with the same type and identifier (name for name-only
+types); each edge becomes an unconfirmed, not-verified relationship that cites
+`note://garbage/graph-import/{sha256 prefix}`. Unknown relationship labels map
+to `related-to` and keep the original label in the description. Limits: 8 MiB,
+2,000 nodes, 5,000 edges. A DTD or entity declaration is rejected before
+parsing. The response counts new and existing entities and relationships,
+invalid nodes and skipped edges, and lists up to 50 problems.
+
+The graph view adds multi-selection (Shift+click, Shift+drag box, Ctrl+A),
+pinned and hidden nodes (saved per case in the browser), undo and redo of
+view changes, a minimap, type glyphs on nodes, PNG export at twice the screen
+resolution (the CSP allows `blob:` images for this), GraphML and JSON export
+with positions, and restoring a layout from a JSON export.
+
 `POST /api/intel/runs/{id}/promote` with `{source_entity_id, investigation_id?,
 items: [{result_id, entity_type?, relationship_type?}]}` turns selected findings
 into entities (existing ones are reused) and relationships from the source

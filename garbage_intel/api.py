@@ -53,6 +53,7 @@ from .evidence import (
 from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
 from .modules import attack
+from .graph_io import import_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
 from .transforms import entity_history, list_transforms, run_transforms
 from .intel_keys import delete_key, list_keys, set_key
@@ -145,6 +146,7 @@ _STATIC_FILES = {
     "views-analytics.js": "text/javascript; charset=utf-8",
     "views-attack.js": "text/javascript; charset=utf-8",
     "views-transforms.js": "text/javascript; charset=utf-8",
+    "graph-tools.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -224,7 +226,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self'; "
-            "img-src 'self'; connect-src 'self'; object-src 'none'; "
+            "img-src 'self' blob:; connect-src 'self'; object-src 'none'; "
             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
         )
         for header, value in (extra_headers or {}).items():
@@ -1553,6 +1555,28 @@ class RequestHandler(BaseHTTPRequestHandler):
             entity_history(self.database_path, match.group(1), limit=_query_int(query, "limit", 50)),
         )
 
+    def api_graph_import(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("relationship-graph")
+        unknown = set(payload) - {"content", "format", "file_name", "investigation_id", "commit"}
+        if unknown:
+            raise ValidationError(f"unsupported import fields: {', '.join(sorted(unknown))}")
+        commit = payload.get("commit", False)
+        if not isinstance(commit, bool):
+            raise ValidationError("commit must be a boolean")
+        self._json(
+            201 if commit else 200,
+            import_graph(
+                self.database_path,
+                content=payload.get("content"),
+                file_format=payload.get("format"),
+                file_name=payload.get("file_name", ""),
+                investigation_id=payload.get("investigation_id"),
+                commit=commit,
+            ),
+        )
+
     def api_entity_aliases(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1701,6 +1725,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         MAX_BODY_BYTES,
     ),
     ("GET", re.compile(r"^/api/graph$"), "api_graph", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
     ("GET", re.compile(r"^/api/transforms$"), "api_transforms_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/transforms/run$"), "api_transforms_run", MAX_BODY_BYTES),
     (

@@ -186,6 +186,13 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         status, aliases = self.request("GET", f"/api/entities/{domain['id']}/aliases")
         self.assertEqual(aliases["items"][0]["merged_from_id"], twin["id"])
+        graph = {"nodes": [{"id": "a", "name": "import.example"}, {"id": "b", "name": "192.0.2.99"}], "edges": [{"source": "a", "target": "b", "label": "resolves to"}]}
+        status, preview = self.request("POST", "/api/graph/import", {"content": json.dumps(graph), "format": "json"})
+        self.assertEqual((status, preview["committed"], preview["counts"]["new_relationships"]), (200, False, 1))
+        status, done = self.request("POST", "/api/graph/import", {"content": json.dumps(graph), "format": "json", "commit": True})
+        self.assertEqual((status, done["committed"]), (201, True))
+        status, _ = self.request("POST", "/api/graph/import", {"content": "x", "format": "csv"})
+        self.assertEqual(status, 400)
         status, _ = self.request("PATCH", "/api/modules/entity-resolution", {"state": "disabled"})
         status, _ = self.request("GET", "/api/resolution/candidates")
         self.assertEqual(status, 409)

@@ -2006,6 +2006,12 @@ G.openShortcuts = function openShortcuts() {
     ["R", "Atualizar tela atual"],
     ["?", "Este guia de atalhos"],
     ["Esc", "Fechar diálogo, menu ou painel"],
+    ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
+    ["Grafo · Shift + arrastar", "Selecionar uma área"],
+    ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
+    ["Grafo · P", "Fixar ou soltar a seleção"],
+    ["Grafo · H ou Delete", "Ocultar a seleção"],
+    ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
   ];
   const dialog = el(
     "dialog",
