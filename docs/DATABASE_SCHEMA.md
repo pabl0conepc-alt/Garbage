@@ -84,6 +84,13 @@ indicators and limitations. Summary columns exist for listing and filtering.
 `ssdeep` (migration 5) let the similarity search compare analyses without
 parsing every JSON payload.
 
+### `intel_api_keys`
+
+`provider_id`, `secret`, `created_at`, `updated_at`
+
+The operator's own provider keys. `secret` is plaintext like the rest of the
+database (see SECURITY.md); the API never returns it, only a last-four hint.
+
 ### `yara_rulesets`
 
 `id`, `name` (unique), `description`, `source`, `enabled`, `rule_count`,
@@ -188,6 +195,7 @@ Applied migration ledger used to make startup idempotent.
 | 3 | Persistent file intelligence analyses | `file_analyses` and case/time index |
 | 4 | Multi-source intelligence runs and source status | `intel_runs`, `intel_results`, `intel_cache`, `intel_source_status` |
 | 5 | YARA rule sets and file similarity digests | `yara_rulesets`; `tlsh` and `ssdeep` columns on `file_analyses` |
+| 6 | Local API keys for keyed intelligence connectors | `intel_api_keys` |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

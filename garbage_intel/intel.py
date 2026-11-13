@@ -630,6 +630,16 @@ PROMOTABLE_TYPES = {
     "asn": "other",
     "as-name": "organization",
     "cidr": "other",
+    "hostname": "domain",
+    "subdomain": "domain",
+    "origin-asn": "other",
+    "as-holder": "organization",
+    "network-owner": "organization",
+    "network-operator": "organization",
+    "announced-prefix": "other",
+    "malicious-url": "url",
+    "final-url": "url",
+    "dns-record": "other",
 }
 MAX_PROMOTIONS = 50
 

@@ -4991,3 +4991,28 @@ dialog:focus-visible,
 
 /* Components that set display (buttons, flex rows) must still honour hidden. */
 [hidden] { display: none !important; }
+
+/* ---- API keys ----------------------------------------------------- */
+
+.key-list { display: flex; flex-direction: column; }
+
+.key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(150px, auto) minmax(260px, 1.2fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--divider);
+}
+
+.key-row:first-child { border-top: 0; }
+.key-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.key-info span { color: var(--text-secondary); font-size: var(--text-sm); }
+.key-info .muted { font-size: var(--text-xs); }
+.key-state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1, 4px); }
+.key-actions { display: flex; gap: var(--space-2); align-items: center; }
+.key-input { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); }
+
+@media (max-width: 900px) {
+  .key-row { grid-template-columns: minmax(0, 1fr); }
+}

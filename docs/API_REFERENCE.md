@@ -269,6 +269,9 @@ to every registered connector that accepts its type.
 | POST | `/api/intel/runs` | Run one artifact against the connectors |
 | GET | `/api/intel/runs?limit=` | Recent runs |
 | GET | `/api/intel/runs/{id}` | One run with per-source status and results |
+| GET | `/api/intel/keys` | Key providers: `configured`, last-four `hint`, sign-up link (never the key) |
+| PUT | `/api/intel/keys/{provider}` | Save the operator's key: `{key}` |
+| DELETE | `/api/intel/keys/{provider}` | Remove a saved key |
 
 Run payload: `{value, type?, connectors?, investigation_id?, use_cache?}`.
 `type` is optional; when given it must match the detected type. Supported
@@ -276,7 +279,7 @@ types: `domain`, `ipv4`, `ipv6`, `cidr`, `url`, `email`, `md5`, `sha1`,
 `sha256`, `asn`, `cve`.
 
 Each source reports one status: `ok`, `empty`, `error`, `rate-limited`,
-`network-disabled` or `unsupported`. Each result carries `connector_id`,
+`network-disabled`, `target-contact-disabled`, `key-missing` or `unsupported`. Each result carries `connector_id`,
 `result_type`, `value`, `data`, `source_url`, `response_sha256`, `cached`,
 `elapsed_ms` and `fetched_at`.
 
@@ -307,6 +310,28 @@ Registered connectors:
 | `first-epss` | CVE | yes | FIRST EPSS API | 24 h |
 | `tls-certificate` | domain, URL, IP | **contacts target** | one TLS handshake on port 443 | 1 h |
 | `web-fingerprint` | domain, URL, IP | **contacts target** | one HTTPS GET of the page and its same-host favicon | 1 h |
+| `shodan-internetdb` | IP | yes | Shodan InternetDB: ports, hostnames, CPEs, tags, CVEs | 12 h |
+| `ripestat` | IP, CIDR, ASN | yes | RIPEstat: origin AS, holder, announced prefixes, abuse contact | 6 h |
+| `peeringdb` | ASN | yes | PeeringDB network record | 24 h |
+| `ipinfo` | IP | yes (optional key) | IPinfo: network owner, reverse name, network location | 24 h |
+| `circl-hashlookup` | MD5, SHA-1, SHA-256 | yes | CIRCL hashlookup known-software sets (NSRL and others) | 7 d |
+| `urlscan` | domain, IP, URL, SHA-256 | yes (optional key) | urlscan.io public search; `relation` is `page` or `loaded-resource` | 1 h |
+| `certspotter` | domain, URL | yes | Cert Spotter CT issuances and subdomains | 6 h |
+| `nvd` | CVE | yes (optional key) | NVD CVE record: CVSS, CWE, references | 24 h |
+| `osv` | CVE | yes | OSV.dev affected packages (follows the GHSA alias) | 24 h |
+| `greynoise` | IPv4 | yes (optional key) | GreyNoise Community classification | 6 h |
+| `otx` | IP, domain, URL, hashes, CVE | yes (optional key) | AlienVault OTX pulses, malware families, ATT&CK IDs | 6 h |
+| `shodan` | IP | yes (optional key) | Shodan host: services, banners, TLS names, inferred CVEs | 12 h |
+| `virustotal` | IP, domain, URL, hashes | **key required** | VirusTotal v3 detections, threat label, tags, context | 6 h |
+| `abuseipdb` | IP | **key required** | AbuseIPDB 90-day reports and confidence score | 6 h |
+| `urlhaus` | URL, domain, IPv4, MD5, SHA-256 | **key required** (abuse.ch) | URLhaus malware URLs and payloads | 1 h |
+| `threatfox` | IPv4, domain, URL, MD5, SHA-256 | **key required** (abuse.ch) | ThreatFox IOCs and malware families | 1 h |
+| `malwarebazaar` | MD5, SHA-1, SHA-256 | **key required** (abuse.ch) | MalwareBazaar sample record | 24 h |
+
+Keys are stored by migration 6 in `intel_api_keys` on this machine, sent only
+to their provider in its documented header (Shodan: query parameter, never
+stored in result URLs) and replaced by `***` in error messages. A keyed
+connector without a key reports `key-missing` and makes no request.
 
 Connectors marked **contacts target** reach the artifact's own servers and run
 only when both `intel.allow_network` and `intel.allow_target_contact` are

@@ -168,7 +168,7 @@ Mantendo o design system monocromático do PR #8:
 | 4 | Inteligência de domínio, IP/ASN, certificados e web — **concluída**: domínio e IP/ASN na fase 2; certificado TLS e impressão digital web (com trava própria de contato com o alvo), parser X.509 e hash de favicon em Python | 2 |
 | 5 | Pivô no grafo + algoritmos C++ — **concluída**: centralidade (grau, intermediação, harmônica), comunidades Louvain e caminho mais curto em C++ com referência Python idêntica; pivô do nó com aprovação por resultado | 3, 4 |
 | 6 | Motores de arquivo — **concluída**: TLSH e ssdeep em C (idênticos ao py-tlsh 5 e ao ssdeep 2.14) com busca de arquivos parecidos; scanner de assinaturas embutidas em Rust (29 formatos, paridade com Python); OLE/VBA, MSI, LNK, ISO 9660 e RTF; motor YARA próprio (subconjunto conferido com o YARA 4.5.5, sem libyara) com conjuntos de regras no workspace | — (paralelo) |
-| 7 | Conectores com chave do usuário (VirusTotal, AbuseIPDB, Shodan, GreyNoise, OTX, URLhaus, ThreatFox) | 1 |
+| 7 | Mais fontes — **concluída**: 17 conectores novos. Sem chave: Shodan InternetDB, RIPEstat, PeeringDB, IPinfo, CIRCL hashlookup, urlscan.io, Cert Spotter, NVD, OSV, GreyNoise, OTX e Shodan host. Com chave do usuário: VirusTotal, AbuseIPDB, URLhaus, ThreatFox e MalwareBazaar. Gerenciador local de chaves (migração 6), que nunca devolve a chave | 1 |
 | 8 | ATT&CK offline, exportação STIX/MISP, typosquatting em Rust | 2 |
 | 9 | Monitoramento local e notificações | 3 |
 | 10 | FTS5, revisão de acessibilidade, testes de ponta a ponta, documentação, atualização da matriz OpenArchive | todas |

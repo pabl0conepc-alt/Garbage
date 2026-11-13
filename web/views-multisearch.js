@@ -21,6 +21,23 @@
     "first-epss": ["FIRST EPSS", "Probabilidade e percentil de exploração (EPSS) de uma CVE."],
     "tls-certificate": ["Certificado TLS", "Um handshake TLS na porta 443 do alvo: confiança, protocolo, titular, emissor, validade, SANs, chave, fingerprints e pin SPKI."],
     "web-fingerprint": ["Impressão digital web", "Um GET HTTPS da página do alvo (e do favicon): status, redirecionamentos, cabeçalhos de segurança, cookies, título, tecnologias e hash do favicon."],
+    "shodan-internetdb": ["Shodan InternetDB", "Portas abertas, nomes, CPEs, tags e CVEs que as varreduras do Shodan registraram para um IP."],
+    ripestat: ["RIPEstat", "ASN de origem, titular do AS, prefixos anunciados e contato de abuso, pelo RIPE NCC."],
+    peeringdb: ["PeeringDB", "Operador, tipo de rede, perfil de tráfego e presença em pontos de troca de um ASN."],
+    ipinfo: ["IPinfo", "Dono da rede, nome reverso e localização aproximada da rede de um IP."],
+    "circl-hashlookup": ["CIRCL hashlookup", "Diz se o hash pertence a software conhecido e distribuído (NSRL e outras bases)."],
+    urlscan: ["urlscan.io", "Varreduras públicas de páginas que são ou carregam este domínio, IP, URL ou arquivo."],
+    certspotter: ["Cert Spotter", "Certificados emitidos para o domínio e subdomínios, pelo Certificate Transparency."],
+    nvd: ["NVD (NIST)", "Registro da CVE: descrição, CVSS, CWE e referências."],
+    osv: ["OSV.dev", "Pacotes de código aberto e versões afetadas pela vulnerabilidade, com as correções."],
+    virustotal: ["VirusTotal", "Detecções dos motores, rótulo de ameaça, tags e contexto de IPs, domínios, URLs e arquivos."],
+    abuseipdb: ["AbuseIPDB", "Denúncias de abuso da comunidade e pontuação de confiança de um IP em 90 dias."],
+    greynoise: ["GreyNoise", "Se o IP faz varredura em massa da internet ou é um serviço benigno conhecido."],
+    otx: ["AlienVault OTX", "Relatos de ameaça da comunidade (pulses), famílias de malware e técnicas ATT&CK."],
+    shodan: ["Shodan", "Serviços, banners, produtos, nomes TLS e CVEs inferidas de um IP."],
+    urlhaus: ["URLhaus", "URLs de distribuição de malware ligadas a uma URL, host ou hash de payload."],
+    threatfox: ["ThreatFox", "Indicadores de comprometimento ligados a famílias de malware e infraestrutura de botnets."],
+    malwarebazaar: ["MalwareBazaar", "Registro de amostra de malware: família, tipo, entrega e hashes de semelhança."],
   };
 
   const RESULT_LABELS = {
@@ -42,6 +59,17 @@
     "security-header": "Cabeçalho de segurança", "missing-header": "Cabeçalho ausente",
     "disclosure-header": "Cabeçalho que expõe software", cookie: "Cookie", "page-title": "Título da página",
     "page-meta": "Meta da página", technology: "Tecnologia", favicon: "Hash do favicon (mmh3)",
+    "open-port": "Porta aberta", hostname: "Nome de host", cpe: "CPE", tag: "Tag", cve: "CVE",
+    "origin-asn": "ASN de origem", "as-holder": "Titular do AS", "announced-prefix": "Prefixo anunciado",
+    routing: "Roteamento", "network-operator": "Operador de rede", "network-owner": "Dono da rede",
+    geolocation: "Localização da rede", "known-file": "Arquivo conhecido", scan: "Varredura urlscan",
+    subdomain: "Subdomínio", certificate: "Certificado", "cve-record": "Registro da CVE",
+    reference: "Referência", "affected-package": "Pacote afetado", alias: "Identificador alternativo",
+    verdict: "Veredito dos motores", "threat-label": "Rótulo de ameaça", category: "Categoria",
+    file: "Arquivo", "dns-record": "Registro DNS", "final-url": "URL final", "abuse-score": "Pontuação de abuso",
+    "internet-noise": "Ruído na internet", "pulse-count": "Relatos (pulses)", pulse: "Relato (pulse)",
+    "malware-family": "Família de malware", "attack-technique": "Técnica ATT&CK", host: "Host",
+    service: "Serviço", payload: "Payload", "malicious-url": "URL maliciosa", ioc: "IOC", sample: "Amostra",
   };
 
   const DATA_LABELS = {
@@ -66,6 +94,30 @@
     value: "valor", header: "cabeçalho", secure: "Secure", httponly: "HttpOnly", samesite: "SameSite",
     category: "categoria", version: "versão", evidence: "evidência", algorithm: "algoritmo",
     md5: "MD5", url: "URL",
+    source: "fonte", holder: "titular", announced: "anunciado", registry_block: "bloco no registro",
+    website: "site", scope: "alcance", traffic_ratio: "tráfego", ix_count: "pontos de troca",
+    facility_count: "data centers", irr_as_set: "AS-SET", anycast: "anycast", coordinates: "coordenadas",
+    timezone: "fuso", source_set: "base", product_version: "versão", size_bytes: "tamanho",
+    trust: "confiança", known_malicious: "malicioso conhecido", scanned_at: "varrido em",
+    relation: "relação", page_domain: "domínio da página", page_ip: "IP da página", asn_name: "nome do AS",
+    server: "servidor", title: "título", tls_issuer: "emissor TLS", domain_age_days: "idade do domínio (dias)",
+    verdict_malicious: "veredito malicioso", report: "relatório", screenshot: "captura",
+    not_before: "válido desde", not_after: "válido até", revoked: "revogado", spki_sha256: "SPKI SHA-256",
+    names: "nomes", description: "descrição", published: "publicada", modified: "alterada", cvss: "CVSS",
+    cwe: "CWE", kev_due_date: "prazo KEV", tags: "tags", fixed_in: "corrigido em", purl: "purl",
+    versions_listed: "versões listadas", malicious: "malicioso", suspicious: "suspeito",
+    harmless: "inofensivo", undetected: "não detectado", timeout: "sem resposta", reputation: "reputação",
+    last_analysis: "última análise", categories: "categorias", first_submission: "primeiro envio",
+    ssdeep: "ssdeep", tlsh: "TLSH", network: "rede", reports_90d: "denúncias (90 dias)",
+    distinct_reporters: "denunciantes", last_reported: "última denúncia", usage_type: "uso", isp: "provedor",
+    domain: "domínio", tor_exit: "saída Tor", allow_listed: "na lista de permissões",
+    scanning_internet: "varre a internet", known_benign_service: "serviço benigno conhecido",
+    created: "criado", adversary: "adversário", tlp: "TLP", references: "referências", link: "link",
+    os: "sistema", last_update: "atualizado", ports: "portas", module: "módulo", cpe: "CPE",
+    http_title: "título HTTP", http_server: "servidor HTTP", tls_subject_cn: "CN do TLS", seen: "visto em",
+    file_type: "tipo de arquivo", url_count: "URLs", threat: "ameaça", threat_type: "tipo de ameaça",
+    malware: "malware", aliases: "outros nomes", confidence: "confiança", file_name: "nome do arquivo",
+    mime: "MIME", delivery: "entrega", imphash: "imphash",
   };
 
   const STATUS_TEXT = {
@@ -75,6 +127,7 @@
     "rate-limited": ["Limite de taxa", "warning"],
     "network-disabled": ["Rede desativada", "warning"],
     "target-contact-disabled": ["Contato com o alvo desativado", "warning"],
+    "key-missing": ["Sem chave", "neutral"],
     unsupported: ["Não se aplica", "neutral"],
     ready: ["Pronto", "success"],
   };
@@ -89,14 +142,29 @@
     "dns-a": "ipv4", "dns-aaaa": "ipv6", "dns-ns": "domain", "dns-cname": "domain",
     "dns-mx": "domain", nameserver: "domain", "ct-name": "domain", organization: "organization",
     "abuse-contact": "email", "archive-capture": "url", lookalike: "domain",
-    "cert-san": "domain", "http-redirect": "url",
+    "cert-san": "domain", "http-redirect": "url", hostname: "domain", subdomain: "domain",
+    "as-holder": "organization", "network-owner": "organization", "network-operator": "organization",
+    "malicious-url": "url", "final-url": "url",
   };
 
   const PIVOTABLE = new Set([
     "dns-a", "dns-aaaa", "dns-ns", "dns-cname", "dns-mx", "nameserver", "ct-name",
     "asn", "cidr", "abuse-contact", "lookalike", "co-occurrence", "indicator", "cert-san",
-    "cert-san-ip", "http-redirect",
+    "cert-san-ip", "http-redirect", "hostname", "origin-asn", "announced-prefix", "subdomain",
+    "malicious-url", "final-url", "ioc", "cve",
   ]);
+
+  const PROVIDER_NOTE = {
+    virustotal: "Obrigatória. Chaves gratuitas: 4 consultas por minuto e 500 por dia.",
+    abuseipdb: "Obrigatória. Chaves gratuitas: 1.000 consultas por dia.",
+    abusech: "Obrigatória. Uma Auth-Key serve para URLhaus, ThreatFox e MalwareBazaar.",
+    greynoise: "Opcional: a consulta funciona sem chave, com limite menor.",
+    otx: "Opcional: a consulta de indicadores funciona sem chave.",
+    shodan: "Opcional: a consulta de host funciona sem chave; com chave segue os limites do seu plano.",
+    urlscan: "Opcional: a busca funciona sem chave, com limite menor.",
+    nvd: "Opcional: aumenta o limite de 5 para 50 consultas a cada 30 s.",
+    ipinfo: "Opcional: sem token, o limite anônimo é menor.",
+  };
 
   function button(label, onClick, options = {}) {
     return el(
@@ -159,7 +227,7 @@
     const accepted = await G.confirm({
       title: "Ativar conectores de rede",
       message:
-        "Os conectores de rede enviam o artefato consultado a serviços públicos: o resolvedor DNS da Cloudflare, rdap.org e registros regionais, crt.sh, Internet Archive, Team Cymru e FIRST. Nenhum deles acessa os servidores do alvo. Você pode desativar isso a qualquer momento em Configurações.",
+        "Os conectores de rede enviam o artefato consultado a serviços de terceiros: resolvedor DNS da Cloudflare, registros RDAP, RIPEstat, PeeringDB, Team Cymru, crt.sh, Cert Spotter, Internet Archive, urlscan.io, Shodan, GreyNoise, OTX, IPinfo, CIRCL, NVD, OSV e FIRST, além dos provedores cujas chaves você salvar. Nenhum deles acessa os servidores do alvo. Você pode desativar isso a qualquer momento em Configurações.",
       confirmLabel: "Ativar rede",
     });
     if (!accepted) return;
@@ -203,7 +271,7 @@
 
   function sourceList(run, connectorsById) {
     const list = el("ol", { class: "source-list", "aria-label": "Status por fonte" });
-    const order = { ok: 0, empty: 1, error: 2, "rate-limited": 3, "network-disabled": 4, unsupported: 5 };
+    const order = { ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4, "network-disabled": 5, unsupported: 6 };
     const sources = [...run.sources].sort(
       (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.connector_id.localeCompare(b.connector_id),
     );
@@ -304,7 +372,7 @@
   /* ---------------------------------------------------------------- */
 
   async function renderMultiSearch(root, params = []) {
-    const [connectorData, runs] = await Promise.all([
+    let [connectorData, runs] = await Promise.all([
       api("/api/intel/connectors"),
       api("/api/intel/runs?limit=15"),
     ]);
@@ -313,7 +381,8 @@
     const connectorsById = Object.fromEntries(connectorData.items.map((item) => [item.connector_id, item]));
     let detected = null;
     let currentRun = null;
-    let activeTab = params[0] === "conectores" ? "connectors" : "search";
+    let activeTab = { conectores: "connectors", chaves: "keys" }[params[0]] || "search";
+    const keysHost = el("div");
     let detectTimer = null;
     const selected = new Set(connectorData.items.map((item) => item.connector_id));
 
@@ -408,6 +477,7 @@
     function showRun(run) {
       currentRun = run;
       const networkSkipped = run.sources.some((item) => item.status === "network-disabled");
+      const keyless = run.sources.filter((item) => item.status === "key-missing");
       const caseId = caseSelect.value || run.investigation_id || "";
       const summaryNodes = [
         el(
@@ -468,6 +538,21 @@
               { class: "notice-bar", role: "note" },
               el("span", {}, "Fontes de rede foram ignoradas porque os conectores de rede estão desativados."),
               button("Ativar rede", () => enableNetwork(() => G.refreshView())),
+          ),
+        );
+      }
+      if (keyless.length) {
+        summaryNodes.push(
+          el(
+            "div",
+            { class: "notice-bar is-quiet", role: "note" },
+            el(
+              "span",
+              {},
+              `${keyless.length} fonte(s) ficaram de fora por falta de chave: ` +
+                keyless.map((item) => connectorName(item.connector_id, item.connector_id)).join(", ") + ".",
+            ),
+            el("a", { class: "button button-secondary button-small", href: "#/multisearch/chaves" }, "Configurar chaves"),
           ),
         );
       }
@@ -603,7 +688,19 @@
             { label: "ACEITA", render: (row) => row.accepts.map((type) => TYPE_LABELS[type] || type).join(", ") },
             {
               label: "ACESSO",
-              render: (row) => (row.contacts_target ? "Contata o alvo" : row.network ? "Rede (passivo)" : "Local"),
+              render: (row) =>
+                el(
+                  "div",
+                  { class: "connector-cell" },
+                  el("span", {}, row.contacts_target ? "Contata o alvo" : row.network ? "Rede (passivo)" : "Local"),
+                  row.key_id
+                    ? el(
+                        "a",
+                        { class: "table-link", href: "#/multisearch/chaves" },
+                        row.key_configured ? "Chave salva" : row.requires_key ? "Precisa de chave" : "Chave opcional",
+                      )
+                    : null,
+                ),
             },
             { label: "DISPONIBILIDADE", render: (row) => statusBadgeFor(row.availability) },
             {
@@ -641,12 +738,111 @@
       );
     }
 
+    async function keysTab() {
+      keysHost.replaceChildren(loadingBlock("Carregando chaves…"));
+      let keys;
+      try {
+        keys = await api("/api/intel/keys");
+      } catch (error) {
+        keysHost.replaceChildren(G.inlineError(error.message));
+        return;
+      }
+      const usedBy = {};
+      for (const item of connectorData.items) {
+        if (item.key_id) (usedBy[item.key_id] ||= []).push(connectorName(item.connector_id, item.name));
+      }
+      const row = (provider) => {
+        const input = el("input", {
+          class: "input key-input",
+          type: "password",
+          autocomplete: "off",
+          spellcheck: "false",
+          placeholder: provider.configured ? `Substituir a chave salva (${provider.hint})` : "Cole a chave aqui",
+          "aria-label": `Chave de API de ${provider.name}`,
+        });
+        const save = async () => {
+          if (!input.value.trim()) return;
+          try {
+            await api(`/api/intel/keys/${provider.provider_id}`, { method: "PUT", body: JSON.stringify({ key: input.value }) });
+            input.value = "";
+            toast(`Chave de ${provider.name} salva neste computador.`);
+            connectorData = await api("/api/intel/connectors");
+            keysTab();
+          } catch (error) {
+            toast(error.message, "error");
+          }
+        };
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") save();
+        });
+        return el(
+          "div",
+          { class: "key-row" },
+          el(
+            "div",
+            { class: "key-info" },
+            el("strong", {}, provider.name),
+            el("span", {}, PROVIDER_NOTE[provider.provider_id] || provider.note),
+            el("span", { class: "muted" }, `Usada por: ${(usedBy[provider.provider_id] || []).join(", ")}`),
+          ),
+          el(
+            "div",
+            { class: "key-state" },
+            provider.configured ? badge(`Salva ${provider.hint}`, "success") : badge("Não configurada", "neutral"),
+            el("a", { class: "table-link", href: provider.signup_url, target: "_blank", rel: "noopener noreferrer" }, "Obter chave"),
+          ),
+          el(
+            "div",
+            { class: "key-actions" },
+            input,
+            button("Salvar", save, { variant: "button-primary" }),
+            provider.configured
+              ? button("Remover", async () => {
+                  const confirmed = await G.confirm({
+                    title: "Remover chave",
+                    message: `A chave de ${provider.name} será apagada deste computador. As fontes que dependem dela deixam de rodar.`,
+                    confirmLabel: "Remover",
+                    danger: true,
+                  });
+                  if (!confirmed) return;
+                  try {
+                    await api(`/api/intel/keys/${provider.provider_id}`, { method: "DELETE" });
+                    toast(`Chave de ${provider.name} removida.`);
+                    connectorData = await api("/api/intel/connectors");
+                    keysTab();
+                  } catch (error) {
+                    toast(error.message, "error");
+                  }
+                })
+              : null,
+          ),
+        );
+      };
+      keysHost.replaceChildren(
+        panel(
+          {
+            eyebrow: "CHAVES DE API",
+            title: "Suas contas nos provedores",
+            caption: `${keys.items.filter((item) => item.configured).length} de ${keys.total} salvas`,
+          },
+          el(
+            "p",
+            { class: "panel-note" },
+            "As chaves ficam só no banco local deste workspace. A interface nunca recebe a chave de volta, apenas os 4 últimos caracteres. " +
+              "Cada chave vai apenas para o provedor dela, no cabeçalho que ele documenta, e é removida das mensagens de erro.",
+          ),
+          el("div", { class: "key-list" }, ...keys.items.map(row)),
+        ),
+      );
+    }
+
     function renderTab() {
       tabStrip.replaceChildren(
         G.tabs({
           items: [
             { key: "search", label: "Pesquisa" },
             { key: "connectors", label: "Conectores", count: connectorData.total },
+            { key: "keys", label: "Chaves de API" },
           ],
           active: activeTab,
           onSelect: (key) => {
@@ -655,8 +851,11 @@
           },
         }),
       );
+      if (activeTab === "keys") keysTab();
       tabHost.replaceChildren(
-        activeTab === "connectors"
+        activeTab === "keys"
+          ? keysHost
+          : activeTab === "connectors"
           ? connectorsTab()
           : el(
               "div",
