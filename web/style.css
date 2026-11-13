@@ -5526,3 +5526,19 @@ dialog:focus-visible,
 @media (max-width: 760px) {
   .graph-minimap { display: none; }
 }
+
+/* Ranked global search */
+.search-result-title mark, .search-result-snippet mark {
+  background: rgba(240, 241, 242, 0.16);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.search-result-snippet {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}

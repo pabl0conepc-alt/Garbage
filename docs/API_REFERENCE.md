@@ -26,7 +26,7 @@ rejected where the handler validates an allowlist.
 | PATCH | `/api/settings` | Update allowlisted settings |
 | GET | `/api/activities?limit=` | Recent activity |
 | GET | `/api/overview` | Dashboard summary |
-| GET | `/api/search?q=` | Grouped cross-record search |
+| GET | `/api/search?q=` | Ranked cross-record search: `engine` (`fts5`, or `like` when SQLite lacks FTS5), `best` (top 8 by BM25, title weighted 8:1), and `groups` (investigations, entities, sources, evidence, observations, file analyses, indicators). FTS hits carry `title_marked` and `snippet` with matches between `\u0002` and `\u0003`. Terms are quoted, so operators are literal; the last term is a prefix; accents are ignored |
 
 ## Investigations
 
@@ -266,7 +266,7 @@ to every registered connector that accepts its type.
 | --- | --- | --- |
 | GET | `/api/intel/connectors` | Registered connectors, availability and health |
 | GET | `/api/intel/detect?value=` | Offline artifact detection (refangs input) |
-| POST | `/api/intel/runs` | Run one artifact against the connectors |
+| POST | `/api/intel/runs` | Run one artifact against the connectors. With `"async": true` it answers `202` at once; sources still working are `pending`, each source's results are stored as soon as it answers, and `progress: {total, pending}` on `GET /api/intel/runs/{id}` shows how far it is. Runs left `running` by a restart become `interrupted` at startup |
 | GET | `/api/intel/runs?limit=` | Recent runs |
 | GET | `/api/intel/runs/{id}` | One run with per-source status and results |
 | GET | `/api/intel/keys` | Key providers: `configured`, last-four `hint`, sign-up link (never the key) |
@@ -410,6 +410,17 @@ into entities (existing ones are reused) and relationships from the source
 entity, with confidence `possible`, status `not-verified` and the finding's
 source URL as reference. Duplicate relationships and unusable findings (null
 MX, the source itself) are reported under `skipped`.
+
+### Organisation sources
+
+- `github` (URL on github.com): an organisation's public profile, site and up
+  to 30 repositories, or one repository's metadata, homepage, licence and fork
+  parent. A personal account returns only a notice; nothing about people is
+  collected. Unauthenticated GitHub API (60 requests per hour per IP).
+- `security-txt` (domain or URL, target contact): the RFC 9116 file at
+  `/.well-known/security.txt`: contacts, policy, encryption key, expiry
+  (and whether it has expired) and PGP signature. A non-text answer or one
+  without `Contact:` is reported as not published.
 
 ## Transforms
 

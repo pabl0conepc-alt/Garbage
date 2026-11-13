@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -963,6 +963,60 @@ def _migrate_foundation(connection: sqlite3.Connection) -> None:
             (name, description, category, version, utc_now(), module_id),
         )
 
+# Indexed records: (kind, table, title SQL, body SQL). Expressions use the
+# NEW./OLD. row alias in triggers and the bare table in the backfill.
+SEARCH_SOURCES = (
+    ("investigations", "investigations", "{r}name", "{r}description"),
+    ("entities", "entities", "{r}name", "{r}identifier || ' ' || {r}entity_type || ' ' || {r}description"),
+    ("sources", "sources", "{r}title", "{r}reference || ' ' || {r}category || ' ' || {r}description"),
+    ("evidence", "evidence", "{r}title", "{r}description || ' ' || {r}original_name || ' ' || {r}sha256 || ' ' || {r}evidence_type"),
+    ("observations", "observations", "{r}title", "{r}content"),
+    ("files", "file_analyses", "{r}file_name", "{r}format || ' ' || {r}sha256 || ' ' || {r}media_type"),
+)
+
+
+def fts5_available(connection: sqlite3.Connection) -> bool:
+    try:
+        connection.execute("CREATE VIRTUAL TABLE IF NOT EXISTS temp._fts5_probe USING fts5(x)")
+        connection.execute("DROP TABLE IF EXISTS temp._fts5_probe")
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
+def _migrate_search_index(connection: sqlite3.Connection) -> None:
+    """Version 9: FTS5 index over cases, entities, sources, evidence,
+    observations and file analyses, kept current by triggers. Builds without
+    FTS5 skip it; global search then falls back to LIKE."""
+    if not fts5_available(connection):
+        return
+    connection.execute(
+        """CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+               kind UNINDEXED, ref_id UNINDEXED, title, body,
+               tokenize = 'unicode61 remove_diacritics 2'
+           )"""
+    )
+    for kind, table, title, body in SEARCH_SOURCES:
+        new_title, new_body = title.format(r="NEW."), body.format(r="NEW.")
+        connection.executescript(
+            f"""CREATE TRIGGER IF NOT EXISTS search_{table}_insert AFTER INSERT ON {table} BEGIN
+                    INSERT INTO search_index (kind, ref_id, title, body)
+                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+                END;
+                CREATE TRIGGER IF NOT EXISTS search_{table}_update AFTER UPDATE ON {table} BEGIN
+                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+                    INSERT INTO search_index (kind, ref_id, title, body)
+                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+                END;
+                CREATE TRIGGER IF NOT EXISTS search_{table}_delete AFTER DELETE ON {table} BEGIN
+                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+                END;"""
+        )
+        connection.execute(
+            f"""INSERT INTO search_index (kind, ref_id, title, body)
+                SELECT '{kind}', id, {title.format(r="")}, {body.format(r="")} FROM {table}"""
+        )
+
 
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
@@ -986,6 +1040,7 @@ MIGRATIONS = (
     (6, "Local API keys for keyed intelligence connectors", _migrate_api_keys),
     (7, "Offline MITRE ATT&CK and case techniques", _migrate_attack),
     (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
+    (9, "Full-text search index", _migrate_search_index),
 )
 
 
