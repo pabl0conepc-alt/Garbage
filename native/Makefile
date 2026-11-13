@@ -32,8 +32,10 @@ $(BUILD):
 
 c: $(LIB_C)
 
-$(LIB_C): c/garbage_native.c include/garbage_native.h | $(BUILD)
-	$(CC) $(CFLAGS) $(INCLUDES) $(SHARED_C) -o $@ c/garbage_native.c -lm
+C_SOURCES := c/garbage_native.c c/garbage_fuzzy.c
+
+$(LIB_C): $(C_SOURCES) include/garbage_native.h | $(BUILD)
+	$(CC) $(CFLAGS) $(INCLUDES) $(SHARED_C) -o $@ $(C_SOURCES) -lm
 
 cpp: $(LIB_CPP)
 

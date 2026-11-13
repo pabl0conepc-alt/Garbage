@@ -25,6 +25,7 @@ from .. import native
 from ..db import _connection, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
+from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
 from .hardening import describe_hardening
 from .imaging import inspect_image
 from .indicators import extract_indicators
@@ -1113,6 +1114,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         )
     indicators = _indicators_from_strings(strings)
     hardening = describe_hardening(kind, data)
+    similarity = similarity_digests(data)
     return {
         "file_name": safe_name,
         "format": kind,
@@ -1123,7 +1125,10 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             "sha256": hashlib.sha256(data).hexdigest(),
             "sha1": hashlib.sha1(data).hexdigest(),
             "md5": hashlib.md5(data).hexdigest(),
+            "tlsh": similarity["tlsh"],
+            "ssdeep": similarity["ssdeep"],
         },
+        "similarity_engine": similarity["engine"],
         "magic_hex": data[:16].hex(),
         "entropy": entropy,
         "metadata": metadata,
@@ -1139,6 +1144,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             "Parsers cover bounded headers and central directories; malformed files can hide fields.",
             "Embedded indicators are syntactic string matches, not reputation or attribution.",
             "Hashes identify these exact bytes and do not establish safety or provenance.",
+            "TLSH and ssdeep measure byte-level resemblance; a close digest is not shared authorship or intent.",
         ],
         "analysis_engine": "python-stdlib",
     }
@@ -1166,6 +1172,10 @@ def _ensure_analysis_table(connection: Any) -> None:
         "CREATE INDEX IF NOT EXISTS file_analyses_case_created "
         "ON file_analyses(investigation_id, created_at DESC)"
     )
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(file_analyses)")}
+    for column in ("tlsh", "ssdeep"):
+        if column not in columns:
+            connection.execute(f"ALTER TABLE file_analyses ADD COLUMN {column} TEXT")
 
 
 def analyze_file(
@@ -1200,8 +1210,8 @@ def analyze_file(
         connection.execute(
             """INSERT INTO file_analyses
                (id, investigation_id, file_name, format, media_type,
-                size_bytes, sha256, analysis_json, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                size_bytes, sha256, analysis_json, created_at, tlsh, ssdeep)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 analysis_id,
                 investigation_id,
@@ -1212,6 +1222,8 @@ def analyze_file(
                 analysis["hashes"]["sha256"],
                 json.dumps(analysis_payload, ensure_ascii=False, sort_keys=True),
                 created_at,
+                analysis["hashes"]["tlsh"],
+                analysis["hashes"]["ssdeep"],
             ),
         )
         record_activity(
@@ -1279,3 +1291,60 @@ def get_file_analysis(database: str, analysis_id: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValidationError("stored file analysis is invalid")
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Similarity across the workspace
+
+SIMILARITY_SCAN_LIMIT = 5000
+TLSH_CLOSE_DISTANCE = 100
+
+
+def similar_file_analyses(database: str, analysis_id: str, *, limit: int = 20) -> dict[str, Any]:
+    """Rank stored analyses by TLSH distance and ssdeep score against one.
+
+    Identical SHA-256 values are reported as exact copies. A candidate is kept
+    when its TLSH distance is at most ``TLSH_CLOSE_DISTANCE`` or its ssdeep
+    score is above zero; nothing here implies a shared origin."""
+    limit = max(1, min(100, int(limit)))
+    with _connection(database) as connection:
+        _ensure_analysis_table(connection)
+        target = connection.execute(
+            "SELECT id, sha256, tlsh, ssdeep FROM file_analyses WHERE id = ?", (analysis_id,)
+        ).fetchone()
+        if target is None:
+            raise NotFoundError(f"file analysis not found: {analysis_id}")
+        rows = connection.execute(
+            """SELECT a.id, a.investigation_id, a.file_name, a.format, a.size_bytes,
+                      a.sha256, a.tlsh, a.ssdeep, a.created_at, i.name AS investigation_name
+               FROM file_analyses a
+               LEFT JOIN investigations i ON i.id = a.investigation_id
+               WHERE a.id != ?
+               ORDER BY a.created_at DESC LIMIT ?""",
+            (analysis_id, SIMILARITY_SCAN_LIMIT),
+        ).fetchall()
+    matches = []
+    for row in rows:
+        exact = row["sha256"] == target["sha256"]
+        distance = tlsh_compare(target["tlsh"], row["tlsh"]) if target["tlsh"] and row["tlsh"] else None
+        score = ssdeep_score(target["ssdeep"], row["ssdeep"]) if target["ssdeep"] and row["ssdeep"] else None
+        if not exact and (distance is None or distance > TLSH_CLOSE_DISTANCE) and not score:
+            continue
+        item = {key: row[key] for key in row.keys() if key not in {"tlsh", "ssdeep"}}
+        item.update({"exact": exact, "tlsh_distance": distance, "ssdeep_score": score})
+        matches.append(item)
+    matches.sort(
+        key=lambda item: (
+            not item["exact"],
+            item["tlsh_distance"] if item["tlsh_distance"] is not None else 10_000,
+            -(item["ssdeep_score"] or 0),
+        )
+    )
+    return {
+        "analysis_id": analysis_id,
+        "has_digests": bool(target["tlsh"] or target["ssdeep"]),
+        "compared": len(rows),
+        "items": matches[:limit],
+        "thresholds": {"tlsh_max_distance": TLSH_CLOSE_DISTANCE, "ssdeep_min_score": 1},
+        "note": "Byte-level resemblance only; not shared authorship, purpose or verdict.",
+    }

@@ -65,6 +65,7 @@ from .modules.file_intel import (
     analyze_file,
     get_file_analysis,
     list_file_analyses,
+    similar_file_analyses,
 )
 from .reporting import (
     render_csv_report,
@@ -1070,6 +1071,17 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("file-intelligence")
         self._json(200, get_file_analysis(self.database_path, match.group(1)))
 
+    def api_file_similar_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("file-intelligence")
+        self._json(
+            200,
+            similar_file_analyses(
+                self.database_path, match.group(1), limit=_query_int(query, "limit", 20)
+            ),
+        )
+
     # --- indicators, settings, modules, CISA KEV -----------------------------
 
     def api_indicators_get(
@@ -1554,6 +1566,12 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "GET",
         re.compile(rf"^/api/intelligence/files/{_ID_PATTERN}$"),
         "api_file_analysis_get",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(rf"^/api/intelligence/files/{_ID_PATTERN}/similar$"),
+        "api_file_similar_get",
         MAX_BODY_BYTES,
     ),
     (
