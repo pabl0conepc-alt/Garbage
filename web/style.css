@@ -5571,3 +5571,9 @@ dialog:focus-visible,
 .inline-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .attack-list { margin: 6px 0 10px; padding-left: 18px; line-height: 1.7; font-size: 13px; }
 .attack-list li { overflow-wrap: anywhere; }
+
+/* Cases: objective, report sections */
+.case-objective { margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius); color: var(--text-secondary); overflow-wrap: anywhere; }
+.case-objective strong { color: var(--text); }
+.report-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 8px 16px; }
+.report-graph svg { width: 100%; height: auto; border-radius: 8px; }

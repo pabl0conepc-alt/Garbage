@@ -630,6 +630,15 @@ const ERROR_PATTERNS = [
   [/^this plugin declared no network access$/, () => "Este plugin não declarou acesso à rede"],
   [/^request limit of (\d+) reached$/, (m) => `Limite de ${m[1]} requisições atingido`],
   [/^the plugin is invalid: (.+)$/, (m) => `O plugin é inválido: ${m[1]}`],
+  [/^this is not a GARBAGE case package$/, () => "Este arquivo não é um pacote de caso do GARBAGE"],
+  [/^the case package was modified after export \(SHA-256 does not match\)$/, () => "O pacote foi alterado depois de exportado (o SHA-256 não confere)"],
+  [/^unsupported case package version: (.+)$/, (m) => `Versão de pacote não suportada: ${m[1]}`],
+  [/^file content does not match its recorded SHA-256$/, () => "o conteúdo do arquivo não confere com o SHA-256 registrado"],
+  [/^not in the local ATT&CK data; load ATT&CK first$/, () => "fora dos dados locais do ATT&CK; carregue o ATT&CK primeiro"],
+  [/^endpoint missing or unknown type$/, () => "ponta ausente ou tipo desconhecido"],
+  [/^unknown entity type$/, () => "tipo de entidade desconhecido"],
+  [/^evidence files exceed 48 MiB; export without files$/, () => "Os arquivos de evidência passam de 48 MiB; exporte sem os arquivos"],
+  [/^unknown report sections: (.+)$/, (m) => `Seções de relatório desconhecidas: ${m[1]}`],
   [/^plugin\.json is missing$/, () => "Falta o plugin.json"],
   [/^give a registrable domain such as example\.com$/, () => "Informe um domínio registrável, como example.com"],
   [/^the selected objects have no simple observable patterns$/, () => "Os objetos escolhidos não têm padrões simples de observáveis"],
@@ -752,6 +761,12 @@ const ACTIVITY_PATTERNS = [
   [/^Sigma rules refreshed: (\S+), (\d+) rules$/, "Regras Sigma atualizadas: $1, $2 regras"],
   [/^Plugin approved: (.+) \((\w+)\)$/, "Plugin aprovado: $1 ($2)"],
   [/^Plugin disabled: (.+)$/, "Plugin desativado: $1"],
+  [/^Investigation archived: (.+)$/, "Investigação arquivada: $1"],
+  [/^Investigation restored: (.+)$/, "Investigação desarquivada: $1"],
+  [/^Investigation duplicated from (.+): (.+)$/, "Investigação duplicada de $1: $2"],
+  [/^Case package exported: (.+)$/, "Pacote do caso exportado: $1"],
+  [/^Case package imported: (.+) \((\w+)\)$/, "Pacote de caso importado: $1 ($2)"],
+  [/^Evidence note added: (.+)$/, "Anotação de evidência: $1"],
 ];
 
 const FORMAT_LABEL_PT = {
@@ -839,6 +854,7 @@ const TEXT_PT = {
   bitsquatting: "bit trocado", addition: "acréscimo", subdomain: "subdomínio", "tld-swap": "outro TLD",
   "TAXII feeds and Sigma rules": "Feeds TAXII e regras Sigma",
   "Local plugin approvals": "Aprovações de plugins locais",
+  "Case objective and archive, evidence custody and notes": "Objetivo e arquivamento de casos, custódia e anotações de evidências",
 };
 
 function translateText(value) {
@@ -1625,7 +1641,15 @@ G.newInvestigation = async function newInvestigation() {
         label: "Descrição",
         type: "textarea",
         rows: 3,
-        placeholder: "Escopo, contexto ou objetivo do analista",
+        placeholder: "Escopo e contexto",
+      },
+      {
+        name: "objective",
+        label: "Objetivo",
+        type: "textarea",
+        rows: 2,
+        maxlength: 2000,
+        placeholder: "A pergunta que o caso precisa responder",
       },
     ],
     submitLabel: "Criar investigação",

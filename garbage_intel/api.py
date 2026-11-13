@@ -56,7 +56,8 @@ from .modules import attack
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
-from . import plugins
+from . import cases, custody, plugins
+from .report_sections import parse_sections
 from .graph_io import import_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
 from .transforms import entity_history, list_transforms, run_transforms
@@ -467,6 +468,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.database_path,
             self._text(payload, "name") or "",
             self._text(payload, "description", required=False) or "",
+            self._text(payload, "objective", required=False) or "",
         )
         self._json(201, result)
 
@@ -480,7 +482,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("investigations")
-        allowed = {"name", "description", "status"}
+        allowed = {"name", "description", "status", "objective"}
         unknown = set(payload) - allowed
         if unknown:
             raise ValidationError(
@@ -497,6 +499,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             ) or ""
         if "status" in payload:
             fields["status"] = self._text(payload, "status") or ""
+        if "objective" in payload:
+            fields["objective"] = self._text(payload, "objective", required=False) or ""
         result = update_investigation(
             self.database_path, match.group(1), **fields
         )
@@ -535,7 +539,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         if file_format in ("stix", "misp", "iocs"):
             self._send_cti_export(match.group(1), file_format, _query_text(query, "tlp", "amber").strip().lower())
             return
-        report = build_report(self.database_path, match.group(1))
+        sections = parse_sections(_query_text(query, "sections", "")) if _query_text(query, "sections", "") else None
+        report = build_report(self.database_path, match.group(1), sections)
         if file_format == "json":
             body = json.dumps(report, ensure_ascii=False, indent=2)
             content_type = "application/json; charset=utf-8"
@@ -1045,7 +1050,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     ) -> None:
         self._module("evidence")
         data, _media_type, original_name, _is_image = read_evidence_file(
-            self.database_path, match.group(1)
+            self.database_path, match.group(1), purpose="downloaded"
         )
         self._send(
             200,
@@ -1059,7 +1064,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     ) -> None:
         self._module("evidence")
         data, media_type, original_name, is_image = read_evidence_file(
-            self.database_path, match.group(1)
+            self.database_path, match.group(1), purpose="previewed"
         )
         if not is_image:
             raise ConflictError("preview is only available for image evidence")
@@ -1657,6 +1662,51 @@ class RequestHandler(BaseHTTPRequestHandler):
     def api_sigma_rule(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._json(200, sigma.get_rule(self.database_path, match.group(1)))
 
+    def api_case_archive(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        archived = payload.get("archived", True)
+        if not isinstance(archived, bool) or set(payload) - {"archived"}:
+            raise ValidationError("send {\"archived\": true or false}")
+        self._json(200, cases.set_archived(self.database_path, match.group(1), archived))
+
+    def api_case_duplicate(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        if set(payload) - {"name"}:
+            raise ValidationError("only name may be given")
+        self._json(201, cases.duplicate(self.database_path, match.group(1), name=payload.get("name")))
+
+    def api_case_package(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("investigations")
+        include = _query_text(query, "files", "1") != "0"
+        package = cases.export_package(self.database_path, match.group(1), include_files=include)
+        name = package["content"]["case"]["name"]
+        body = json.dumps(package, ensure_ascii=False, indent=1).encode("utf-8")
+        self._send(200, "application/json; charset=utf-8", body,
+                   {"Content-Disposition": _attachment_disposition(_report_filename(name, "case.json").replace("-report.", "-"))})
+
+    def api_case_import(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        if set(payload) - {"package", "commit", "name"}:
+            raise ValidationError("send package, commit and optionally name")
+        commit = payload.get("commit", False)
+        if not isinstance(commit, bool):
+            raise ValidationError("commit must be a boolean")
+        self._json(201 if commit else 200, cases.import_package(self.database_path, payload.get("package"), commit=commit, name=payload.get("name")))
+
+    def api_evidence_custody(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        self._json(200, custody.chain(self.database_path, match.group(1)))
+
+    def api_evidence_notes(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        self._json(200, custody.list_notes(self.database_path, match.group(1)))
+
+    def api_evidence_note_add(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("evidence")
+        if set(payload) - {"body"}:
+            raise ValidationError("send body")
+        self._json(201, custody.add_note(self.database_path, match.group(1), payload.get("body")))
+
     def api_plugins(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._json(200, plugins.list_plugins(self.database_path))
 
@@ -1763,7 +1813,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
         self._module("report-center")
-        report = build_report(self.database_path, match.group(1))
+        sections = parse_sections(_query_text(query, "sections", "")) if _query_text(query, "sections", "") else None
+        report = build_report(self.database_path, match.group(1), sections)
         self._send(
             200,
             "text/html; charset=utf-8",
@@ -1853,6 +1904,13 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
     ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/plugins$"), "api_plugins", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/archive$"), "api_case_archive", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/duplicate$"), "api_case_duplicate", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/package$"), "api_case_package", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/cases/import$"), "api_case_import", 72 * 1024 * 1024),
+    ("GET", re.compile(rf"^/api/evidence/{_ID_PATTERN}/custody$"), "api_evidence_custody", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/evidence/{_ID_PATTERN}/notes$"), "api_evidence_notes", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/evidence/{_ID_PATTERN}/notes$"), "api_evidence_note_add", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/plugins/rescan$"), "api_plugins_rescan", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/plugins/([a-z0-9][a-z0-9-]{1,40})/enable$"), "api_plugin_enable", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/plugins/([a-z0-9][a-z0-9-]{1,40})/disable$"), "api_plugin_disable", MAX_BODY_BYTES),

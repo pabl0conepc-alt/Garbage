@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -1128,6 +1128,40 @@ def _migrate_plugins(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_cases(connection: sqlite3.Connection) -> None:
+    """Version 12: case objective and archive flag, evidence custody chain
+    and evidence notes."""
+    _ensure_column(connection, "investigations", "objective", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(connection, "investigations", "archived_at", "TEXT NOT NULL DEFAULT ''")
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS evidence_events (
+               id TEXT PRIMARY KEY,
+               evidence_id TEXT NOT NULL,
+               investigation_id TEXT NOT NULL,
+               sequence INTEGER NOT NULL,
+               action TEXT NOT NULL,
+               actor TEXT NOT NULL DEFAULT 'analyst',
+               detail TEXT NOT NULL DEFAULT '',
+               sha256 TEXT NOT NULL DEFAULT '',
+               occurred_at TEXT NOT NULL,
+               previous_hash TEXT NOT NULL,
+               entry_hash TEXT NOT NULL,
+               UNIQUE (evidence_id, sequence)
+           );
+           CREATE INDEX IF NOT EXISTS evidence_events_evidence ON evidence_events(evidence_id, sequence);
+           CREATE TABLE IF NOT EXISTS evidence_notes (
+               id TEXT PRIMARY KEY,
+               evidence_id TEXT NOT NULL REFERENCES evidence(id) ON DELETE CASCADE,
+               body TEXT NOT NULL,
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS evidence_notes_evidence ON evidence_notes(evidence_id, created_at);"""
+    )
+    from .custody import backfill
+
+    backfill(connection)
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -1153,6 +1187,7 @@ MIGRATIONS = (
     (9, "Full-text search index", _migrate_search_index),
     (10, "TAXII feeds and Sigma rules", _migrate_cti_feeds),
     (11, "Local plugin approvals", _migrate_plugins),
+    (12, "Case objective and archive, evidence custody and notes", _migrate_cases),
 )
 
 

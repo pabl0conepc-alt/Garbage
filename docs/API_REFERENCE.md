@@ -53,6 +53,37 @@ Case membership:
 | POST/DELETE | `/api/investigations/{id}/entities[/{entityId}]` |
 | POST/DELETE | `/api/investigations/{id}/sources[/{sourceId}]` |
 
+### Case lifecycle and packages
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST, PATCH | `/api/investigations`, `/api/investigations/{id}` | Also accept `objective` (up to 2,000 characters) |
+| POST | `/api/investigations/{id}/archive` | `{archived: true|false}`; archived cases carry `archived_at` and leave the active lists; nothing is deleted |
+| POST | `/api/investigations/{id}/duplicate` | `{name?}`: new open case with the objective, entities, case relationships, sources and techniques; observations and evidence stay with the original |
+| GET | `/api/investigations/{id}/package?files=1` | Download a `garbage-case` v1 package: case, status history, observations, entities, relationships, sources, evidence with custody log, notes and (unless `files=0`) file contents up to 48 MiB, techniques and file analyses, plus a SHA-256 over the canonical content |
+| POST | `/api/cases/import` | `{package, commit?, name?}`: preview (default) or import into a new case. A changed package (digest mismatch) is refused; each evidence file is re-hashed and refused when it does not match; entities are reused by type and identifier |
+
+### Evidence custody and notes
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/evidence/{id}/custody` | Hash-chained events (`recorded`, `verified`, `accessed`, `annotated`, `exported`, `imported`, `imported-history`, `deleted`) with `intact`, `broken_at` and the head hash; still readable after the evidence is deleted |
+| GET, POST | `/api/evidence/{id}/notes` | List or add an analyst note (`{body}`), which also enters the custody log |
+
+Downloads and previews are logged as `accessed`. Evidence recorded before
+schema 12 starts its log with a backfilled `recorded` event.
+
+### Report sections
+
+`GET /api/investigations/{id}/export?format=html|json|markdown&sections=...`
+and `/reports/{id}?sections=...` take a comma list of `summary`,
+`methodology`, `entities`, `relationships`, `graph`, `evidence`, `custody`,
+`sources`, `observations`, `indicators`, `correlations`, `techniques`,
+`limitations`. Without it the original set is used. `methodology` is
+generated from the case records (sources queried with outcomes, transforms,
+file analyses, collection bases, verification states, imports); `graph` is a
+static SVG laid out per connected component.
+
 ## Entities and relationships
 
 | Method | Path | Purpose |
