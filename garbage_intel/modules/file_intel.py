@@ -12,6 +12,7 @@ import io
 import json
 import math
 import re
+import struct
 import tarfile
 import zipfile
 import zlib
@@ -29,6 +30,7 @@ from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
 from .hardening import describe_hardening
 from .imaging import inspect_image
 from .indicators import extract_indicators
+from .legacy_formats import FormatError, analyse_compound, analyse_iso, analyse_lnk, analyse_rtf, detect_legacy
 
 MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_ARCHIVE_ENTRIES = 500
@@ -38,6 +40,7 @@ MAX_STRINGS = 150
 MAX_STRING_CHARS = 6000
 MAX_SECTIONS = 96
 MAX_IMPORTS = 80
+MAX_EXTRA_TEXT = 200_000
 
 _FORMAT_LABELS = {
     "pdf": "PDF document",
@@ -65,6 +68,14 @@ _FORMAT_LABELS = {
     "pe": "PE executable",
     "macho": "Mach-O executable",
     "ole": "OLE compound document",
+    "doc": "Word 97-2003 document",
+    "xls": "Excel 97-2003 workbook",
+    "ppt": "PowerPoint 97-2003 presentation",
+    "msg": "Outlook message",
+    "msi": "Windows Installer package",
+    "lnk": "Windows shortcut (LNK)",
+    "iso": "ISO 9660 disc image",
+    "rtf": "Rich Text Format document",
     "sqlite": "SQLite database",
     "woff": "WOFF font",
     "woff2": "WOFF2 font",
@@ -99,6 +110,14 @@ _MEDIA_TYPES = {
     "pe": "application/vnd.microsoft.portable-executable",
     "macho": "application/x-mach-binary",
     "ole": "application/x-ole-storage",
+    "doc": "application/msword",
+    "xls": "application/vnd.ms-excel",
+    "ppt": "application/vnd.ms-powerpoint",
+    "msg": "application/vnd.ms-outlook",
+    "msi": "application/x-msi",
+    "lnk": "application/x-ms-shortcut",
+    "iso": "application/x-iso9660-image",
+    "rtf": "application/rtf",
     "sqlite": "application/vnd.sqlite3",
     "woff": "font/woff",
     "woff2": "font/woff2",
@@ -132,6 +151,14 @@ _EXTENSIONS = {
     "pe": {"exe", "dll", "sys", "scr", "cpl"},
     "macho": {"macho", "dylib"},
     "sqlite": {"sqlite", "sqlite3", "db"},
+    "doc": {"doc", "dot"},
+    "xls": {"xls", "xlt", "xla"},
+    "ppt": {"ppt", "pps", "pot"},
+    "msg": {"msg"},
+    "msi": {"msi", "msp"},
+    "lnk": {"lnk"},
+    "iso": {"iso", "img"},
+    "rtf": {"rtf"},
     "woff": {"woff"},
     "woff2": {"woff2"},
     "ttf": {"ttf"},
@@ -874,7 +901,7 @@ def detect_format(data: bytes, filename: str = "") -> dict[str, str]:
     elif header.startswith(b"SQLite format 3\x00"):
         kind = "sqlite"
     elif header.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
-        kind = "ole"
+        kind = detect_legacy(data) or "ole"
     elif header.startswith(b"7z\xbc\xaf\x27\x1c"):
         kind = "7z"
     elif header.startswith(b"Rar!\x1a\x07"):
@@ -887,6 +914,8 @@ def detect_format(data: bytes, filename: str = "") -> dict[str, str]:
         kind = "ttf"
     elif header.startswith(b"OTTO"):
         kind = "otf"
+    elif detect_legacy(data):
+        kind = detect_legacy(data) or "unknown"
     else:
         text_kind = _text_kind(data)
         if text_kind:
@@ -931,8 +960,10 @@ def _extract_strings(data: bytes) -> dict[str, Any]:
     return {"count": len(found), "truncated": truncated, "items": found}
 
 
-def _indicators_from_strings(strings: list[dict[str, Any]]) -> list[dict[str, str]]:
+def _indicators_from_strings(strings: list[dict[str, Any]], extra_text: str = "") -> list[dict[str, str]]:
     content = "\n".join(item["value"] for item in strings["items"])[:MAX_STRING_CHARS]
+    if extra_text:
+        content += "\n" + extra_text[:MAX_EXTRA_TEXT]
     findings = extract_indicators(
         [
             {
@@ -952,7 +983,7 @@ def _indicators_from_strings(strings: list[dict[str, Any]]) -> list[dict[str, st
             {
                 "type": finding["type"],
                 "value": finding["value"],
-                "note": "Syntactic match in extracted strings; not a reputation result.",
+                "note": "Syntactic match in extracted strings or decoded content; not a reputation result.",
             },
         )
     return list(unique.values())[:200]
@@ -970,8 +1001,120 @@ def _extension_mismatch(filename: str, kind: str) -> bool:
     specific = {
         "pdf", "docx", "xlsx", "pptx", "zip", "gz", "tar", "png", "jpg", "jpeg",
         "gif", "webp", "exe", "dll", "elf", "so", "json", "xml", "html", "htm",
+        "doc", "xls", "ppt", "msi", "lnk", "iso", "rtf",
     }
     return suffix in specific
+
+
+def _vba_text(projects: list[dict[str, Any]]) -> list[str]:
+    return [module.get("source", "") for project in projects for module in project["modules"]]
+
+
+def _vba_findings(projects: list[dict[str, Any]]) -> list[dict[str, str]]:
+    modules = [module for project in projects for module in project["modules"]]
+    if not projects:
+        return []
+    findings = [
+        {
+            "level": "warning",
+            "code": "vba-macros",
+            "message": f"VBA macro project with {len(modules)} module(s); source was decompressed for reading and not executed.",
+        }
+    ]
+    autoexec = sorted({word for module in modules for word in module.get("autoexec", [])})
+    if autoexec:
+        findings.append(
+            {
+                "level": "warning",
+                "code": "vba-autoexec",
+                "message": "Macros run automatically through: " + ", ".join(autoexec) + ".",
+            }
+        )
+    categories = sorted({category for module in modules for category in module.get("suspicious", {})})
+    if categories:
+        findings.append(
+            {
+                "level": "warning",
+                "code": "vba-suspicious-keywords",
+                "message": "Macro source uses keywords associated with: " + ", ".join(categories) + ". Keywords show capability, not behaviour.",
+            }
+        )
+    return findings
+
+
+def _ooxml_vba(data: bytes) -> list[dict[str, Any]]:
+    """Parse vbaProject.bin parts of OOXML documents in memory."""
+    projects: list[dict[str, Any]] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for info in archive.infolist()[:MAX_ARCHIVE_ENTRIES]:
+                if not info.filename.lower().endswith("vbaproject.bin") or info.file_size > MAX_FILE_BYTES:
+                    continue
+                try:
+                    compound = analyse_compound(archive.read(info))
+                except (FormatError, struct.error, zipfile.BadZipFile, NotImplementedError, RuntimeError):
+                    continue
+                for project in compound["vba"]:
+                    project["storage"] = f"{info.filename}:{project['storage']}"
+                    projects.append(project)
+    except (zipfile.BadZipFile, NotImplementedError, OSError, ValueError):
+        return []
+    return projects
+
+
+def _rtf_findings(document: dict[str, Any]) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    if document["object_count"]:
+        classes = ", ".join(document["object_classes"][:6]) or "unnamed"
+        findings.append(
+            {
+                "level": "note",
+                "code": "rtf-objects",
+                "message": f"Embedded OLE objects: {document['object_count']} (classes: {classes}). They were decoded for inspection, not opened.",
+            }
+        )
+    if document["equation_editor"]:
+        findings.append(
+            {
+                "level": "warning",
+                "code": "rtf-equation-editor",
+                "message": "An Equation Editor object is embedded; it is a frequent exploitation vector in RTF documents. Presence alone is not proof of an exploit.",
+            }
+        )
+    if document["remote_templates"]:
+        findings.append(
+            {
+                "level": "warning",
+                "code": "rtf-remote-template",
+                "message": "The document references a remote template, which Word may fetch on open.",
+            }
+        )
+    if document["auto_update_objects"] or document["linked_objects"]:
+        findings.append(
+            {
+                "level": "warning",
+                "code": "rtf-auto-update",
+                "message": "Objects are set to update automatically or link to an external source.",
+            }
+        )
+    if any(field["type"].startswith("DDE") for field in document["fields"]):
+        findings.append(
+            {
+                "level": "warning",
+                "code": "rtf-dde",
+                "message": "A DDE field is present; DDE can ask Word to start another program.",
+            }
+        )
+    packages = [item for item in document["objects"] if item.get("package_label")]
+    if packages:
+        findings.append(
+            {
+                "level": "warning",
+                "code": "rtf-package",
+                "message": "Packaged files are embedded: " + ", ".join(item["package_label"] for item in packages[:5]) + ".",
+            }
+        )
+    return findings
 
 
 def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
@@ -996,6 +1139,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
     findings: list[dict[str, str]] = []
     flags: list[str] = []
     imports: list[str] = []
+    extra_text: list[str] = []
 
     if kind in {"zip", "docx", "xlsx", "pptx", "epub", "jar", "apk"}:
         members, archive_flags, office_metadata = _zip_members(data)
@@ -1008,6 +1152,11 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         flags.extend(archive_flags)
         if office_metadata:
             metadata["document_properties"] = office_metadata
+        projects = _ooxml_vba(data)
+        if projects:
+            structure["vba"] = projects
+            extra_text.extend(_vba_text(projects))
+            findings.extend(_vba_findings(projects))
     elif kind == "tar":
         members, archive_flags = _tar_members(data)
         structure = {
@@ -1071,14 +1220,99 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             "first_bytes_utf8": encoded[:300],
             "bom": data.startswith(b"\xef\xbb\xbf"),
         }
-    elif kind == "ole":
-        findings.append(
-            {
-                "level": "note",
-                "code": "legacy-ole",
-                "message": "Legacy OLE compound document; structured parsing is limited to format identification.",
+    elif kind in {"ole", "doc", "xls", "ppt", "msg", "msi"}:
+        try:
+            compound = analyse_compound(data)
+        except (FormatError, struct.error) as exc:
+            flags.append(f"unreadable compound file ({exc})")
+        else:
+            structure = {"compound": compound}
+            properties = {**compound.get("summary", {}), **compound.get("document_summary", {})}
+            if properties:
+                metadata["document_properties"] = properties
+            flags.extend(compound["notes"])
+            extra_text.extend(_vba_text(compound["vba"]))
+            findings.extend(_vba_findings(compound["vba"]))
+            if compound.get("msi_custom_actions"):
+                findings.append(
+                    {
+                        "level": "warning",
+                        "code": "msi-custom-actions",
+                        "message": "The installer declares a CustomAction table; custom actions can run commands or embedded binaries during installation.",
+                    }
+                )
+            if compound["ole_objects"]:
+                findings.append(
+                    {
+                        "level": "note",
+                        "code": "ole-embedded-objects",
+                        "message": f"Embedded OLE objects are present ({len(compound['ole_objects'])}). They were listed, not opened.",
+                    }
+                )
+    elif kind == "lnk":
+        try:
+            shortcut = analyse_lnk(data)
+        except (FormatError, struct.error) as exc:
+            flags.append(f"unreadable shortcut ({exc})")
+        else:
+            structure = {"lnk": shortcut}
+            metadata["shortcut"] = {
+                key: shortcut[key]
+                for key in ("local_base_path", "relative_path", "working_dir", "arguments", "icon_location", "machine_id", "droid_mac", "target_modified")
+                if shortcut.get(key)
             }
-        )
+            extra_text.append(" ".join(str(shortcut.get(key, "")) for key in ("local_base_path", "relative_path", "arguments", "environment_target", "network_share")))
+            if shortcut["risky_command"]:
+                findings.append(
+                    {
+                        "level": "warning",
+                        "code": "lnk-command",
+                        "message": "The shortcut target or arguments reference a script host, downloader or remote path: " + ", ".join(shortcut["risky_command"]) + ".",
+                    }
+                )
+            if shortcut["padded_arguments"]:
+                findings.append(
+                    {
+                        "level": "warning",
+                        "code": "lnk-padded-arguments",
+                        "message": "The arguments contain a long run of whitespace, which hides the command in the Windows properties dialog.",
+                    }
+                )
+            if shortcut.get("machine_id"):
+                findings.append(
+                    {
+                        "level": "info",
+                        "code": "lnk-tracker",
+                        "message": "The shortcut carries the NetBIOS name of the machine where it was created; treat it as an investigative lead, not attribution.",
+                    }
+                )
+    elif kind == "iso":
+        try:
+            image = analyse_iso(data)
+        except (FormatError, struct.error) as exc:
+            flags.append(f"unreadable ISO image ({exc})")
+        else:
+            structure = {"iso": image, "entries": [{"name": item["path"], "size_bytes": item["size_bytes"] or 0, "ratio": None} for item in image["entries"]], "entry_count": image["entry_count"]}
+            metadata["volume"] = {key: image[key] for key in ("volume_id", "publisher", "preparer", "application", "created") if image.get(key)}
+            flags.extend(image["notes"])
+            extra_text.append("\n".join(item["path"] for item in image["entries"]))
+            if image["risky_entries"]:
+                findings.append(
+                    {
+                        "level": "warning",
+                        "code": "iso-executable-content",
+                        "message": "The image contains executable or script files: " + ", ".join(image["risky_entries"][:8]) + ". Disc images are a common way to deliver them without download marks.",
+                    }
+                )
+    elif kind == "rtf":
+        try:
+            document = analyse_rtf(data)
+        except (FormatError, ValueError) as exc:
+            flags.append(f"unreadable RTF ({exc})")
+        else:
+            structure = {"rtf": document}
+            extra_text.append("\n".join([*document["remote_templates"], *(item["target"] for item in document["fields"])]))
+            findings.extend(_rtf_findings(document))
 
     if len(data) > 1024 and entropy >= 7.2:
         findings.append(
@@ -1112,7 +1346,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
                 "message": "Structural notes: " + "; ".join(sorted(set(flags))),
             }
         )
-    indicators = _indicators_from_strings(strings)
+    indicators = _indicators_from_strings(strings, "\n".join(extra_text))
     hardening = describe_hardening(kind, data)
     similarity = similarity_digests(data)
     return {
