@@ -1,0 +1,243 @@
+{
+ "has_more": false,
+ "results": [
+  {
+   "_id": "01a1d26e-79d9-701d-85e3-144fa26dd6c9",
+   "_score": null,
+   "canonical": {
+    "page": {
+     "url": "baliprema.com"
+    },
+    "task": {
+     "url": "baliprema.com"
+    }
+   },
+   "labels": [],
+   "page": {
+    "apexDomain": "baliprema.com",
+    "apexDomainAgeDays": 3476,
+    "asn": "AS13335",
+    "asnname": "CLOUDFLARENET - Cloudflare, Inc., US",
+    "country": "CA",
+    "domain": "baliprema.com",
+    "domainAgeDays": 3476,
+    "ip": "23.227.38.32",
+    "language": "en",
+    "mimeType": "text/html",
+    "ptr": "myshopify.com",
+    "redirected": "https-only",
+    "server": "cloudflare",
+    "status": "200",
+    "title": "Bali Prema Everyday Resort Wear",
+    "tlsAgeDays": 45,
+    "tlsIssuer": "YE1",
+    "tlsValidDays": 89,
+    "tlsValidFrom": "2026-09-28T23:22:32.000Z",
+    "url": "https://baliprema.com/"
+   },
+   "result": "https://urlscan.io/api/v1/result/01a1d26e-79d9-701d-85e3-144fa26dd6c9/",
+   "screenshot": "https://urlscan.io/screenshots/01a1d26e-79d9-701d-85e3-144fa26dd6c9.png",
+   "sort": [
+    1794531836506,
+    "01a1d26e-79d9-701d-85e3-144fa26dd6c9"
+   ],
+   "stats": {
+    "dataLength": 55898549,
+    "encodedDataLength": 32790255,
+    "requests": 392,
+    "uniqCountries": 3,
+    "uniqIPs": 40
+   },
+   "submitter": {},
+   "task": {
+    "apexDomain": "baliprema.com",
+    "domain": "baliprema.com",
+    "method": "api",
+    "time": "2026-11-13T01:03:56.506Z",
+    "url": "http://baliprema.com/",
+    "uuid": "01a1d26e-79d9-701d-85e3-144fa26dd6c9",
+    "visibility": "public"
+   }
+  },
+  {
+   "_id": "01a1d25e-08d4-748f-b74c-b16c3a87f1db",
+   "_score": null,
+   "canonical": {
+    "page": {
+     "url": "tw.yahoo.com"
+    },
+    "task": {
+     "url": "jk-whatsapp.com"
+    }
+   },
+   "labels": [],
+   "page": {
+    "apexDomain": "yahoo.com",
+    "apexDomainAgeDays": 4979,
+    "asn": "AS14777",
+    "asnname": "YAHOO - Yahoo Holdings Inc., US",
+    "country": "US",
+    "domain": "tw.yahoo.com",
+    "domainAgeDays": 4979,
+    "ip": "69.147.92.11",
+    "language": "zh-Hant",
+    "mimeType": "text/html",
+    "ptr": "e1.ycpi.vip.dca.yahoo.com",
+    "redirected": "off-domain",
+    "server": "ATS",
+    "status": "200",
+    "title": "Yahoo",
+    "tlsAgeDays": 11,
+    "tlsIssuer": "DigiCert Global G2 TLS RSA SHA256 2020 CA1",
+    "tlsValidDays": 51,
+    "tlsValidFrom": "2026-11-02T00:00:00.000Z",
+    "umbrellaRank": 206955,
+    "url": "https://tw.yahoo.com/"
+   },
+   "result": "https://urlscan.io/api/v1/result/01a1d25e-08d4-748f-b74c-b16c3a87f1db/",
+   "screenshot": "https://urlscan.io/screenshots/01a1d25e-08d4-748f-b74c-b16c3a87f1db.png",
+   "sort": [
+    1794530781736,
+    "01a1d25e-08d4-748f-b74c-b16c3a87f1db"
+   ],
+   "stats": {
+    "dataLength": 22786026,
+    "encodedDataLength": 9738069,
+    "requests": 1101,
+    "uniqCountries": 12,
+    "uniqIPs": 166
+   },
+   "submitter": {},
+   "task": {
+    "apexDomain": "jk-whatsapp.com",
+    "domain": "jk-whatsapp.com",
+    "method": "api",
+    "time": "2026-11-13T00:46:21.736Z",
+    "url": "http://jk-whatsapp.com/",
+    "uuid": "01a1d25e-08d4-748f-b74c-b16c3a87f1db",
+    "visibility": "public"
+   }
+  },
+  {
+   "_id": "01a1d25d-ebe5-760d-8e5d-7bc57312fc00",
+   "_score": null,
+   "canonical": {
+    "page": {
+     "url": "yahoo.com"
+    },
+    "task": {
+     "url": "ticket.new-whatsapp.com"
+    }
+   },
+   "labels": [],
+   "page": {
+    "apexDomain": "yahoo.com",
+    "apexDomainAgeDays": 4979,
+    "asn": "AS14777",
+    "asnname": "YAHOO - Yahoo Holdings Inc., US",
+    "country": "US",
+    "domain": "www.yahoo.com",
+    "domainAgeDays": 4979,
+    "ip": "69.147.92.11",
+    "language": "en",
+    "mimeType": "text/html",
+    "ptr": "e1.ycpi.vip.dca.yahoo.com",
+    "redirected": "off-domain",
+    "server": "ATS",
+    "status": "200",
+    "title": "Yahoo | Mail, Weather, Search, Politics, News, Finance, Sports & Videos",
+    "tlsAgeDays": 11,
+    "tlsIssuer": "DigiCert Global G2 TLS RSA SHA256 2020 CA1",
+    "tlsValidDays": 51,
+    "tlsValidFrom": "2026-11-02T00:00:00.000Z",
+    "umbrellaRank": 5615,
+    "url": "https://www.yahoo.com/"
+   },
+   "result": "https://urlscan.io/api/v1/result/01a1d25d-ebe5-760d-8e5d-7bc57312fc00/",
+   "screenshot": "https://urlscan.io/screenshots/01a1d25d-ebe5-760d-8e5d-7bc57312fc00.png",
+   "sort": [
+    1794530780869,
+    "01a1d25d-ebe5-760d-8e5d-7bc57312fc00"
+   ],
+   "stats": {
+    "dataLength": 27296568,
+    "encodedDataLength": 9803700,
+    "requests": 1764,
+    "uniqCountries": 11,
+    "uniqIPs": 199
+   },
+   "submitter": {},
+   "task": {
+    "apexDomain": "new-whatsapp.com",
+    "domain": "ticket.new-whatsapp.com",
+    "method": "api",
+    "time": "2026-11-13T00:46:20.869Z",
+    "url": "https://ticket.new-whatsapp.com/",
+    "uuid": "01a1d25d-ebe5-760d-8e5d-7bc57312fc00",
+    "visibility": "public"
+   }
+  },
+  {
+   "_id": "01a1d25d-fb53-7370-99c2-3df55f10f8e4",
+   "_score": null,
+   "canonical": {
+    "page": {
+     "url": "yahoo.com"
+    },
+    "task": {
+     "url": "career.profi-whatsapp.com"
+    }
+   },
+   "labels": [],
+   "page": {
+    "apexDomain": "yahoo.com",
+    "apexDomainAgeDays": 4979,
+    "asn": "AS14779",
+    "asnname": "YAHOO - Yahoo Holdings Inc., US",
+    "country": "US",
+    "domain": "www.yahoo.com",
+    "domainAgeDays": 4979,
+    "ip": "69.147.82.61",
+    "language": "en",
+    "mimeType": "text/html",
+    "ptr": "e2.ycpi.vip.nya.yahoo.com",
+    "redirected": "off-domain",
+    "server": "ATS",
+    "status": "200",
+    "title": "Yahoo | Mail, Weather, Search, Politics, News, Finance, Sports & Videos",
+    "tlsAgeDays": 11,
+    "tlsIssuer": "DigiCert Global G2 TLS RSA SHA256 2020 CA1",
+    "tlsValidDays": 51,
+    "tlsValidFrom": "2026-11-02T00:00:00.000Z",
+    "umbrellaRank": 5615,
+    "url": "https://www.yahoo.com/"
+   },
+   "result": "https://urlscan.io/api/v1/result/01a1d25d-fb53-7370-99c2-3df55f10f8e4/",
+   "screenshot": "https://urlscan.io/screenshots/01a1d25d-fb53-7370-99c2-3df55f10f8e4.png",
+   "sort": [
+    1794530776461,
+    "01a1d25d-fb53-7370-99c2-3df55f10f8e4"
+   ],
+   "stats": {
+    "dataLength": 27395331,
+    "encodedDataLength": 10364382,
+    "requests": 1846,
+    "uniqCountries": 10,
+    "uniqIPs": 200
+   },
+   "submitter": {},
+   "task": {
+    "apexDomain": "profi-whatsapp.com",
+    "domain": "career.profi-whatsapp.com",
+    "method": "api",
+    "time": "2026-11-13T00:46:16.461Z",
+    "url": "http://career.profi-whatsapp.com/",
+    "uuid": "01a1d25d-fb53-7370-99c2-3df55f10f8e4",
+    "visibility": "public"
+   }
+  }
+ ],
+ "search_date_limit_days": 30,
+ "took": 4982,
+ "total": 8042
+}

@@ -50,6 +50,7 @@ from .evidence import (
     read_evidence_file,
     verify_evidence,
 )
+from .intel_keys import delete_key, list_keys, set_key
 from .intel import (
     detect_artifact,
     get_run,
@@ -1305,6 +1306,27 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("intel-orchestrator")
         self._json(200, list_connectors(self.database_path))
 
+    def api_intel_keys(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, list_keys(self.database_path))
+
+    def api_intel_key_put(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("intel-orchestrator")
+        unknown = set(payload) - {"key"}
+        if unknown:
+            raise ValidationError(f"unsupported key fields: {', '.join(sorted(unknown))}")
+        self._json(200, set_key(self.database_path, match.group(1), payload.get("key")))
+
+    def api_intel_key_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, delete_key(self.database_path, match.group(1)))
+
     def api_intel_detect(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1729,6 +1751,24 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "GET",
         re.compile(r"^/api/intel/connectors$"),
         "api_intel_connectors",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/intel/keys$"),
+        "api_intel_keys",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "PUT",
+        re.compile(r"^/api/intel/keys/([a-z0-9-]{2,40})$"),
+        "api_intel_key_put",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "DELETE",
+        re.compile(r"^/api/intel/keys/([a-z0-9-]{2,40})$"),
+        "api_intel_key_delete",
         MAX_BODY_BYTES,
     ),
     ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),

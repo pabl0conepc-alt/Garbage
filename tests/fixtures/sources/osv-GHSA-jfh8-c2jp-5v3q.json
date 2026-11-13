@@ -1,0 +1,87 @@
+{
+ "affected": [
+  {
+   "database_specific": {
+    "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2021/12/GHSA-jfh8-c2jp-5v3q/GHSA-jfh8-c2jp-5v3q.json"
+   },
+   "package": {
+    "ecosystem": "Maven",
+    "name": "org.apache.logging.log4j:log4j-core",
+    "purl": "pkg:maven/org.apache.logging.log4j/log4j-core"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "2.13.0"
+      },
+      {
+       "fixed": "2.15.0"
+      }
+     ],
+     "type": "ECOSYSTEM"
+    }
+   ],
+   "versions": [
+    "2.13.0",
+    "2.13.1",
+    "2.13.2"
+   ]
+  },
+  {
+   "database_specific": {
+    "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2021/12/GHSA-jfh8-c2jp-5v3q/GHSA-jfh8-c2jp-5v3q.json"
+   },
+   "package": {
+    "ecosystem": "Maven",
+    "name": "org.apache.logging.log4j:log4j-core",
+    "purl": "pkg:maven/org.apache.logging.log4j/log4j-core"
+   },
+   "ranges": [
+    {
+     "events": [
+      {
+       "introduced": "2.0-beta9"
+      },
+      {
+       "fixed": "2.3.1"
+      }
+     ],
+     "type": "ECOSYSTEM"
+    }
+   ],
+   "versions": [
+    "2.0",
+    "2.0-beta9",
+    "2.0-rc1"
+   ]
+  }
+ ],
+ "aliases": [
+  "CVE-2021-44228"
+ ],
+ "database_specific": {
+  "cwe_ids": [
+   "CWE-20",
+   "CWE-400",
+   "CWE-502",
+   "CWE-917"
+  ],
+  "github_reviewed": true,
+  "github_reviewed_at": "2021-12-10T00:40:41Z",
+  "nvd_published_at": "2021-12-10T10:15:00Z",
+  "severity": "CRITICAL"
+ },
+ "details": "# Summary\n\nLog4j versions prior to 2.16.0 are subject to a remote code execution vulnerability via t",
+ "id": "GHSA-jfh8-c2jp-5v3q",
+ "modified": "2025-10-22T19:37:02.616807Z",
+ "published": "2021-12-10T00:40:56Z",
+ "schema_version": "1.9.0",
+ "severity": [
+  {
+   "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H/E:H",
+   "type": "CVSS_V3"
+  }
+ ],
+ "summary": "Remote code injection in Log4j"
+}

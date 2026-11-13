@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -790,6 +790,18 @@ def _migrate_file_engines(connection: sqlite3.Connection) -> None:
     _ensure_column(connection, "file_analyses", "ssdeep", "TEXT")
 
 
+def _migrate_api_keys(connection: sqlite3.Connection) -> None:
+    """Version 6: the operator's own API keys for keyed connectors."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS intel_api_keys (
+               provider_id TEXT PRIMARY KEY,
+               secret TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL
+           );"""
+    )
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -809,6 +821,7 @@ MIGRATIONS = (
     (3, "Persistent file intelligence analyses", _migrate_file_intelligence),
     (4, "Multi-source intelligence runs and source status", _migrate_intelligence_runs),
     (5, "YARA rule sets and file similarity digests", _migrate_file_engines),
+    (6, "Local API keys for keyed intelligence connectors", _migrate_api_keys),
 )
 
 

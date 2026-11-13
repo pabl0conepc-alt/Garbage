@@ -15,7 +15,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -29,6 +29,7 @@ from .db import (
     utc_now,
 )
 from .errors import NotFoundError, ValidationError
+from .intel_keys import get_secret
 from .modules.indicator_tools import inspect_value
 from .net import NetworkError, NetworkPolicyError
 from .validation import clean_text
@@ -53,6 +54,7 @@ RESULT_STATUSES = (
     "rate-limited",
     "network-disabled",
     "target-contact-disabled",
+    "key-missing",
     "unsupported",
 )
 MAX_FINDINGS_PER_CONNECTOR = 200
@@ -77,6 +79,8 @@ class ConnectorContext:
     query_type: str
     query_value: str
     investigation_id: str | None
+    # The operator's key for this connector's provider, when it has one.
+    api_key: str = ""
 
 
 ConnectorFunction = Callable[[ConnectorContext], list[Finding]]
@@ -94,6 +98,9 @@ class Connector:
     # request or TLS handshake), not to a third-party registry or archive.
     contacts_target: bool = False
     requires_key: bool = False
+    # Provider in garbage_intel.intel_keys; with requires_key False the key is
+    # optional and only raises the provider's limits.
+    key_id: str = ""
     rate_per_minute: int = 60
     ttl_seconds: int = 0
     source_url: str = ""
@@ -257,6 +264,7 @@ def list_connectors(database: str) -> dict[str, Any]:
         require_module(connection, "intel-orchestrator")
         network_allowed = setting_bool(connection, "intel.allow_network", False)
         target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
+        keys = {row["provider_id"] for row in connection.execute("SELECT provider_id FROM intel_api_keys")}
         status_rows = {
             row["connector_id"]: dict(row)
             for row in connection.execute("SELECT * FROM intel_source_status")
@@ -268,6 +276,8 @@ def list_connectors(database: str) -> dict[str, Any]:
             availability = "network-disabled"
         elif connector.contacts_target and not target_allowed:
             availability = "target-contact-disabled"
+        elif connector.requires_key and connector.key_id not in keys:
+            availability = "key-missing"
         else:
             availability = "ready"
         items.append(
@@ -278,6 +288,8 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "accepts": list(connector.accepts),
                 "network": connector.network,
                 "requires_key": connector.requires_key,
+                "key_id": connector.key_id,
+                "key_configured": connector.key_id in keys,
                 "contacts_target": connector.contacts_target,
                 "rate_per_minute": connector.rate_per_minute,
                 "ttl_seconds": connector.ttl_seconds,
@@ -312,6 +324,8 @@ def _run_one(
         findings, status, error = [], "error", str(exc)
     except Exception:  # noqa: BLE001 - a connector must never break the run
         findings, status, error = [], "error", "connector failed unexpectedly"
+    if context.api_key and context.api_key in error:
+        error = error.replace(context.api_key, "***")
     return status, findings, error, int((time.monotonic() - started) * 1000)
 
 
@@ -378,6 +392,11 @@ def run_query(
                         cached[connector.connector_id] = hit
 
     context = ConnectorContext(database, kind, detected["value"], case_id)
+    secrets = {
+        connector.key_id: get_secret(database, connector.key_id)
+        for connector in selected
+        if connector.key_id
+    }
     outcomes: dict[str, tuple[str, list[Finding], str, int, bool]] = {}
     runnable: list[Connector] = []
     for connector in selected:
@@ -390,6 +409,8 @@ def run_query(
             outcomes[connector.connector_id] = ("network-disabled", [], "", 0, False)
         elif connector.contacts_target and not target_allowed:
             outcomes[connector.connector_id] = ("target-contact-disabled", [], "", 0, False)
+        elif connector.requires_key and not secrets.get(connector.key_id):
+            outcomes[connector.connector_id] = ("key-missing", [], "", 0, False)
         elif not RATE_LIMITER.acquire(connector.connector_id, connector.rate_per_minute):
             outcomes[connector.connector_id] = ("rate-limited", [], "", 0, False)
         else:
@@ -398,7 +419,9 @@ def run_query(
     if runnable:
         with ThreadPoolExecutor(max_workers=min(workers, len(runnable))) as pool:
             futures = {
-                connector.connector_id: pool.submit(_run_one, connector, context)
+                connector.connector_id: pool.submit(
+                    _run_one, connector, replace(context, api_key=secrets.get(connector.key_id, ""))
+                )
                 for connector in runnable
             }
             for connector_id, future in futures.items():
@@ -854,3 +877,5 @@ register_connector(
 # the registry and Finding types above are fully defined.
 from .modules import intel_connectors as _intel_connectors  # noqa: E402,F401
 from .modules import intel_target_connectors as _intel_target_connectors  # noqa: E402,F401
+from .modules import intel_open_connectors as _intel_open_connectors  # noqa: E402,F401
+from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: E402,F401

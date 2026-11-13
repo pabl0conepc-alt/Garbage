@@ -1,0 +1,28 @@
+{
+ "build_version": "v0.12.2-2026.10.23",
+ "cached": true,
+ "data": {
+  "abuse_contacts": [
+   "helpdesk@apnic.net"
+  ],
+  "authoritative_rir": "apnic",
+  "earliest_time": "2026-11-12T09:01:45",
+  "latest_time": "2026-11-12T09:01:45",
+  "parameters": {
+   "cache": null,
+   "resource": "1.1.1.1"
+  }
+ },
+ "data_call_name": "abuse-contact-finder",
+ "data_call_status": "supported",
+ "messages": [],
+ "pipeline": "1478200",
+ "process_time": 3,
+ "query_id": "20261113011017-4ea104a9-af18-4342-a3c8-a8082942e841",
+ "see_also": [],
+ "server_id": "app173",
+ "status": "ok",
+ "status_code": 200,
+ "time": "2026-11-13T01:10:17.467419",
+ "version": "2.1"
+}
