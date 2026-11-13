@@ -59,6 +59,7 @@ G.NAV = [
       { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
       { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
       { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
+      { view: "geoint", label: "Mapa GEOINT", icon: "globe", module: "geoint" },
     ],
   },
   {
@@ -247,6 +248,7 @@ const ICON_PATHS = {
   chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
   merge: "M6 4v4a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 4v4a6 6 0 0 1-6 6M12 14v6M4 6l2-2 2 2M16 6l2-2 2 2",
   transform: "M4 12h10M10 7l5 5-5 5M18 5v14",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z",
   matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
   graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
   evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
@@ -872,6 +874,7 @@ const MODULE_TEXT = {
   "attack-matrix": ["MITRE ATT&CK", "Matriz Enterprise ATT&CK offline, detalhe de técnicas e técnicas vinculadas aos casos."],
   "yara-rules": ["Regras YARA", "Conjuntos locais de regras YARA verificados, testados e aplicados às análises de arquivos."],
   analytics: ["Painel analítico", "Gráficos do workspace e do caso calculados a partir dos registros salvos."],
+  geoint: ["Mapa GEOINT", "Mapa local das posições GPS do EXIF de imagens analisadas e da localização aproximada de redes vinda das consultas."],
   "cti-export": ["Exportação CTI", "Pacotes STIX 2.1, eventos MISP e CSV de IOCs gerados a partir dos registros do caso."],
   "media-forensics": ["Perícia de mídia", "Análise de mídia mais profunda planejada; hoje existem apenas hash e metadados."],
 };

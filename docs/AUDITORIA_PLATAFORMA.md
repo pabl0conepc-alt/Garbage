@@ -32,8 +32,8 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | 8. SOCMINT | parcial / fora | Dentro do escopo: dados públicos de **organizações e comunidades** (repositórios e organizações do GitHub, metadados públicos de canais e servidores). Fora: perfis e histórico de pessoas |
 | 9. Identidade digital | fora | Ver seção 4 |
 | 10. Infraestrutura | existe (quase todo) | DNS, rDNS (IPinfo/Shodan), RDAP, ASN, geolocalização de rede, CT, TLS, cabeçalhos, tecnologias, portas (Shodan), histórico (Wayback). Falta: árvore de subdomínios dedicada e DNS passivo (só com provedor pago) |
-| 11. Mídia | parcial | Metadados, hashes e EXIF básico. Falta: hash perceptual e duplicatas visuais, OCR (dependeria do Tesseract, opcional), frames de vídeo (dependeria do ffmpeg, opcional) |
-| 12. GEOINT | falta | Mapa sem tiles externos (CSP) para coordenadas de EXIF de arquivos fornecidos pelo usuário e localização aproximada de **redes**, sempre com origem e precisão |
+| 11. Mídia | parcial | EXIF completo com GPS (etapa 4a), pHash/dHash e imagens visualmente parecidas. Falta: OCR (dependeria do Tesseract, opcional), frames de vídeo (dependeria do ffmpeg, opcional) |
+| 12. GEOINT | existe (etapa 4a) | Mapa local (Natural Earth) com GPS do EXIF de imagens analisadas e localização aproximada de redes, sempre com origem e precisão |
 | 13. CTI | parcial | Falta: Sigma, cliente TAXII 2.1, feeds periódicos, perfis de grupos (os dados do ATT&CK já estão no banco) |
 | 14. Dark web | fora por ora | Exige Tor e fontes curadas; sem desenho seguro definido. Pode entrar depois como consulta a listas públicas de domínios onion em feeds de CTI |
 | 15. Casos | parcial | Falta: objetivo, arquivar, duplicar, exportar/importar o caso inteiro |

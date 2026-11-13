@@ -53,6 +53,7 @@ from .evidence import (
 from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
 from .modules import attack
+from .geoint import geo_points
 from .graph_io import import_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
 from .transforms import entity_history, list_transforms, run_transforms
@@ -148,6 +149,9 @@ _STATIC_FILES = {
     "views-attack.js": "text/javascript; charset=utf-8",
     "views-transforms.js": "text/javascript; charset=utf-8",
     "graph-tools.js": "text/javascript; charset=utf-8",
+    "image-hash.js": "text/javascript; charset=utf-8",
+    "world.json": "application/json; charset=utf-8",
+    "views-geoint.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -1081,7 +1085,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("file-intelligence")
-        allowed = {"filename", "content_base64", "investigation_id"}
+        allowed = {"filename", "content_base64", "investigation_id", "perceptual"}
         unknown = set(payload) - allowed
         if unknown:
             raise ValidationError(
@@ -1109,6 +1113,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data=data,
                 filename=filename,
                 investigation_id=investigation_id,
+                perceptual=payload.get("perceptual"),
             ),
         )
 
@@ -1560,6 +1565,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             entity_history(self.database_path, match.group(1), limit=_query_int(query, "limit", 50)),
         )
 
+    def api_geoint(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("geoint")
+        self._json(200, geo_points(self.database_path, investigation_id=_query_text(query, "investigation_id", "") or None))
+
     def api_graph_import(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
@@ -1731,6 +1742,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ),
     ("GET", re.compile(r"^/api/graph$"), "api_graph", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
+    ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/transforms$"), "api_transforms_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/transforms/run$"), "api_transforms_run", MAX_BODY_BYTES),
     (

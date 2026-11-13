@@ -27,6 +27,7 @@ from ..db import _connection, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
 from .embedded_scan import scan_signatures
+from .exif import parse_exif
 from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
 from .hardening import describe_hardening
 from .imaging import inspect_image
@@ -1215,6 +1216,18 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         if image:
             structure = {"image": image}
             metadata["image"] = image
+        exif = parse_exif(data)
+        if exif:
+            metadata["exif"] = exif
+            gps = exif.get("gps")
+            if gps and gps.get("valid"):
+                findings.append(
+                    {
+                        "level": "note",
+                        "code": "exif-gps",
+                        "message": f"The image carries GPS coordinates ({gps['latitude']}, {gps['longitude']}) written by the device. They can be stale, coarse or edited; treat them as a lead, not as where the file came from.",
+                    }
+                )
     elif kind in {"json", "xml", "html", "text"}:
         encoded = data[:4096].decode("utf-8", errors="replace")
         structure = {
@@ -1434,9 +1447,31 @@ def _ensure_analysis_table(connection: Any) -> None:
         "ON file_analyses(investigation_id, created_at DESC)"
     )
     columns = {row[1] for row in connection.execute("PRAGMA table_info(file_analyses)")}
-    for column in ("tlsh", "ssdeep"):
+    for column in ("tlsh", "ssdeep", "phash", "dhash"):
         if column not in columns:
             connection.execute(f"ALTER TABLE file_analyses ADD COLUMN {column} TEXT")
+
+
+_HASH64 = re.compile(r"[0-9a-f]{16}")
+IMAGE_FORMATS = frozenset({"png", "jpeg", "gif", "webp", "bmp"})
+
+
+def _perceptual(value: object, kind: str) -> dict[str, str] | None:
+    """Validate perceptual hashes computed by the browser from the decoded image."""
+    if value in (None, {}):
+        return None
+    if not isinstance(value, dict) or set(value) - {"phash", "dhash"}:
+        raise ValidationError("perceptual must be an object with phash and dhash")
+    hashes = {key: str(value.get(key, "")).lower() for key in ("phash", "dhash")}
+    if not all(_HASH64.fullmatch(item) for item in hashes.values()):
+        raise ValidationError("phash and dhash must be 16 hexadecimal characters")
+    # A format the browser decodes but the analyser does not recognise as an
+    # image (AVIF, HEIC) keeps its analysis; the hashes are simply not stored.
+    return hashes if kind in IMAGE_FORMATS else None
+
+
+def hamming64(first: str, second: str) -> int:
+    return bin(int(first, 16) ^ int(second, 16)).count("1")
 
 
 def analyze_file(
@@ -1445,8 +1480,16 @@ def analyze_file(
     data: bytes,
     filename: str = "",
     investigation_id: str | None = None,
+    perceptual: object = None,
 ) -> dict[str, Any]:
     analysis = analyze_bytes(data, filename)
+    hashes = _perceptual(perceptual, analysis["format"])
+    if hashes:
+        analysis["perceptual"] = {
+            **hashes,
+            "computed_by": "browser",
+            "method": "pHash: DCT of a 32x32 greyscale copy, 8x8 low frequencies against their median; dHash: 9x8 greyscale, horizontal gradient; image as displayed (EXIF orientation applied)",
+        }
     yara = scan_with_enabled(database, data)
     if yara is not None:
         analysis["yara"] = yara
@@ -1492,8 +1535,8 @@ def analyze_file(
         connection.execute(
             """INSERT INTO file_analyses
                (id, investigation_id, file_name, format, media_type,
-                size_bytes, sha256, analysis_json, created_at, tlsh, ssdeep)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                size_bytes, sha256, analysis_json, created_at, tlsh, ssdeep, phash, dhash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 analysis_id,
                 investigation_id,
@@ -1506,6 +1549,8 @@ def analyze_file(
                 created_at,
                 analysis["hashes"]["tlsh"],
                 analysis["hashes"]["ssdeep"],
+                hashes["phash"] if hashes else "",
+                hashes["dhash"] if hashes else "",
             ),
         )
         record_activity(
@@ -1580,6 +1625,9 @@ def get_file_analysis(database: str, analysis_id: str) -> dict[str, Any]:
 
 SIMILARITY_SCAN_LIMIT = 5000
 TLSH_CLOSE_DISTANCE = 100
+# pHash bits that may differ for two images to count as visually similar
+# (resizing, recompression, small edits stay well under this).
+PHASH_CLOSE_DISTANCE = 10
 
 
 def similar_file_analyses(database: str, analysis_id: str, *, limit: int = 20) -> dict[str, Any]:
@@ -1592,13 +1640,13 @@ def similar_file_analyses(database: str, analysis_id: str, *, limit: int = 20) -
     with _connection(database) as connection:
         _ensure_analysis_table(connection)
         target = connection.execute(
-            "SELECT id, sha256, tlsh, ssdeep FROM file_analyses WHERE id = ?", (analysis_id,)
+            "SELECT id, sha256, tlsh, ssdeep, phash, dhash FROM file_analyses WHERE id = ?", (analysis_id,)
         ).fetchone()
         if target is None:
             raise NotFoundError(f"file analysis not found: {analysis_id}")
         rows = connection.execute(
             """SELECT a.id, a.investigation_id, a.file_name, a.format, a.size_bytes,
-                      a.sha256, a.tlsh, a.ssdeep, a.created_at, i.name AS investigation_name
+                      a.sha256, a.tlsh, a.ssdeep, a.phash, a.dhash, a.created_at, i.name AS investigation_name
                FROM file_analyses a
                LEFT JOIN investigations i ON i.id = a.investigation_id
                WHERE a.id != ?
@@ -1610,23 +1658,27 @@ def similar_file_analyses(database: str, analysis_id: str, *, limit: int = 20) -
         exact = row["sha256"] == target["sha256"]
         distance = tlsh_compare(target["tlsh"], row["tlsh"]) if target["tlsh"] and row["tlsh"] else None
         score = ssdeep_score(target["ssdeep"], row["ssdeep"]) if target["ssdeep"] and row["ssdeep"] else None
-        if not exact and (distance is None or distance > TLSH_CLOSE_DISTANCE) and not score:
+        visual = hamming64(target["phash"], row["phash"]) if target["phash"] and row["phash"] else None
+        gradient = hamming64(target["dhash"], row["dhash"]) if target["dhash"] and row["dhash"] else None
+        close_visual = visual is not None and visual <= PHASH_CLOSE_DISTANCE
+        if not exact and (distance is None or distance > TLSH_CLOSE_DISTANCE) and not score and not close_visual:
             continue
-        item = {key: row[key] for key in row.keys() if key not in {"tlsh", "ssdeep"}}
-        item.update({"exact": exact, "tlsh_distance": distance, "ssdeep_score": score})
+        item = {key: row[key] for key in row.keys() if key not in {"tlsh", "ssdeep", "phash", "dhash"}}
+        item.update({"exact": exact, "tlsh_distance": distance, "ssdeep_score": score, "phash_distance": visual, "dhash_distance": gradient})
         matches.append(item)
     matches.sort(
         key=lambda item: (
             not item["exact"],
+            item["phash_distance"] if item["phash_distance"] is not None else 64,
             item["tlsh_distance"] if item["tlsh_distance"] is not None else 10_000,
             -(item["ssdeep_score"] or 0),
         )
     )
     return {
         "analysis_id": analysis_id,
-        "has_digests": bool(target["tlsh"] or target["ssdeep"]),
+        "has_digests": bool(target["tlsh"] or target["ssdeep"] or target["phash"]),
         "compared": len(rows),
         "items": matches[:limit],
-        "thresholds": {"tlsh_max_distance": TLSH_CLOSE_DISTANCE, "ssdeep_min_score": 1},
-        "note": "Byte-level resemblance only; not shared authorship, purpose or verdict.",
+        "thresholds": {"tlsh_max_distance": TLSH_CLOSE_DISTANCE, "ssdeep_min_score": 1, "phash_max_distance": PHASH_CLOSE_DISTANCE},
+        "note": "Byte-level (TLSH, ssdeep) and visual (pHash) resemblance only; not shared authorship, purpose or verdict.",
     }

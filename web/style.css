@@ -5542,3 +5542,24 @@ dialog:focus-visible,
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
+/* GEOINT map */
+.geo-shell { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr); gap: 18px; align-items: start; margin-bottom: 18px; }
+.geo-stage { position: relative; border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); overflow: hidden; background: #0b0d0f; }
+.geo-map { display: block; width: 100%; aspect-ratio: 2 / 1; cursor: grab; touch-action: none; }
+.geo-map:active { cursor: grabbing; }
+.geo-ocean { fill: #0b0d0f; }
+.geo-graticule { fill: none; stroke: rgba(240, 241, 242, 0.06); stroke-width: 0.15; vector-effect: non-scaling-stroke; }
+.geo-land { fill: #1d2125; stroke: #2c3237; stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.geo-borders { fill: none; stroke: #3a4147; stroke-width: 0.5; vector-effect: non-scaling-stroke; }
+.geo-marker { cursor: pointer; }
+.geo-marker.kind-photo { fill: var(--viz-1); stroke: #0b0d0f; }
+.geo-marker.kind-network { fill: none; stroke: var(--viz-2); }
+.geo-marker.is-selected { stroke: #ffffff; }
+.geo-marker:focus-visible { outline: none; stroke: #ffffff; }
+.geo-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.geo-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.geo-swatch.kind-photo { background: var(--viz-1); }
+.geo-swatch.kind-network { border: 2px solid var(--viz-2); }
+.geo-detail .hash { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .geo-shell { grid-template-columns: minmax(0, 1fr); } }

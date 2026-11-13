@@ -197,6 +197,32 @@ process with a 20 s deadline. The engine supports a documented subset of the
 YARA language (no modules, no `base64`, jumps need an upper bound up to 65,536);
 rule errors return `400` with the line number in the message.
 
+### Images: EXIF and perceptual hashes
+
+Image analyses (`png`, `jpeg`, `gif`, `webp`, `bmp`) carry `metadata.exif`
+when the file has an EXIF block (JPEG APP1, PNG `eXIf`, WebP `EXIF`, TIFF):
+make, model, lens, software, capture and modification times, orientation and
+`gps` (`latitude`, `longitude`, `altitude_m`, `gps_time_utc`,
+`horizontal_error_m`, `datum`, or `valid: false`). The author and body serial
+number are reported only as present, never copied. Valid GPS adds an
+`exif-gps` finding.
+
+`POST /api/intelligence/files` accepts `perceptual: {phash, dhash}` (16 hex
+digits each). The interface computes them in the browser from the decoded
+image (as displayed, EXIF orientation applied) with the imagehash library's
+definitions; the server stores them for images and ignores them otherwise.
+`/similar` adds `phash_distance` and `dhash_distance` (bits out of 64) and
+keeps a candidate when pHash is within 10 bits.
+
+## GEOINT
+
+`GET /api/geoint?investigation_id=` returns `points` of two kinds: `photo`
+(EXIF GPS of analysed images, `precision: device`) and `network` (newest
+`geolocation` finding per artifact from IPinfo, `precision:
+network-approximate`), with their source, time and case. Nothing is geocoded
+or fetched. The map's base layer is `web/world.json`, built by
+`tools/build_world_map.py` from Natural Earth 1:110m (public domain).
+
 ## Indicators and CTI
 
 | Method | Path | Purpose |

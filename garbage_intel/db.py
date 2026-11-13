@@ -322,6 +322,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "enabled",
     ),
     (
+        "geoint",
+        "GEOINT map",
+        "Local map of EXIF GPS positions from analysed images and approximate network locations from queries.",
+        "Analysis",
+        "1.0.0",
+        "enabled",
+    ),
+    (
         "cti-export",
         "CTI export",
         "STIX 2.1 bundles, MISP events and IOC CSV built from case records.",
