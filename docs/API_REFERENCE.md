@@ -313,6 +313,21 @@ The HTTP client loads the system CA bundle when the interpreter's compiled-in
 default is empty (standalone Python builds on NixOS), so TLS verification works
 without `SSL_CERT_FILE`.
 
+## Graph analytics and pivot
+
+`GET /api/graph` now also returns `analytics`: `{engine, communities,
+modularity, nodes: {id: {degree, betweenness, harmonic, community,
+community_size}}}`, computed on the simple undirected graph (duplicates and
+self-loops ignored). `GET /api/graph/path?from=&to=&investigation_id=` returns
+the shortest chain of recorded relationships.
+
+`POST /api/intel/runs/{id}/promote` with `{source_entity_id, investigation_id?,
+items: [{result_id, entity_type?, relationship_type?}]}` turns selected findings
+into entities (existing ones are reused) and relationships from the source
+entity, with confidence `possible`, status `not-verified` and the finding's
+source URL as reference. Duplicate relationships and unusable findings (null
+MX, the source itself) are reported under `skipped`.
+
 ## Modules
 
 | Method | Path | Purpose |

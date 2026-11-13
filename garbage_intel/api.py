@@ -23,6 +23,7 @@ from .entities import (
     delete_entity,
     delete_relationship,
     get_entity,
+    graph_path,
     graph_payload,
     link_entity_to_investigation,
     list_entities,
@@ -54,6 +55,7 @@ from .intel import (
     get_run,
     list_connectors,
     list_runs,
+    promote_results,
     record_run_observation,
     run_query,
 )
@@ -571,6 +573,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                 investigation_id=_query_text(query, "investigation_id", "") or None,
                 entity_type=_query_text(query, "entity_type", "") or None,
                 search=_query_text(query, "search", ""),
+            ),
+        )
+
+    def api_graph_path(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("relationship-graph")
+        start = _query_text(query, "from", "")
+        goal = _query_text(query, "to", "")
+        if not start or not goal:
+            raise ValidationError("from and to are required")
+        self._json(
+            200,
+            graph_path(
+                self.database_path,
+                start_id=start,
+                goal_id=goal,
+                investigation_id=_query_text(query, "investigation_id", "") or None,
             ),
         )
 
@@ -1258,6 +1278,27 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    def api_intel_run_promote(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("intel-orchestrator")
+        self._module("entities")
+        unknown = set(payload) - {"source_entity_id", "items", "investigation_id"}
+        if unknown:
+            raise ValidationError(
+                f"unsupported promote fields: {', '.join(sorted(unknown))}"
+            )
+        self._json(
+            201,
+            promote_results(
+                self.database_path,
+                match.group(1),
+                source_entity_id=payload.get("source_entity_id"),
+                items=payload.get("items"),
+                investigation_id=payload.get("investigation_id"),
+            ),
+        )
+
     def api_print_report(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1570,6 +1611,13 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "api_intel_run_record",
         MAX_BODY_BYTES,
     ),
+    (
+        "POST",
+        re.compile(rf"^/api/intel/runs/{_ID_PATTERN}/promote$"),
+        "api_intel_run_promote",
+        MAX_BODY_BYTES,
+    ),
+    ("GET", re.compile(r"^/api/graph/path$"), "api_graph_path", MAX_BODY_BYTES),
     (
         "GET",
         re.compile(r"^/api/intel/cisa-kev$"),

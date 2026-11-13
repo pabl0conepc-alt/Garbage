@@ -101,6 +101,10 @@ Delivered:
 - Target-contact connectors (plan phase 4): TLS certificate (own DER parser)
   and web fingerprint (security headers, cookies, technologies, favicon
   hash), behind a separate `intel.allow_target_contact` switch.
+- Graph analytics and pivot (plan phase 5): degree, betweenness and harmonic
+  centrality, deterministic Louvain communities and shortest paths in C++
+  (bit-identical Python fallback); node pivot that promotes approved findings
+  to entities and unverified relationships citing their source.
 
 Not delivered:
 

@@ -837,8 +837,53 @@ def graph_payload(
         "nodes": nodes,
         "edges": edges,
         "metrics": native.graph_metrics(nodes, edges),
+        "analytics": native.graph_analytics(nodes, edges),
         "entity_types": entity_types(),
         "relationship_types": relationship_types(),
+    }
+
+
+def graph_path(
+    database: str,
+    *,
+    start_id: str,
+    goal_id: str,
+    investigation_id: str | None = None,
+) -> dict[str, Any]:
+    """Shortest undirected chain of recorded relationships between two entities."""
+    payload = graph_payload(database, investigation_id=investigation_id)
+    names = {node["id"]: node for node in payload["nodes"]}
+    if start_id not in names or goal_id not in names:
+        raise NotFoundError("both entities must be part of the graph")
+    result = native.shortest_path(payload["nodes"], payload["edges"], start_id, goal_id)
+    hops = []
+    path = result["path"]
+    for left, right in zip(path, path[1:]):
+        edge = next(
+            (
+                item
+                for item in payload["edges"]
+                if {item["source_entity_id"], item["target_entity_id"]} == {left, right}
+            ),
+            None,
+        )
+        hops.append(
+            {
+                "from": left,
+                "to": right,
+                "relationship_id": edge["id"] if edge else "",
+                "relationship_type": edge["relationship_type"] if edge else "",
+                "verification_status": edge["verification_status"] if edge else "",
+            }
+        )
+    return {
+        "engine": result["engine"],
+        "path": [
+            {"id": item, "name": names[item]["name"], "entity_type": names[item]["entity_type"]}
+            for item in path
+        ],
+        "hops": hops,
+        "length": result["hops"],
     }
 
 

@@ -590,6 +590,152 @@ def record_run_observation(
     return {"observation": observation, "finding_count": len(results), "truncated": truncated}
 
 
+PROMOTABLE_TYPES = {
+    "dns-a": "ipv4",
+    "dns-aaaa": "ipv6",
+    "dns-ns": "domain",
+    "dns-cname": "domain",
+    "dns-mx": "domain",
+    "nameserver": "domain",
+    "ct-name": "domain",
+    "cert-san": "domain",
+    "organization": "organization",
+    "abuse-contact": "email",
+    "archive-capture": "url",
+    "http-redirect": "url",
+    "lookalike": "domain",
+    "asn": "other",
+    "as-name": "organization",
+    "cidr": "other",
+}
+MAX_PROMOTIONS = 50
+
+
+def promotion_value(result_type: str, value: str) -> str:
+    """Turn a finding into an entity identifier (MX priority, wildcard, dot)."""
+    clean = value.strip()
+    if result_type == "dns-mx":
+        clean = clean.split()[-1] if clean.split() else ""
+    if result_type in {"ct-name", "cert-san"} and clean.startswith("*."):
+        clean = clean[2:]
+    return clean.rstrip(".")
+
+
+def promote_results(
+    database: str,
+    run_id: str,
+    *,
+    source_entity_id: object,
+    items: object,
+    investigation_id: object = None,
+) -> dict[str, Any]:
+    """Pivot step approved by the analyst: selected findings become shared
+    entities linked to the source entity by recorded, unverified
+    relationships that cite the finding's source."""
+    from .entities import (
+        _normalize_identifier,
+        create_entity,
+        create_relationship,
+        get_entity,
+        link_entity_to_investigation,
+    )
+    from .errors import ConflictError
+
+    if not isinstance(source_entity_id, str) or not source_entity_id:
+        raise ValidationError("source_entity_id is required")
+    if not isinstance(items, list) or not items:
+        raise ValidationError("items must be a non-empty list")
+    if len(items) > MAX_PROMOTIONS:
+        raise ValidationError(f"at most {MAX_PROMOTIONS} findings can be promoted at once")
+    case_id = investigation_id if isinstance(investigation_id, str) and investigation_id else None
+    get_entity(database, source_entity_id, include_relations=False)
+    run = get_run(database, run_id)
+    if case_id:
+        # The pivot source must be in the case too, or the case graph would
+        # show the new entities without the relationships that explain them.
+        link_entity_to_investigation(database, case_id, source_entity_id)
+    results = {item["id"]: item for item in run["results"]}
+    created: list[dict[str, Any]] = []
+    reused: list[dict[str, Any]] = []
+    relationships: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("result_id"), str):
+            raise ValidationError("each item needs a result_id")
+        finding = results.get(item["result_id"])
+        if finding is None:
+            raise NotFoundError(f"finding not found in this run: {item['result_id']}")
+        entity_type = item.get("entity_type") or PROMOTABLE_TYPES.get(finding["result_type"], "other")
+        relationship_type = item.get("relationship_type") or "related-to"
+        identifier = promotion_value(finding["result_type"], finding["value"])
+        if not identifier or finding["data"].get("null_mx"):
+            skipped.append({"result_id": finding["id"], "reason": "finding has no usable identifier"})
+            continue
+        reference = finding["source_url"]
+        if not reference.startswith(("https://", "http://")):
+            reference = f"note://garbage/intel-run/{run['id']}"
+        description = (
+            f"Pivot from {run['query_type']} {run['query_value']} via "
+            f"{finding['connector_id']} ({finding['result_type']})."
+        )
+        try:
+            entity = create_entity(
+                database,
+                entity_type=entity_type,
+                name=identifier,
+                identifier=identifier,
+                description=description,
+                source_reference=reference,
+                collection_basis="public",
+            )
+            created.append(entity)
+        except ConflictError:
+            normalized = _normalize_identifier(str(entity_type), identifier)
+            with _connection(database) as connection:
+                row = connection.execute(
+                    "SELECT id FROM entities WHERE entity_type = ? AND identifier = ?",
+                    (entity_type, normalized),
+                ).fetchone()
+            if row is None:
+                raise
+            entity = get_entity(database, row["id"], include_relations=False)
+            reused.append(entity)
+        if entity["id"] == source_entity_id:
+            skipped.append({"result_id": finding["id"], "reason": "same entity as the pivot source"})
+            continue
+        if case_id:
+            link_entity_to_investigation(database, case_id, entity["id"])
+        with _connection(database) as connection:
+            duplicate = connection.execute(
+                """SELECT id FROM relationships
+                   WHERE source_entity_id = ? AND target_entity_id = ?
+                     AND relationship_type = ?""",
+                (source_entity_id, entity["id"], relationship_type),
+            ).fetchone()
+        if duplicate is not None:
+            skipped.append({"result_id": finding["id"], "reason": "relationship already recorded"})
+            continue
+        relationships.append(
+            create_relationship(
+                database,
+                source_entity_id=source_entity_id,
+                target_entity_id=entity["id"],
+                relationship_type=relationship_type,
+                description=description,
+                source_reference=reference,
+                confidence="possible",
+                verification_status="not-verified",
+                investigation_id=case_id,
+            )
+        )
+    return {
+        "created_entities": created,
+        "reused_entities": reused,
+        "relationships": relationships,
+        "skipped": skipped,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Built-in local connectors (no network)
 

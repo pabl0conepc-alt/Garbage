@@ -198,6 +198,62 @@ class OrchestratorTests(RuntimeTestCase):
                 self.database, empty["id"], investigation_id=case["id"], connector_ids=["local-structure"]
             )
 
+    def test_promote_creates_linked_entities_and_relationships(self):
+        from garbage_intel.entities import create_entity, graph_path, graph_payload
+
+        self.add(
+            "test-pivot",
+            lambda context: [
+                Finding("dns-a", "203.0.113.9", {}, "https://dns.example/q"),
+                Finding("dns-mx", "10 mail.example.org.", {}),
+                Finding("ct-name", "*.www.example.com", {}),
+            ],
+        )
+        case = create_investigation(self.database, "Case", "scope")
+        source = create_entity(self.database, entity_type="domain", identifier="example.com")
+        run = run_query(self.database, value="example.com", connector_ids=["test-pivot"])
+        ids = {item["result_type"]: item["id"] for item in run["results"]}
+        result = intel.promote_results(
+            self.database,
+            run["id"],
+            source_entity_id=source["id"],
+            investigation_id=case["id"],
+            items=[
+                {"result_id": ids["dns-a"], "entity_type": "ipv4", "relationship_type": "hosted-on"},
+                {"result_id": ids["dns-mx"]},
+                {"result_id": ids["ct-name"]},
+            ],
+        )
+        self.assertEqual(
+            [item["identifier"] for item in result["created_entities"]],
+            ["203.0.113.9", "mail.example.org", "www.example.com"],
+        )
+        relationship = result["relationships"][0]
+        self.assertEqual(relationship["relationship_type"], "hosted-on")
+        self.assertEqual(relationship["verification_status"], "not-verified")
+        self.assertEqual(relationship["confidence"], "possible")
+        self.assertEqual(relationship["source_reference"], "https://dns.example/q")
+        self.assertTrue(result["relationships"][1]["source_reference"].startswith("note://garbage/intel-run/"))
+
+        again = intel.promote_results(
+            self.database, run["id"], source_entity_id=source["id"],
+            items=[{"result_id": ids["dns-a"], "relationship_type": "hosted-on"}],
+        )
+        self.assertEqual(len(again["reused_entities"]), 1)
+        self.assertEqual(again["skipped"][0]["reason"], "relationship already recorded")
+
+        graph = graph_payload(self.database, investigation_id=case["id"])
+        self.assertEqual(len(graph["nodes"]), 4)
+        self.assertEqual(graph["analytics"]["nodes"][source["id"]]["degree"], 1.0)
+        ip = next(node for node in graph["nodes"] if node["identifier"] == "203.0.113.9")
+        mail = next(node for node in graph["nodes"] if node["identifier"] == "mail.example.org")
+        path = graph_path(self.database, start_id=ip["id"], goal_id=mail["id"])
+        self.assertEqual([item["name"] for item in path["path"]], ["203.0.113.9", "example.com", "mail.example.org"])
+        self.assertEqual(path["hops"][0]["relationship_type"], "hosted-on")
+
+        with self.assertRaises(ValidationError):
+            intel.promote_results(self.database, run["id"], source_entity_id=source["id"], items=[])
+
     def test_module_gate(self):
         set_module_state(self.database, "intel-orchestrator", "disabled")
         with self.assertRaises(ModuleDisabledError):
