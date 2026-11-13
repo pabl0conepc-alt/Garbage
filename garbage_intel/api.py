@@ -50,6 +50,7 @@ from .evidence import (
     read_evidence_file,
     verify_evidence,
 )
+from .analytics import workspace_analytics
 from .intel_keys import delete_key, list_keys, set_key
 from .intel import (
     detect_artifact,
@@ -134,6 +135,8 @@ _STATIC_FILES = {
     "views-file.js": "text/javascript; charset=utf-8",
     "views-multisearch.js": "text/javascript; charset=utf-8",
     "views-yara.js": "text/javascript; charset=utf-8",
+    "charts.js": "text/javascript; charset=utf-8",
+    "views-analytics.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -1306,6 +1309,18 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("intel-orchestrator")
         self._json(200, list_connectors(self.database_path))
 
+    def api_analytics(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._json(
+            200,
+            workspace_analytics(
+                self.database_path,
+                investigation_id=_query_text(query, "investigation_id", "") or None,
+                days=_query_int(query, "days", 30),
+            ),
+        )
+
     def api_intel_keys(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1751,6 +1766,12 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "GET",
         re.compile(r"^/api/intel/connectors$"),
         "api_intel_connectors",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/analytics$"),
+        "api_analytics",
         MAX_BODY_BYTES,
     ),
     (

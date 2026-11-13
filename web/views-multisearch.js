@@ -934,6 +934,9 @@
   }
 
   G.views.multisearch = renderMultiSearch;
+  G.connectorLabel = (id) => connectorName(id, id);
+  G.resultTypeLabel = (type) => RESULT_LABELS[type] || type;
+  G.sourceStatusLabel = (status) => (STATUS_TEXT[status] || [status])[0];
   G.multiSearch = function multiSearch(value) {
     state.pendingMultiSearch = value;
     go("multisearch");
