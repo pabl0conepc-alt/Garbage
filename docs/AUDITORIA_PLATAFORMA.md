@@ -41,7 +41,7 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | 17. Monitoramento | falta | Previsto como fase 9 do plano |
 | 18. Plugins | falta | Há registro de conectores e de módulos, mas não um formato de plugin com manifesto, permissões e isolamento |
 | 19. Normalização e resolução | existe (Fundação) | Candidatos exatos, prováveis e fracos com regra explicada; fusão aprovada pelo analista, com alias e registro de atividade; pares marcados como distintos não voltam. Pessoas ficam de fora |
-| 20. Pesquisa global | parcial | Busca existe sem ranking; FTS5 previsto na fase 10 |
+| 20. Pesquisa global | existe (etapa 3) | FTS5 com ranking BM25, trechos destacados, sem acento e com prefixo; grupo "mais relevantes"; recai para LIKE sem FTS5 |
 | 21. Relatórios | parcial | HTML, JSON, CSV, Markdown, STIX, MISP e impressão. Falta: escolher seções, incluir grafo e metodologia |
 | 22. Arquitetura | existe | SQLite com migrações, cache, limites de taxa, erros estruturados. Execução assíncrona de consultas falta (fase 9) |
 | 23. Design | existe | Monocromático, dock flutuante, cantos arredondados; ajuste contínuo |
@@ -56,8 +56,8 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 4. O arquivo original analisado não é guardado (só o resultado), então regras YARA novas não podem ser reaplicadas a análises antigas; isso está documentado na tela.
 5. O grafo carrega no máximo 500 entidades e 1000 relacionamentos.
 9. ~~Passar o mouse sobre um nó redesenhava o grafo em laço e engolia cliques; a exportação SVG aplicava estilos por atributo `style`, bloqueado pela CSP, e saía com fundo transparente.~~ Corrigido na etapa 2.
-6. Consultas multifonte são síncronas: a tela espera a fonte mais lenta (crt.sh pode levar ~27 s).
-7. A pesquisa global usa `LIKE`, sem ranking.
+6. ~~Consultas multifonte síncronas.~~ Assíncronas na etapa 3, com resultados por fonte assim que cada uma responde.
+7. ~~Pesquisa global sem ranking.~~ FTS5 na etapa 3.
 
 ## 4. Decisões de escopo
 
@@ -81,7 +81,7 @@ Ordem de trabalho, cada item com testes, verificação no navegador e PR:
 
 1. **Fundação** (feito) — formato de transform (entrada, saída, parâmetros, logs, tempo) sobre os conectores; registro de módulos corrigido e completo; resolução de entidades com níveis exata/provável/fraca.
 2. **Investigação visual** (feito) — seleção múltipla, fixar e ocultar, minimapa, desfazer/refazer, exportação PNG e JSON/GraphML (e importação), ícones por tipo, histórico de enriquecimento no painel do nó.
-3. **Pesquisa** — consultas assíncronas com progresso por fonte; FTS5 com ranking na busca global; conectores públicos de organizações e comunidades (GitHub, metadados públicos de canais e servidores).
+3. **Pesquisa** (feito) — consultas assíncronas com progresso por fonte; FTS5 com ranking na busca global; conectores de organizações (GitHub, security.txt). Metadados de canais e servidores de chat ficaram de fora: as APIs públicas de convite expõem quem criou o convite.
 4. **Inteligência especializada** — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).
 5. **Plugins** — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.
 6. **Casos e evidências** — objetivo, arquivar, duplicar, exportar/importar caso; cadeia de custódia e anotações de evidência; relatórios com seleção de seções, grafo e metodologia.

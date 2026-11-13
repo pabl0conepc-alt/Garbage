@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import sqlite3
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -1018,6 +1020,18 @@ def global_search(database: str, query: str, limit: int | None = None) -> dict[s
             "limit": result_limit,
             "message": "Enter at least two characters to search.",
         }
+    ranked = _ranked_search(database, clean_query, result_limit)
+    if ranked is not None:
+        indicators = _indicator_group(database, clean_query, result_limit)
+        groups = [*ranked["groups"], indicators]
+        return {
+            "query": clean_query,
+            "engine": "fts5",
+            "best": ranked["best"],
+            "groups": groups,
+            "total": sum(group["total"] for group in groups),
+            "limit": result_limit,
+        }
     pattern = search_pattern(clean_query)
     groups: list[dict[str, Any]] = []
 
@@ -1139,28 +1153,141 @@ def global_search(database: str, query: str, limit: int | None = None) -> dict[s
             "investigation_id": row["investigation_id"],
         },
     )
-    indicator_hits = unified_indicators(database, search=clean_query, limit=result_limit)
-    groups.append(
-        {
-            "key": "indicators",
-            "label": "Indicators",
-            "total": indicator_hits["total"],
-            "items": [
-                {
-                    "id": f"{item['type']}:{item['value']}",
-                    "title": item["value"],
-                    "subtitle": f"Indicator · {INDICATOR_TYPE_LABELS[item['type']]}"
-                    f" · {item['origin_count']} origin(s)",
-                    "view": "indicators",
-                    "indicator_type": item["type"],
-                }
-                for item in indicator_hits["items"]
-            ],
-        }
-    )
+    groups.append(_indicator_group(database, clean_query, result_limit))
     return {
         "query": clean_query,
+        "engine": "like",
+        "best": [],
         "groups": groups,
         "total": sum(group["total"] for group in groups),
         "limit": result_limit,
     }
+
+
+def _indicator_group(database: str, query: str, limit: int) -> dict[str, Any]:
+    hits = unified_indicators(database, search=query, limit=limit)
+    return {
+        "key": "indicators",
+        "label": "Indicators",
+        "total": hits["total"],
+        "items": [
+            {
+                "id": f"{item['type']}:{item['value']}",
+                "kind": "indicators",
+                "title": item["value"],
+                "subtitle": f"Indicator · {INDICATOR_TYPE_LABELS[item['type']]}"
+                f" · {item['origin_count']} origin(s)",
+                "view": "indicators",
+                "indicator_type": item["type"],
+                "origin_count": item["origin_count"],
+            }
+            for item in hits["items"]
+        ],
+    }
+
+
+SEARCH_GROUPS = (
+    ("investigations", "Investigations"),
+    ("entities", "Entities"),
+    ("sources", "Sources"),
+    ("evidence", "Evidence"),
+    ("observations", "Observations"),
+    ("files", "File analyses"),
+)
+MAX_BEST = 8
+
+
+def fts_query(text: str) -> str:
+    """Quote each term (dots and @ stay phrases) and prefix-match the last."""
+    terms = [term.replace('"', "") for term in re.findall(r"[^\s\"]+", text)][:12]
+    terms = [term for term in terms if re.search(r"\w", term)]
+    if not terms:
+        return ""
+    quoted = [f'"{term}"' for term in terms]
+    quoted[-1] += "*"
+    return " ".join(quoted)
+
+
+def _describe_hits(connection: sqlite3.Connection, kind: str, hits: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    ids = [hit["ref_id"] for hit in hits]
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
+    queries = {
+        "investigations": f"SELECT id, name AS title, status FROM investigations WHERE id IN ({marks})",
+        "entities": f"SELECT id, name AS title, entity_type, identifier FROM entities WHERE id IN ({marks})",
+        "sources": f"SELECT id, title, category FROM sources WHERE id IN ({marks})",
+        "evidence": f"SELECT id, title, evidence_type, investigation_id FROM evidence WHERE id IN ({marks})",
+        "observations": f"""SELECT o.id, o.title, o.investigation_id, i.name AS investigation_name
+                            FROM observations o JOIN investigations i ON i.id = o.investigation_id
+                            WHERE o.id IN ({marks})""",
+        "files": f"SELECT id, file_name AS title, format, investigation_id FROM file_analyses WHERE id IN ({marks})",
+    }
+    rows = {row["id"]: dict(row) for row in connection.execute(queries[kind], ids)}
+    items = []
+    for hit in hits:
+        row = rows.get(hit["ref_id"])
+        if row is None:
+            continue
+        item = {
+            "id": row["id"],
+            "kind": kind,
+            "title": row["title"],
+            "title_marked": hit["title_marked"],
+            "snippet": hit["snippet"],
+            "score": round(-float(hit["score"]), 3),
+        }
+        if kind == "investigations":
+            item.update(view="investigations", investigation_id=row["id"], status=row["status"], subtitle=f"Investigation · {row['status']}")
+        elif kind == "entities":
+            item.update(view="entities", entity_id=row["id"], entity_type=row["entity_type"], identifier=row["identifier"],
+                        subtitle=row["entity_type"] + (f" · {row['identifier']}" if row["identifier"] else ""))
+        elif kind == "sources":
+            item.update(view="sources", source_id=row["id"], category=row["category"], subtitle=f"Source · {row['category']}")
+        elif kind == "evidence":
+            item.update(view="evidence", investigation_id=row["investigation_id"], evidence_id=row["id"],
+                        evidence_type=row["evidence_type"], subtitle=f"Evidence · {row['evidence_type']}")
+        elif kind == "observations":
+            item.update(view="investigations", investigation_id=row["investigation_id"],
+                        investigation_name=row["investigation_name"], subtitle=f"Observation · {row['investigation_name']}")
+        else:
+            item.update(view="files", file_analysis_id=row["id"], investigation_id=row["investigation_id"],
+                        format=row["format"], subtitle=f"File analysis · {row['format']}")
+        items.append(item)
+    return items
+
+
+def _ranked_search(database: str, query: str, limit: int) -> dict[str, Any] | None:
+    """BM25-ranked search over the FTS5 index; None when it cannot be used."""
+    match = fts_query(query)
+    if not match:
+        return None
+    select = """SELECT kind, ref_id,
+                       highlight(search_index, 2, char(2), char(3)) AS title_marked,
+                       snippet(search_index, 3, char(2), char(3), '…', 12) AS snippet,
+                       bm25(search_index, 0.0, 0.0, 8.0, 1.0) AS score
+                FROM search_index WHERE search_index MATCH ?"""
+    try:
+        with _connection(database) as connection:
+            if connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE name = 'search_index'"
+            ).fetchone() is None:
+                return None
+            counts = {
+                row["kind"]: row["total"]
+                for row in connection.execute(
+                    "SELECT kind, COUNT(*) AS total FROM search_index WHERE search_index MATCH ? GROUP BY kind",
+                    (match,),
+                )
+            }
+            groups = []
+            for kind, label in SEARCH_GROUPS:
+                hits = connection.execute(f"{select} AND kind = ? ORDER BY score LIMIT ?", (match, kind, limit)).fetchall()
+                groups.append({"key": kind, "label": label, "total": counts.get(kind, 0), "items": _describe_hits(connection, kind, hits)})
+            best_hits = connection.execute(f"{select} ORDER BY score LIMIT ?", (match, MAX_BEST)).fetchall()
+            best = []
+            for hit in best_hits:
+                best.extend(_describe_hits(connection, hit["kind"], [hit]))
+    except sqlite3.OperationalError:
+        return None
+    return {"groups": groups, "best": best}

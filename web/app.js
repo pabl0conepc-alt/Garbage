@@ -600,6 +600,8 @@ const ERROR_PATTERNS = [
   [/^the source returned invalid JSON$/, () => "A fonte retornou JSON inválido"],
   [/^certificate could not be parsed: (.+)$/, (m) => `Não foi possível interpretar o certificado: ${m[1]}`],
   [/^connector failed unexpectedly$/, () => "O conector falhou de forma inesperada"],
+  [/^the run was interrupted( by a restart)?$/, (m) => `A consulta foi interrompida${m[1] ? " por um reinício" : ""}`],
+  [/^async must be a boolean$/, () => "async deve ser verdadeiro ou falso"],
   [/^transforms do not run on people, usernames or profiles$/, () => "Transformações não rodam sobre pessoas, nomes de usuário ou perfis"],
   [/^the entity has no identifier a transform can query$/, () => "A entidade não tem um identificador que uma transformação possa consultar"],
   [/^the entity's identifier is not a domain, IP, CIDR, URL, email, hash, ASN or CVE$/, () => "O identificador da entidade não é domínio, IP, CIDR, URL, e-mail, hash, ASN nem CVE"],
@@ -784,6 +786,25 @@ const TEXT_PT = {
   "planned, not implemented": "planejado, não implementado",
   "explicit manual refresh": "atualização manual explícita",
   "explicit multi-source query": "consulta multifonte explícita",
+  "repository not found": "repositório não encontrado",
+  "missing, private or renamed": "inexistente, privado ou renomeado",
+  "account not found": "conta não encontrada",
+  "personal account; not collected": "conta pessoal; não coletada",
+  "GitHub data about people is not collected": "dados do GitHub sobre pessoas não são coletados",
+  "not published": "não publicado",
+  "published": "publicado",
+  "not in hashlookup": "fora do hashlookup",
+  "unknown to the known-software sets; says nothing about maliciousness": "desconhecido nas bases de software conhecido; não diz nada sobre ser malicioso",
+  "not in VirusTotal": "fora do VirusTotal",
+  "never submitted or scanned; not a clean result": "nunca enviado nem analisado; não é um resultado limpo",
+  "not observed": "não observado",
+  "not seen mass-scanning and not a known benign service": "não visto varrendo a internet e não é serviço benigno conhecido",
+  "no Shodan record": "sem registro no Shodan",
+  "not indexed by Shodan's scans": "não indexado pelas varreduras do Shodan",
+  "not announced": "não anunciado",
+  "the run was interrupted": "a consulta foi interrompida",
+  "the run was interrupted by a restart": "a consulta foi interrompida por um reinício",
+  "Full-text search index": "Índice de busca em texto completo",
 };
 
 function translateText(value) {
@@ -1776,7 +1797,34 @@ function navigateSearchItem(item) {
   else if (item.view === "evidence" && item.investigation_id) go("evidence", item.investigation_id);
   else if (item.view === "investigations" && item.investigation_id)
     go("investigations", item.investigation_id);
+  else if (item.view === "files") go("files");
   else go(item.view);
+}
+
+const SEARCH_GROUP_PT = {
+  best: "Mais relevantes", investigations: "Investigações", entities: "Entidades", sources: "Fontes",
+  evidence: "Evidências", observations: "Observações", files: "Análises de arquivos", indicators: "Indicadores",
+};
+
+/* FTS5 marks matches with \u0002…\u0003; turn them into <mark> safely. */
+function markedText(text) {
+  const parts = String(text || "").split(/(\u0002[^\u0003]*\u0003)/);
+  return parts.filter(Boolean).map((part) =>
+    part.startsWith("\u0002") ? el("mark", {}, part.slice(1, -1)) : document.createTextNode(part),
+  );
+}
+
+function searchSubtitle(item) {
+  switch (item.kind) {
+    case "investigations": return `Investigação · ${statusLabel(item.status).toLowerCase()}`;
+    case "entities": return `${entityTypeLabel(item.entity_type)}${item.identifier ? ` · ${item.identifier}` : ""}`;
+    case "sources": return "Fonte";
+    case "evidence": return "Evidência";
+    case "observations": return `Observação · ${item.investigation_name}`;
+    case "files": return `Análise de arquivo · ${FORMAT_LABEL_PT[item.format] || item.format}`;
+    case "indicators": return `Indicador · ${indicatorTypeLabel(item.indicator_type)} · ${item.origin_count} origem(ns)`;
+    default: return item.subtitle || "";
+  }
 }
 
 function renderSearchResults(data, query = "") {
@@ -1787,7 +1835,15 @@ function renderSearchResults(data, query = "") {
     return;
   }
   const commandCount = appendCommandGroup(query, 4, 5);
-  const groups = (data.groups || []).filter((group) => group.items.length);
+  // The best-ranked hits come first; groups below skip what is already there.
+  const shown = new Set((data.best || []).map((item) => `${item.kind}:${item.id}`));
+  const groups = [
+    ...(data.best?.length ? [{ key: "best", label: "Best", total: data.best.length, items: data.best }] : []),
+    ...(data.groups || []).map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !shown.has(`${item.kind || group.key}:${item.id}`)),
+    })),
+  ].filter((group) => group.items.length);
   if (!groups.length) {
     if (!commandCount) renderSearchHint("Nenhum registro local ou comando corresponde.");
     return;
@@ -1799,7 +1855,7 @@ function renderSearchResults(data, query = "") {
       el(
         "div",
         { class: "search-group-label" },
-        el("span", {}, group.label),
+        el("span", {}, SEARCH_GROUP_PT[group.key] || group.label),
         el("span", { class: "search-group-total" }, String(group.total)),
       ),
     );
@@ -1815,8 +1871,11 @@ function renderSearchResults(data, query = "") {
               navigateSearchItem(item);
             },
           },
-          el("span", { class: "search-result-title" }, item.title),
-          el("span", { class: "search-result-subtitle" }, item.subtitle),
+          el("span", { class: "search-result-title" }, ...(item.title_marked ? markedText(item.title_marked) : [item.title])),
+          el("span", { class: "search-result-subtitle" }, searchSubtitle({ kind: group.key, ...item })),
+          item.snippet && item.snippet.includes("\u0002") && !(item.title_marked || "").includes("\u0002")
+            ? el("span", { class: "search-result-snippet" }, ...markedText(item.snippet))
+            : null,
         ),
       );
     }

@@ -14,8 +14,9 @@ import json
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
+from functools import partial
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -49,6 +50,7 @@ ARTIFACT_TYPES = (
     "cve",
 )
 RESULT_STATUSES = (
+    "pending",
     "ok",
     "empty",
     "error",
@@ -135,6 +137,9 @@ class RateLimiter:
         with self._lock:
             self._buckets.clear()
 
+
+# Runs started with wait=False execute here, one thread per run.
+_BACKGROUND = ThreadPoolExecutor(max_workers=4, thread_name_prefix="intel-run")
 
 _REGISTRY: dict[str, Connector] = {}
 _REGISTRY_LOCK = threading.Lock()
@@ -362,8 +367,14 @@ def run_query(
     connector_ids: object = None,
     investigation_id: object = None,
     use_cache: bool = True,
+    wait: bool = True,
 ) -> dict[str, Any]:
-    """Fan one artifact out to every compatible connector and persist the run."""
+    """Fan one artifact out to every compatible connector and persist the run.
+
+    Each source's results are written as soon as that source answers, so a
+    caller that passes ``wait=False`` gets the run back at once (sources still
+    working are ``pending``) and can poll ``get_run`` for progress.
+    """
     detected = detect_artifact(value)
     kind = detected["type"]
     if query_type not in (None, ""):
@@ -444,70 +455,150 @@ def run_query(
         else:
             runnable.append(connector)
 
-    if runnable:
-        with ThreadPoolExecutor(max_workers=min(workers, len(runnable))) as pool:
-            futures = {
-                connector.connector_id: pool.submit(
-                    _run_one, connector, replace(context, api_key=secrets.get(connector.key_id, ""))
-                )
-                for connector in runnable
-            }
-            for connector_id, future in futures.items():
-                status, findings, error, elapsed = future.result()
-                outcomes[connector_id] = (status, findings, error, elapsed, False)
-
-    fetched_at = utc_now()
     by_id = {item.connector_id: item for item in selected}
-    result_count = 0
     with _connection(database) as connection:
-        for connector_id, (status, findings, error, elapsed, from_cache) in outcomes.items():
-            connector = by_id[connector_id]
-            if connector in runnable:
-                _record_status(connection, connector_id, status, error, elapsed)
-                if status in {"ok", "empty"} and connector.ttl_seconds > 0:
-                    _cache_put(connection, connector, kind, detected["value"], findings)
-            rows = findings or [None]
-            for finding in rows:
-                if finding is not None:
-                    result_count += 1
-                connection.execute(
-                    """INSERT INTO intel_results
-                       (id, run_id, connector_id, status, cached, result_type, value,
-                        data_json, source_url, response_sha256, error, elapsed_ms,
-                        fetched_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        new_id(),
-                        run_id,
-                        connector_id,
-                        status,
-                        1 if from_cache else 0,
-                        finding.result_type if finding else "",
-                        finding.value if finding else "",
-                        json.dumps(finding.data if finding else {}, sort_keys=True),
-                        (finding.source_url if finding else "") or connector.source_url,
-                        finding.response_sha256 if finding else "",
-                        error,
-                        elapsed,
-                        fetched_at,
-                    ),
-                )
-        statuses = {outcome[0] for outcome in outcomes.values()}
-        run_status = "completed" if "error" not in statuses else "completed-with-errors"
-        connection.execute(
-            """UPDATE intel_runs SET status = ?, result_count = ?, finished_at = ?
-               WHERE id = ?""",
-            (run_status, result_count, fetched_at, run_id),
-        )
-        record_activity(
-            connection,
-            action="intel-run",
-            target_type="intel_run",
-            target_id=run_id,
-            investigation_id=case_id,
-            summary=f"Multi-source query: {kind} {detected['value'][:120]}",
-        )
+        for connector_id, outcome in outcomes.items():
+            _write_outcome(connection, run_id, by_id[connector_id], outcome, kind, detected["value"], ran=False)
+        for connector in runnable:
+            _write_outcome(connection, run_id, connector, ("pending", [], "", 0, False), kind, detected["value"], ran=False)
+
+    job = partial(
+        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers
+    )
+    if wait:
+        job()
+    else:
+        _BACKGROUND.submit(job)
     return get_run(database, run_id)
+
+
+def _write_outcome(
+    connection: Any,
+    run_id: str,
+    connector: Connector,
+    outcome: tuple[str, list[Finding], str, int, bool],
+    kind: str,
+    value: str,
+    *,
+    ran: bool,
+) -> None:
+    status, findings, error, elapsed, from_cache = outcome
+    if ran:
+        _record_status(connection, connector.connector_id, status, error, elapsed)
+        if status in {"ok", "empty"} and connector.ttl_seconds > 0:
+            _cache_put(connection, connector, kind, value, findings)
+    fetched_at = utc_now()
+    for finding in findings or [None]:
+        connection.execute(
+            """INSERT INTO intel_results
+               (id, run_id, connector_id, status, cached, result_type, value,
+                data_json, source_url, response_sha256, error, elapsed_ms,
+                fetched_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                new_id(),
+                run_id,
+                connector.connector_id,
+                status,
+                1 if from_cache else 0,
+                finding.result_type if finding else "",
+                finding.value if finding else "",
+                json.dumps(finding.data if finding else {}, sort_keys=True),
+                (finding.source_url if finding else "") or connector.source_url,
+                finding.response_sha256 if finding else "",
+                error,
+                elapsed,
+                fetched_at,
+            ),
+        )
+
+
+def _finish_run(connection: Any, run_id: str, kind: str, value: str, case_id: str | None) -> None:
+    statuses = {
+        row["status"]
+        for row in connection.execute(
+            "SELECT DISTINCT status FROM intel_results WHERE run_id = ?", (run_id,)
+        )
+    }
+    result_count = connection.execute(
+        """SELECT COUNT(*) FROM intel_results
+           WHERE run_id = ? AND (value <> '' OR result_type <> '')""",
+        (run_id,),
+    ).fetchone()[0]
+    run_status = "completed" if "error" not in statuses else "completed-with-errors"
+    connection.execute(
+        """UPDATE intel_runs SET status = ?, result_count = ?, finished_at = ?
+           WHERE id = ?""",
+        (run_status, result_count, utc_now(), run_id),
+    )
+    record_activity(
+        connection,
+        action="intel-run",
+        target_type="intel_run",
+        target_id=run_id,
+        investigation_id=case_id,
+        summary=f"Multi-source query: {kind} {value[:120]}",
+    )
+
+
+def _execute(
+    database: str,
+    run_id: str,
+    kind: str,
+    value: str,
+    case_id: str | None,
+    runnable: list[Connector],
+    context: ConnectorContext,
+    secrets: dict[str, str],
+    workers: int,
+) -> None:
+    """Run the connectors and write each one's outcome as it completes."""
+    finished: set[str] = set()
+    try:
+        if runnable:
+            with ThreadPoolExecutor(max_workers=min(workers, len(runnable))) as pool:
+                futures = {
+                    pool.submit(
+                        _run_one, connector, replace(context, api_key=secrets.get(connector.key_id, ""))
+                    ): connector
+                    for connector in runnable
+                }
+                for future in as_completed(futures):
+                    connector = futures[future]
+                    status, findings, error, elapsed = future.result()
+                    with _connection(database) as connection:
+                        connection.execute(
+                            "DELETE FROM intel_results WHERE run_id = ? AND connector_id = ? AND status = 'pending'",
+                            (run_id, connector.connector_id),
+                        )
+                        _write_outcome(connection, run_id, connector, (status, findings, error, elapsed, False), kind, value, ran=True)
+                    finished.add(connector.connector_id)
+    finally:
+        with _connection(database) as connection:
+            # Anything still pending here was cut short by an unexpected failure.
+            connection.execute(
+                """UPDATE intel_results SET status = 'error', error = 'the run was interrupted'
+                   WHERE run_id = ? AND status = 'pending'""",
+                (run_id,),
+            )
+            _finish_run(connection, run_id, kind, value, case_id)
+
+
+def recover_interrupted_runs(database: str) -> int:
+    """Close runs left 'running' by a previous process (called at startup)."""
+    with _connection(database) as connection:
+        stale = [row["id"] for row in connection.execute("SELECT id FROM intel_runs WHERE status = 'running'")]
+        for run_id in stale:
+            connection.execute(
+                """UPDATE intel_results SET status = 'error', error = 'the run was interrupted by a restart'
+                   WHERE run_id = ? AND status = 'pending'""",
+                (run_id,),
+            )
+            connection.execute(
+                "UPDATE intel_runs SET status = 'interrupted', finished_at = ? WHERE id = ?",
+                (utc_now(), run_id),
+            )
+    return len(stale)
 
 
 def _decode_result(row: Any) -> dict[str, Any]:
@@ -549,9 +640,14 @@ def get_run(database: str, run_id: str) -> dict[str, Any]:
         )
         if item["value"] or item["result_type"]:
             entry["count"] += 1
+    ordered = sorted(sources.values(), key=lambda item: item["connector_id"])
     return {
         **dict(run),
-        "sources": sorted(sources.values(), key=lambda item: item["connector_id"]),
+        "progress": {
+            "total": len(ordered),
+            "pending": sum(1 for item in ordered if item["status"] == "pending"),
+        },
+        "sources": ordered,
         "results": [item for item in results if item["value"] or item["result_type"]],
     }
 
@@ -668,6 +764,13 @@ PROMOTABLE_TYPES = {
     "malicious-url": "url",
     "final-url": "url",
     "dns-record": "other",
+    "website": "url",
+    "repository": "url",
+    "repo-homepage": "url",
+    "fork-of": "url",
+    "security-contact-email": "email",
+    "security-contact-url": "url",
+    "security-policy": "url",
 }
 MAX_PROMOTIONS = 50
 
@@ -922,3 +1025,4 @@ from .modules import intel_connectors as _intel_connectors  # noqa: E402,F401
 from .modules import intel_target_connectors as _intel_target_connectors  # noqa: E402,F401
 from .modules import intel_open_connectors as _intel_open_connectors  # noqa: E402,F401
 from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: E402,F401
+from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402,F401

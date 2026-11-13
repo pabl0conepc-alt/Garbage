@@ -64,6 +64,7 @@ from .intel import (
     list_runs,
     promote_results,
     record_run_observation,
+    recover_interrupted_runs,
     run_query,
 )
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
@@ -1453,7 +1454,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("intel-orchestrator")
-        allowed = {"value", "type", "connectors", "investigation_id", "use_cache"}
+        allowed = {"value", "type", "connectors", "investigation_id", "use_cache", "async"}
         unknown = set(payload) - allowed
         if unknown:
             raise ValidationError(
@@ -1462,8 +1463,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         use_cache = payload.get("use_cache", True)
         if not isinstance(use_cache, bool):
             raise ValidationError("use_cache must be a boolean")
+        background = payload.get("async", False)
+        if not isinstance(background, bool):
+            raise ValidationError("async must be a boolean")
         self._json(
-            201,
+            202 if background else 201,
             run_query(
                 self.database_path,
                 value=payload.get("value"),
@@ -1471,6 +1475,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 connector_ids=payload.get("connectors"),
                 investigation_id=payload.get("investigation_id"),
                 use_cache=use_cache,
+                wait=not background,
             ),
         )
 
@@ -2123,6 +2128,7 @@ def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer
 
 def serve(database: str | Path, port: int = 8000) -> None:
     server = create_server(database, port)
+    recover_interrupted_runs(str(database))
     print(f"GARBAGE local interface: http://127.0.0.1:{server.server_port}/")
     try:
         server.serve_forever()
