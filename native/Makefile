@@ -32,8 +32,10 @@ $(BUILD):
 
 c: $(LIB_C)
 
-$(LIB_C): c/garbage_native.c include/garbage_native.h | $(BUILD)
-	$(CC) $(CFLAGS) $(INCLUDES) $(SHARED_C) -o $@ c/garbage_native.c -lm
+C_SOURCES := c/garbage_native.c c/garbage_fuzzy.c
+
+$(LIB_C): $(C_SOURCES) include/garbage_native.h | $(BUILD)
+	$(CC) $(CFLAGS) $(INCLUDES) $(SHARED_C) -o $@ $(C_SOURCES) -lm
 
 cpp: $(LIB_CPP)
 
@@ -42,7 +44,7 @@ $(LIB_CPP): cpp/garbage_graph.cpp include/garbage_graph.h | $(BUILD)
 
 rust: $(LIB_RUST)
 
-$(LIB_RUST): rust/src/lib.rs rust/Cargo.toml | $(BUILD)
+$(LIB_RUST): rust/src/lib.rs rust/src/signatures.rs rust/Cargo.toml | $(BUILD)
 	cd rust && $(CARGO) build --release
 	cp $(RUST_SOURCE) $@
 

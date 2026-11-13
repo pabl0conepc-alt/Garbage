@@ -75,12 +75,22 @@ generated name. `sha256` is recomputed by verification.
 ### `file_analyses`
 
 `id`, `investigation_id`, `file_name`, `format`, `media_type`, `size_bytes`,
-`sha256`, `analysis_json`, `created_at`
+`sha256`, `analysis_json`, `created_at`, `tlsh`, `ssdeep`
 
 Persistent File Intelligence history. `analysis_json` contains the complete
 bounded result: hashes, entropy, strings, metadata, structure, findings,
 indicators and limitations. Summary columns exist for listing and filtering.
-`investigation_id` is optional and cascades on case deletion.
+`investigation_id` is optional and cascades on case deletion. `tlsh` and
+`ssdeep` (migration 5) let the similarity search compare analyses without
+parsing every JSON payload.
+
+### `yara_rulesets`
+
+`id`, `name` (unique), `description`, `source`, `enabled`, `rule_count`,
+`rule_names`, `created_at`, `updated_at`
+
+Workspace YARA rule sets. `source` is compiled before every insert or update;
+`rule_count` and `rule_names` are derived from the compiled set.
 
 ### `intel_runs`
 
@@ -177,6 +187,7 @@ Applied migration ledger used to make startup idempotent.
 | 2 | Investigation workspace tables and columns | Entities, sources, boards, activities, settings, module registry, extra evidence columns |
 | 3 | Persistent file intelligence analyses | `file_analyses` and case/time index |
 | 4 | Multi-source intelligence runs and source status | `intel_runs`, `intel_results`, `intel_cache`, `intel_source_status` |
+| 5 | YARA rule sets and file similarity digests | `yara_rulesets`; `tlsh` and `ssdeep` columns on `file_analyses` |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

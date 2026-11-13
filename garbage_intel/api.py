@@ -65,6 +65,16 @@ from .modules.file_intel import (
     analyze_file,
     get_file_analysis,
     list_file_analyses,
+    similar_file_analyses,
+)
+from .modules.yara_rules import (
+    check_source,
+    create_ruleset,
+    delete_ruleset,
+    get_ruleset,
+    list_rulesets,
+    test_source,
+    update_ruleset,
 )
 from .reporting import (
     render_csv_report,
@@ -122,6 +132,7 @@ _STATIC_FILES = {
     "views-system.js": "text/javascript; charset=utf-8",
     "views-file.js": "text/javascript; charset=utf-8",
     "views-multisearch.js": "text/javascript; charset=utf-8",
+    "views-yara.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -1070,6 +1081,88 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("file-intelligence")
         self._json(200, get_file_analysis(self.database_path, match.group(1)))
 
+    def api_yara_list(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("file-intelligence")
+        self._json(200, list_rulesets(self.database_path))
+
+    def api_yara_create(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("file-intelligence")
+        unknown = set(payload) - {"name", "description", "source", "enabled"}
+        if unknown:
+            raise ValidationError(f"unsupported rule set fields: {', '.join(sorted(unknown))}")
+        self._json(
+            201,
+            create_ruleset(
+                self.database_path,
+                name=payload.get("name"),
+                description=payload.get("description", ""),
+                source=payload.get("source"),
+                enabled=payload.get("enabled", True),
+            ),
+        )
+
+    def api_yara_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("file-intelligence")
+        self._json(200, get_ruleset(self.database_path, match.group(1)))
+
+    def api_yara_patch(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("file-intelligence")
+        unknown = set(payload) - {"name", "description", "source", "enabled"}
+        if unknown:
+            raise ValidationError(f"unsupported rule set fields: {', '.join(sorted(unknown))}")
+        if not payload:
+            raise ValidationError("no rule set fields were provided")
+        self._json(200, update_ruleset(self.database_path, match.group(1), **payload))
+
+    def api_yara_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("file-intelligence")
+        self._json(200, delete_ruleset(self.database_path, match.group(1)))
+
+    def api_yara_test(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("file-intelligence")
+        unknown = set(payload) - {"source", "content_base64"}
+        if unknown:
+            raise ValidationError(f"unsupported test fields: {', '.join(sorted(unknown))}")
+        source = payload.get("source")
+        if not isinstance(source, str):
+            raise ValidationError("source must be a string")
+        content = payload.get("content_base64")
+        if content in (None, ""):
+            self._json(200, check_source(source))
+            return
+        if not isinstance(content, str):
+            raise ValidationError("content_base64 must be a string")
+        try:
+            data = base64.b64decode(content, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValidationError("content_base64 must be valid base64") from exc
+        if not data or len(data) > MAX_FILE_BYTES:
+            raise ValidationError("file must be between 1 byte and 4 MiB")
+        self._json(200, test_source(source, data))
+
+    def api_file_similar_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("file-intelligence")
+        self._json(
+            200,
+            similar_file_analyses(
+                self.database_path, match.group(1), limit=_query_int(query, "limit", 20)
+            ),
+        )
+
     # --- indicators, settings, modules, CISA KEV -----------------------------
 
     def api_indicators_get(
@@ -1554,6 +1647,48 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "GET",
         re.compile(rf"^/api/intelligence/files/{_ID_PATTERN}$"),
         "api_file_analysis_get",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/intelligence/yara$"),
+        "api_yara_list",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "POST",
+        re.compile(r"^/api/intelligence/yara$"),
+        "api_yara_create",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "POST",
+        re.compile(r"^/api/intelligence/yara/test$"),
+        "api_yara_test",
+        MAX_FILE_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(rf"^/api/intelligence/yara/{_ID_PATTERN}$"),
+        "api_yara_get",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "PATCH",
+        re.compile(rf"^/api/intelligence/yara/{_ID_PATTERN}$"),
+        "api_yara_patch",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "DELETE",
+        re.compile(rf"^/api/intelligence/yara/{_ID_PATTERN}$"),
+        "api_yara_delete",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(rf"^/api/intelligence/files/{_ID_PATTERN}/similar$"),
+        "api_file_similar_get",
         MAX_BODY_BYTES,
     ),
     (

@@ -729,6 +729,10 @@ const TEXT_PT = {
   "Baseline evidence ledger schema": "Esquema base do registro de evidências",
   "Investigation workspace tables and columns": "Tabelas e colunas do workspace de investigação",
   "Persistent file intelligence analyses": "Análises persistentes de arquivos",
+  "Multi-source intelligence runs and source status": "Consultas multifonte e status das fontes",
+  "YARA rule sets and file similarity digests": "Conjuntos de regras YARA e hashes de semelhança de arquivos",
+  "TLSH and ssdeep measure byte-level resemblance; a close digest is not shared authorship or intent.": "TLSH e ssdeep medem semelhança de bytes; um hash próximo não indica mesma autoria nem mesma intenção.",
+  "Embedded signatures mark where another format appears to start; they are not validated or carved.": "Assinaturas embutidas marcam onde outro formato parece começar; não são validadas nem recortadas.",
   "planned, not implemented": "planejado, não implementado",
   "explicit manual refresh": "atualização manual explícita",
 };
@@ -1012,7 +1016,7 @@ function errorState({ title = "Não foi possível carregar esta tela", message, 
   );
 }
 
-function dataTable({ columns, rows, emptyMessage = "Nenhum registro.", onRowClick = null }) {
+function dataTable({ columns, rows, emptyMessage = "Nenhum registro.", onRowClick = null, rowClass = null }) {
   const table = el("table", { class: "data-table" });
   table.append(
     el(
@@ -1038,7 +1042,7 @@ function dataTable({ columns, rows, emptyMessage = "Nenhum registro.", onRowClic
     );
   }
   for (const row of rows) {
-    const tr = el("tr");
+    const tr = el("tr", { class: rowClass ? rowClass(row) : "" });
     if (onRowClick) {
       tr.classList.add("is-clickable");
       tr.tabIndex = 0;

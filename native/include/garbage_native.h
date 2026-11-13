@@ -72,6 +72,18 @@ int gi_entropy(const unsigned char *data, size_t length, double *out_entropy);
 int gi_hardening_scan(const unsigned char *data, size_t length, int format,
                       gi_hardening *out);
 
+/* Similarity digests (garbage_fuzzy.c). gi_tlsh writes "T1" + 70 hex digits
+ * (capacity >= 73) and returns 0, 1 when the input is too short or too
+ * uniform for a digest, or -1 for invalid arguments. gi_ssdeep writes
+ * "<block size>:<digest>:<digest>" (capacity >= 148) and returns 0 or -1. */
+int gi_tlsh(const unsigned char *data, size_t length, char *out, size_t capacity);
+int gi_ssdeep(const unsigned char *data, size_t length, char *out, size_t capacity);
+
+/* TLSH distance (0 = identical digests) or ssdeep score (0-100); -1 when a
+ * digest cannot be parsed. */
+int gi_tlsh_distance(const char *left, const char *right);
+int gi_ssdeep_compare(const char *left, const char *right);
+
 #ifdef __cplusplus
 }
 #endif

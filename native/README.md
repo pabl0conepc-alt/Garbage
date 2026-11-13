@@ -7,8 +7,10 @@ has a fallback.
 | Language | File | Used for |
 | --- | --- | --- |
 | C | `c/garbage_native.c` | Bounded ELF/PE hardening scan (PIE, NX, RELRO, bind-now, canary, Fortify, ASLR, CFG) and byte entropy |
+| C | `c/garbage_fuzzy.c` | TLSH and ssdeep digests, TLSH distance and ssdeep score (byte-compatible with py-tlsh 5 and ssdeep 2.14) |
 | C++ | `cpp/garbage_graph.cpp` | Relationship graph components, isolates, degree, density and reciprocal edges |
 | Rust | `rust/src/lib.rs` | Bounded Damerau-Levenshtein distance and domain skeleton for lookalike analysis |
+| Rust | `rust/src/signatures.rs` | Embedded signature scan over 29 formats (list-only, no carving) |
 
 ## Build
 

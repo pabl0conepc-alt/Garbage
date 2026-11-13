@@ -176,6 +176,8 @@ def native_status() -> dict[str, Any]:
             "c_file_intelligence": bool(_C),
             "cpp_graph_metrics": bool(_CPP),
             "cpp_graph_analytics": bool(globals().get("_CPP_ANALYTICS")),
+            "c_similarity_digests": bool(globals().get("_C_FUZZY")),
+            "rust_signature_scan": bool(globals().get("_RUST_SIGNATURES")),
             "rust_similarity": bool(_RUST),
         },
         "directory": str(_build_directories()[-1]),
@@ -725,3 +727,97 @@ def _configure_cpp_analytics(library: ctypes.CDLL | None) -> ctypes.CDLL | None:
 
 
 _CPP_ANALYTICS = _configure_cpp_analytics(_CPP)
+
+
+# ---------------------------------------------------------------------------
+# Similarity digests (C, optional symbols of the file-intelligence library)
+
+
+def _configure_c_fuzzy(library: ctypes.CDLL | None) -> ctypes.CDLL | None:
+    if library is None:
+        return None
+    try:
+        for name in ("gi_tlsh", "gi_ssdeep"):
+            function = getattr(library, name)
+            function.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t]
+            function.restype = ctypes.c_int
+        for name in ("gi_tlsh_distance", "gi_ssdeep_compare"):
+            function = getattr(library, name)
+            function.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+            function.restype = ctypes.c_int
+    except AttributeError:
+        return None
+    return library
+
+
+_C_FUZZY = _configure_c_fuzzy(_C)
+
+
+def fuzzy_digests(data: bytes | bytearray | memoryview) -> dict[str, Any] | None:
+    """TLSH and ssdeep from the C engine, or None when it is not built."""
+    if _C_FUZZY is None:
+        return None
+    payload = _as_bytes(data)
+    tlsh_out = ctypes.create_string_buffer(80)
+    ssdeep_out = ctypes.create_string_buffer(160)
+    tlsh_status = _C_FUZZY.gi_tlsh(payload, len(payload), tlsh_out, len(tlsh_out))
+    if tlsh_status < 0 or _C_FUZZY.gi_ssdeep(payload, len(payload), ssdeep_out, len(ssdeep_out)) != 0:
+        return None
+    return {
+        "tlsh": tlsh_out.value.decode("ascii") if tlsh_status == 0 else None,
+        "ssdeep": ssdeep_out.value.decode("ascii"),
+        "engine": "c-native",
+    }
+
+
+def fuzzy_compare(kind: str, left: str, right: str) -> int | None:
+    """Native TLSH distance or ssdeep score; None when unavailable or invalid."""
+    if _C_FUZZY is None or kind not in {"tlsh", "ssdeep"}:
+        return None
+    function = _C_FUZZY.gi_tlsh_distance if kind == "tlsh" else _C_FUZZY.gi_ssdeep_compare
+    value = function(left.encode("ascii", errors="replace"), right.encode("ascii", errors="replace"))
+    return None if value < 0 else int(value)
+
+
+# ---------------------------------------------------------------------------
+# Embedded signature scan (Rust, optional symbol)
+
+
+class _Signature(ctypes.Structure):
+    _fields_ = [("offset", ctypes.c_uint64), ("kind", ctypes.c_uint32), ("extra", ctypes.c_uint32)]
+
+
+def _configure_rust_signatures(library: ctypes.CDLL | None) -> ctypes.CDLL | None:
+    if library is None:
+        return None
+    try:
+        library.gi_signature_scan.argtypes = [
+            ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(_Signature), ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        library.gi_signature_scan.restype = ctypes.c_int32
+    except AttributeError:
+        return None
+    return library
+
+
+_RUST_SIGNATURES = _configure_rust_signatures(_RUST)
+
+
+def signature_scan(data: bytes | bytearray | memoryview) -> tuple[list[tuple[int, int, int]], bool] | None:
+    """Native embedded signature scan, or None when Rust is not built."""
+    if _RUST_SIGNATURES is None:
+        return None
+    payload = _as_bytes(data)
+    count = ctypes.c_size_t()
+    capacity = 1024
+    while True:
+        records = (_Signature * capacity)()
+        status = _RUST_SIGNATURES.gi_signature_scan(payload, len(payload), records, capacity, ctypes.byref(count))
+        if status == -2 and count.value > capacity:
+            capacity = count.value
+            continue
+        if status < 0:
+            return None
+        hits = [(int(record.offset), int(record.kind), int(record.extra)) for record in records[: count.value]]
+        return hits, status == 1
