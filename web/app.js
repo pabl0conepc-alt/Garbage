@@ -621,6 +621,16 @@ const ERROR_PATTERNS = [
   [/^the TAXII server refused the credentials \(HTTP (\d+)\)$/, (m) => `O servidor TAXII recusou as credenciais (HTTP ${m[1]})`],
   [/^the TAXII server answered HTTP 404$/, () => "O servidor TAXII respondeu HTTP 404"],
   [/^the DNS resolver did not answer$/, () => "O resolvedor DNS não respondeu"],
+  [/^the plugin did not finish within (\d+) s$/, (m) => `O plugin não terminou em ${m[1]} s`],
+  [/^the plugin exited without a result$/, () => "O plugin terminou sem resultado"],
+  [/^the plugin broke the protocol$/, () => "O plugin quebrou o protocolo"],
+  [/^the plugin failed: (.+)$/, (m) => `O plugin falhou: ${m[1]}`],
+  [/^the plugin changed after approval; approve it again$/, () => "O plugin foi alterado depois da aprovação; aprove de novo"],
+  [/^the plugin changed since it was listed; review it again$/, () => "O plugin mudou desde a listagem; revise de novo"],
+  [/^this plugin declared no network access$/, () => "Este plugin não declarou acesso à rede"],
+  [/^request limit of (\d+) reached$/, (m) => `Limite de ${m[1]} requisições atingido`],
+  [/^the plugin is invalid: (.+)$/, (m) => `O plugin é inválido: ${m[1]}`],
+  [/^plugin\.json is missing$/, () => "Falta o plugin.json"],
   [/^give a registrable domain such as example\.com$/, () => "Informe um domínio registrável, como example.com"],
   [/^the selected objects have no simple observable patterns$/, () => "Os objetos escolhidos não têm padrões simples de observáveis"],
   [/^the Sigma package could not be downloaded(.*)$/, (m) => `Não foi possível baixar o pacote Sigma${m[1]}`],
@@ -740,6 +750,8 @@ const ACTIVITY_PATTERNS = [
   [/^TAXII server removed: (.+)$/, "Servidor TAXII removido: $1"],
   [/^TAXII pull: (\d+) objects from (.+)$/, "Coleta TAXII: $1 objeto(s) de $2"],
   [/^Sigma rules refreshed: (\S+), (\d+) rules$/, "Regras Sigma atualizadas: $1, $2 regras"],
+  [/^Plugin approved: (.+) \((\w+)\)$/, "Plugin aprovado: $1 ($2)"],
+  [/^Plugin disabled: (.+)$/, "Plugin desativado: $1"],
 ];
 
 const FORMAT_LABEL_PT = {
@@ -826,6 +838,7 @@ const TEXT_PT = {
   insertion: "inserção", homoglyph: "caractere parecido", hyphenation: "hífen", "vowel-swap": "troca de vogal",
   bitsquatting: "bit trocado", addition: "acréscimo", subdomain: "subdomínio", "tld-swap": "outro TLD",
   "TAXII feeds and Sigma rules": "Feeds TAXII e regras Sigma",
+  "Local plugin approvals": "Aprovações de plugins locais",
 };
 
 function translateText(value) {
@@ -895,6 +908,7 @@ const MODULE_TEXT = {
   analytics: ["Painel analítico", "Gráficos do workspace e do caso calculados a partir dos registros salvos."],
   "taxii-feeds": ["Feeds TAXII", "Cliente TAXII 2.1: descoberta, coleções e coleta paginada de objetos STIX, com indicadores registrados nos casos."],
   "sigma-rules": ["Regras Sigma", "Regras de detecção do SigmaHQ baixadas sob demanda e indexadas por técnica ATT&CK."],
+  plugins: ["Plugins locais", "Transformações escritas pelo analista, com manifesto, permissões declaradas e aprovação pelo hash do código, executadas em processo separado."],
   geoint: ["Mapa GEOINT", "Mapa local das posições GPS do EXIF de imagens analisadas e da localização aproximada de redes vinda das consultas."],
   "cti-export": ["Exportação CTI", "Pacotes STIX 2.1, eventos MISP e CSV de IOCs gerados a partir dos registros do caso."],
   "media-forensics": ["Perícia de mídia", "Análise de mídia mais profunda planejada; hoje existem apenas hash e metadados."],

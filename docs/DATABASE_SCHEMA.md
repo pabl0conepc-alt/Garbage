@@ -220,6 +220,7 @@ Applied migration ledger used to make startup idempotent.
 | 8 | Transforms, entity resolution and module registry corrections | `transform_runs`, `resolution_decisions`, `entity_aliases`; `nvd-connector` and `external-osint-connectors` set to enabled where still `planned` |
 | 9 | Full-text search index | `search_index` (FTS5, `unicode61 remove_diacritics 2`) over investigations, entities, sources, evidence, observations and file analyses, kept current by triggers; skipped where SQLite has no FTS5 |
 | 10 | TAXII feeds and Sigma rules | `taxii_servers`, `taxii_objects`, `taxii_pulls`, `sigma_rules`, `sigma_meta` |
+| 11 | Local plugin approvals | `plugin_registry` (enabled flag, approved code SHA-256 and manifest, time) |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

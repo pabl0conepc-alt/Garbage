@@ -39,7 +39,7 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | 15. Casos | parcial | Falta: objetivo, arquivar, duplicar, exportar/importar o caso inteiro |
 | 16. Evidências | parcial | SHA-256 e reverificação existem. Falta: cadeia de custódia (eventos), anotações por evidência, exportação/importação |
 | 17. Monitoramento | falta | Previsto como fase 9 do plano |
-| 18. Plugins | falta | Há registro de conectores e de módulos, mas não um formato de plugin com manifesto, permissões e isolamento |
+| 18. Plugins | existe (etapa 5) | Pasta local, manifesto validado, permissões declaradas (hosts, requisições, tempo, saída), aprovação pelo SHA-256 do código, execução em processo separado com rede intermediada; vira transformação |
 | 19. Normalização e resolução | existe (Fundação) | Candidatos exatos, prováveis e fracos com regra explicada; fusão aprovada pelo analista, com alias e registro de atividade; pares marcados como distintos não voltam. Pessoas ficam de fora |
 | 20. Pesquisa global | existe (etapa 3) | FTS5 com ranking BM25, trechos destacados, sem acento e com prefixo; grupo "mais relevantes"; recai para LIKE sem FTS5 |
 | 21. Relatórios | parcial | HTML, JSON, CSV, Markdown, STIX, MISP e impressão. Falta: escolher seções, incluir grafo e metodologia |
@@ -83,7 +83,7 @@ Ordem de trabalho, cada item com testes, verificação no navegador e PR:
 2. **Investigação visual** (feito) — seleção múltipla, fixar e ocultar, minimapa, desfazer/refazer, exportação PNG e JSON/GraphML (e importação), ícones por tipo, histórico de enriquecimento no painel do nó.
 3. **Pesquisa** (feito) — consultas assíncronas com progresso por fonte; FTS5 com ranking na busca global; conectores de organizações (GitHub, security.txt). Metadados de canais e servidores de chat ficaram de fora: as APIs públicas de convite expõem quem criou o convite.
 4. **Inteligência especializada** (feito) — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).
-5. **Plugins** — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.
+5. **Plugins** (feito) — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.
 6. **Casos e evidências** — objetivo, arquivar, duplicar, exportar/importar caso; cadeia de custódia e anotações de evidência; relatórios com seleção de seções, grafo e metodologia.
 7. **Monitoramento** — consultas salvas com agenda local, diferença entre execuções e notificações.
 8. **Refinamento** — acessibilidade, testes de ponta a ponta, desempenho do grafo, documentação e matriz OpenArchive atualizadas.

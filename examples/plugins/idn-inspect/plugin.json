@@ -1,0 +1,13 @@
+{
+  "id": "idn-inspect",
+  "name": "Inspetor de IDN",
+  "version": "1.0.0",
+  "description": "Decodifica rótulos internacionalizados (xn--), mostra os alfabetos misturados e o domínio ASCII que eles imitam. Offline.",
+  "author": "GARBAGE examples",
+  "entry": "main.py",
+  "accepts": ["domain", "url"],
+  "outputs": [
+    {"result_type": "ascii-lookalike", "entity_type": "domain", "relationship_type": "related-to"}
+  ],
+  "permissions": {"timeout_seconds": 10, "max_output_kb": 64}
+}

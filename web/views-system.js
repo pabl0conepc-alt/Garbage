@@ -40,6 +40,92 @@
   /* Module manager                                                    */
   /* ================================================================ */
 
+  const PLUGIN_STATE = {
+    enabled: ["Ativo", "success"],
+    disabled: ["Não aprovado", "neutral"],
+    changed: ["Alterado: aprove de novo", "warning"],
+    invalid: ["Inválido", "danger"],
+  };
+
+  /* Local plugins: discovered in a folder, approved by code digest. */
+  function pluginsPanel() {
+    const body = el("div", {}, loadingBlock("Procurando plugins…"));
+    const box = panel({ eyebrow: "EXTENSÕES", title: "Plugins locais" }, body);
+
+    function permissionsText(manifest) {
+      const permissions = manifest.permissions;
+      const parts = [permissions.network.length ? `rede: ${permissions.network.join(", ")}` : "sem rede"];
+      if (permissions.contacts_target) parts.push("contata o alvo");
+      if (permissions.network.length) parts.push(`até ${permissions.max_requests} requisição(ões)`);
+      parts.push(`${permissions.timeout_seconds} s`, `${permissions.max_output_kb} KB de saída`);
+      return parts.join(" · ");
+    }
+
+    async function act(path, payload, message) {
+      try {
+        const listing = await api(path, { method: "POST", body: JSON.stringify(payload || {}) });
+        toast(message);
+        draw(listing);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    async function approve(item) {
+      const manifest = item.manifest;
+      const ok = await confirm({
+        title: `Aprovar ${manifest.name} ${manifest.version}?`,
+        message: `Este código (SHA-256 ${item.sha256.slice(0, 16)}…) passa a rodar como transformação, num processo separado com estas permissões: ${permissionsText(manifest)}. O isolamento limita erros e excessos, mas não protege contra código hostil: aprove só plugins que você leu. Qualquer alteração nos arquivos exige nova aprovação.`,
+        confirmLabel: "Aprovar e ativar",
+      });
+      if (ok) act(`/api/plugins/${item.id}/enable`, { sha256: item.sha256 }, `${manifest.name} aprovado.`);
+    }
+
+    function draw(listing) {
+      body.replaceChildren(
+        el("p", { class: "panel-note" }, "Pasta: ", el("code", {}, listing.directory), ". Cada plugin é uma pasta com plugin.json e o código Python. Exemplo em examples/plugins/idn-inspect."),
+        listing.items.length
+          ? table({
+              columns: [
+                {
+                  label: "PLUGIN",
+                  render: (row) =>
+                    el(
+                      "div",
+                      { class: "cell-stack" },
+                      el("strong", {}, row.manifest ? `${row.manifest.name} ${row.manifest.version}` : row.folder),
+                      el("span", {}, row.manifest ? row.manifest.description : G.translateError(row.error)),
+                    ),
+                },
+                { label: "ESTADO", render: (row) => badge(...(PLUGIN_STATE[row.state] || [row.state, "neutral"])) },
+                { label: "PERMISSÕES", render: (row) => (row.manifest ? el("span", { class: "clamp-3" }, permissionsText(row.manifest)) : "—") },
+                { label: "CÓDIGO", render: (row) => (row.sha256 ? el("code", { title: row.sha256 }, row.sha256.slice(0, 12)) : "—") },
+                {
+                  label: "",
+                  render: (row) =>
+                    row.state === "enabled"
+                      ? el("button", { class: "button button-secondary button-small", type: "button", onClick: () => act(`/api/plugins/${row.id}/disable`, null, "Plugin desativado.") }, "Desativar")
+                      : row.manifest
+                        ? el("button", { class: "button button-primary button-small", type: "button", onClick: () => approve(row) }, row.state === "changed" ? "Revisar e aprovar" : "Aprovar")
+                        : null,
+                },
+              ],
+              rows: listing.items,
+            })
+          : el("p", { class: "panel-empty" }, "Nenhum plugin na pasta."),
+        el(
+          "div",
+          { class: "inline-actions" },
+          el("button", { class: "button button-secondary button-small", type: "button", onClick: () => act("/api/plugins/rescan", null, "Pasta de plugins relida.") }, "Reler pasta"),
+        ),
+        el("p", { class: "tool-limit" }, listing.items.length ? "Isolamento: processo python -I separado, limite de tempo e de memória, rede só pelo GARBAGE e só para os hosts declarados. Não é um sandbox contra código hostil." : ""),
+      );
+    }
+
+    api("/api/plugins").then(draw).catch((error) => body.replaceChildren(inlineError(error.message)));
+    return box;
+  }
+
   async function renderModules(root) {
     const data = await api("/api/modules");
     const available = data.items.filter((item) => item.state === "available").length;
@@ -169,6 +255,7 @@
           "Módulos essenciais não podem ser desativados.",
       ),
       ...sections,
+      G.moduleEnabled("plugins") ? pluginsPanel() : null,
       panel(
         { eyebrow: "CONTRATOS", title: "Interface dos módulos" },
         el(

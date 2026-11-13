@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -334,6 +334,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "Sigma rules",
         "SigmaHQ detection rules downloaded on request and indexed by ATT&CK technique.",
         "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "plugins",
+        "Local plugins",
+        "Analyst-written transforms with a manifest, declared permissions and approval by code digest, run in a separate process.",
+        "System",
         "1.0.0",
         "enabled",
     ),
@@ -1106,6 +1114,20 @@ def _migrate_cti_feeds(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_plugins(connection: sqlite3.Connection) -> None:
+    """Version 11: approvals of local plugins."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS plugin_registry (
+               id TEXT PRIMARY KEY,
+               enabled INTEGER NOT NULL DEFAULT 0,
+               approved_sha256 TEXT NOT NULL DEFAULT '',
+               approved_manifest_json TEXT NOT NULL DEFAULT '{}',
+               approved_at TEXT NOT NULL DEFAULT '',
+               last_error TEXT NOT NULL DEFAULT ''
+           );"""
+    )
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -1130,6 +1152,7 @@ MIGRATIONS = (
     (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
     (9, "Full-text search index", _migrate_search_index),
     (10, "TAXII feeds and Sigma rules", _migrate_cti_feeds),
+    (11, "Local plugin approvals", _migrate_plugins),
 )
 
 

@@ -56,6 +56,7 @@ from .modules import attack
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
+from . import plugins
 from .graph_io import import_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
 from .transforms import entity_history, list_transforms, run_transforms
@@ -1656,6 +1657,23 @@ class RequestHandler(BaseHTTPRequestHandler):
     def api_sigma_rule(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._json(200, sigma.get_rule(self.database_path, match.group(1)))
 
+    def api_plugins(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, plugins.list_plugins(self.database_path))
+
+    def api_plugins_rescan(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("plugins")
+        plugins.load_approved(self.database_path)
+        self._json(200, plugins.list_plugins(self.database_path))
+
+    def api_plugin_enable(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        unknown = set(payload) - {"sha256"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(200, plugins.enable(self.database_path, match.group(1), sha256=payload.get("sha256")))
+
+    def api_plugin_disable(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, plugins.disable(self.database_path, match.group(1)))
+
     def api_geoint(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1834,6 +1852,10 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("GET", re.compile(r"^/api/graph$"), "api_graph", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
     ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/plugins$"), "api_plugins", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/plugins/rescan$"), "api_plugins_rescan", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/plugins/([a-z0-9][a-z0-9-]{1,40})/enable$"), "api_plugin_enable", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/plugins/([a-z0-9][a-z0-9-]{1,40})/disable$"), "api_plugin_disable", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/taxii/servers$"), "api_taxii_servers", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/taxii/servers$"), "api_taxii_server_add", MAX_BODY_BYTES),
     ("DELETE", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}$"), "api_taxii_server_delete", MAX_BODY_BYTES),
@@ -2245,6 +2267,9 @@ def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer
 def serve(database: str | Path, port: int = 8000) -> None:
     server = create_server(database, port)
     recover_interrupted_runs(str(database))
+    loaded = plugins.load_approved(str(database))
+    if loaded:
+        print(f"Plugins loaded: {', '.join(loaded)}")
     print(f"GARBAGE local interface: http://127.0.0.1:{server.server_port}/")
     try:
         server.serve_forever()

@@ -214,6 +214,18 @@ definitions; the server stores them for images and ignores them otherwise.
 `/similar` adds `phash_distance` and `dhash_distance` (bits out of 64) and
 keeps a candidate when pHash is within 10 bits.
 
+## Plugins
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/plugins` | Plugins directory, every folder with manifest or error, code SHA-256 and state (`invalid`, `disabled`, `enabled`, `changed`) |
+| POST | `/api/plugins/rescan` | Re-read the folder and load approved, unchanged plugins |
+| POST | `/api/plugins/{id}/enable` | `{sha256}`: approve exactly the listed code and permissions and load the plugin (`409` if it changed since listing) |
+| POST | `/api/plugins/{id}/disable` | Unload and withdraw approval |
+
+See `MODULE_DEVELOPMENT.md` section 8 for the manifest, the `run(ctx)`
+contract and the isolation model.
+
 ## TAXII 2.1 feeds
 
 | Method | Path | Purpose |
