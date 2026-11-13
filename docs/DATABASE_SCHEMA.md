@@ -174,6 +174,26 @@ Capability registry. States are `enabled`, `disabled` and `planned`. Planned
 modules cannot be enabled, and API routes call `require_module` before doing
 work.
 
+### `transform_runs`
+
+`id`, `transform_id`, `entity_id`, `investigation_id`, `intel_run_id`, `status`,
+`result_count`, `created_count`, `reused_count`, `relationship_count`,
+`parameters_json`, `log_json`, `duration_ms`, `started_at`, `finished_at`
+
+One row per transform per run; the entity's enrichment history.
+
+### `resolution_decisions`
+
+`pair_key`, `entity_a`, `entity_b`, `decision` (`distinct` or `merged`),
+`level`, `rule`, `note`, `decided_at`
+
+### `entity_aliases`
+
+`id`, `entity_id`, `entity_type`, `name`, `identifier`, `merged_from_id`,
+`level`, `note`, `created_at`
+
+What a merged entity was, kept on the entity it was merged into.
+
 ### `application_settings`
 
 `key`, `value`, `updated_at`
@@ -196,6 +216,9 @@ Applied migration ledger used to make startup idempotent.
 | 4 | Multi-source intelligence runs and source status | `intel_runs`, `intel_results`, `intel_cache`, `intel_source_status` |
 | 5 | YARA rule sets and file similarity digests | `yara_rulesets`; `tlsh` and `ssdeep` columns on `file_analyses` |
 | 6 | Local API keys for keyed intelligence connectors | `intel_api_keys` |
+| 7 | Offline MITRE ATT&CK and case techniques | `attack_meta`, `attack_tactics`, `attack_techniques`, `attack_objects`, `attack_relations`, `case_techniques` |
+| 8 | Transforms, entity resolution and module registry corrections | `transform_runs`, `resolution_decisions`, `entity_aliases`; `nvd-connector` and `external-osint-connectors` set to enabled where still `planned` |
+| 9 | Full-text search index | `search_index` (FTS5, `unicode61 remove_diacritics 2`) over investigations, entities, sources, evidence, observations and file analyses, kept current by triggers; skipped where SQLite has no FTS5 |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

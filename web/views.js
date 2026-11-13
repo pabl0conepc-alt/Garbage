@@ -649,7 +649,7 @@
     });
     if (!approved) return false;
     try {
-      await api(`/api/investigations/${investigation.id}`, { method: "EXCLUIR" });
+      await api(`/api/investigations/${investigation.id}`, { method: "DELETE" });
     } catch (error) {
       if (error.status !== 409) throw error;
       const forced = await confirm({
@@ -663,7 +663,7 @@
       });
       if (!forced) return false;
       await api(`/api/investigations/${investigation.id}?force=true`, {
-        method: "EXCLUIR",
+        method: "DELETE",
       });
     }
     G.invalidateInvestigations();
@@ -681,7 +681,7 @@
     });
     if (!approved) return false;
     try {
-      await api(`/api/entities/${entity.id}`, { method: "EXCLUIR" });
+      await api(`/api/entities/${entity.id}`, { method: "DELETE" });
     } catch (error) {
       if (error.status !== 409) throw error;
       const forced = await confirm({
@@ -691,7 +691,7 @@
         danger: true,
       });
       if (!forced) return false;
-      await api(`/api/entities/${entity.id}?force=true`, { method: "EXCLUIR" });
+      await api(`/api/entities/${entity.id}?force=true`, { method: "DELETE" });
     }
     toast("Entidade excluída.");
     if (onDeleted) await onDeleted();
@@ -1433,7 +1433,7 @@
                           try {
                             await api(
                               `/api/investigations/${investigation.id}/entities/${row.id}`,
-                              { method: "EXCLUIR" },
+                              { method: "DELETE" },
                             );
                             toast("Entidade desvinculada; o registro compartilhado foi preservado.");
                             await draw();
@@ -1536,7 +1536,7 @@
                             )
                               return;
                             try {
-                              await api(`/api/evidence/${row.id}`, { method: "EXCLUIR" });
+                              await api(`/api/evidence/${row.id}`, { method: "DELETE" });
                               toast("Evidência excluída.");
                               await draw();
                             } catch (error) {
@@ -1608,7 +1608,7 @@
                           try {
                             await api(
                               `/api/investigations/${investigation.id}/sources/${row.id}`,
-                              { method: "EXCLUIR" },
+                              { method: "DELETE" },
                             );
                             toast("Fonte desvinculada; o registro compartilhado foi preservado.");
                             await draw();
@@ -1682,7 +1682,7 @@
                           )
                             return;
                           try {
-                            await api(`/api/relationships/${row.id}`, { method: "EXCLUIR" });
+                            await api(`/api/relationships/${row.id}`, { method: "DELETE" });
                             toast("Relacionamento excluído.");
                             await draw();
                           } catch (error) {
@@ -1914,6 +1914,28 @@
       ["csv", "Exportação CSV"],
       ["markdown", "Markdown"],
     ];
+    const tlpSelect = el(
+      "select",
+      { class: "input compact-select", "aria-label": "Marcação TLP das exportações CTI" },
+      ...["white", "green", "amber", "red"].map((value) => el("option", { value, selected: value === "amber" }, `TLP:${value.toUpperCase()}`)),
+    );
+    const cti = [
+      ["stix", "STIX 2.1", "Bundle com indicadores, observáveis, relacionamentos, técnicas ATT&CK e o relatório. Validado pelo validador da OASIS."],
+      ["misp", "Evento MISP", "Atributos, hashes de semelhança, etiqueta TLP e galáxia ATT&CK. to_ids só em registros verificados."],
+      ["iocs", "IOCs em CSV", "Domínios, IPs, URLs, e-mails e hashes com origem e status de verificação."],
+    ];
+    const ctiLinks = cti.map(([format, label, text]) => {
+      const link = el("a", { class: "export-card", href: `/api/investigations/${investigation.id}/export?format=${format}&tlp=amber`, download: "" }, el("strong", {}, label), el("span", {}, text));
+      return [format, link];
+    });
+    tlpSelect.addEventListener("change", () => {
+      for (const [format, link] of ctiLinks) link.href = `/api/investigations/${investigation.id}/export?format=${format}&tlp=${tlpSelect.value}`;
+    });
+    const ctiPanel = panel(
+      { eyebrow: "INTERCÂMBIO CTI", title: "Exportar para outras plataformas", caption: "Pessoas e perfis ficam de fora", actions: [tlpSelect] },
+      el("div", { class: "export-grid" }, ...ctiLinks.map(([, link]) => link)),
+      el("p", { class: "tool-limit" }, "Indicadores saem com tipo \"unknown\" e com o status de verificação de cada registro: exportar não transforma associação em atribuição."),
+    );
     return el(
       "div",
       { class: "report-tab" },
@@ -1947,6 +1969,7 @@
           ),
         ),
       ),
+      ctiPanel,
       panel(
         { eyebrow: "INTERPRETAÇÃO", title: "Classes de registro" },
         el(
