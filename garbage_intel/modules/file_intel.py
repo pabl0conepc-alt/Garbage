@@ -26,6 +26,7 @@ from .. import native
 from ..db import _connection, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
+from .embedded_scan import scan_signatures
 from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
 from .hardening import describe_hardening
 from .imaging import inspect_image
@@ -1349,6 +1350,29 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
     indicators = _indicators_from_strings(strings, "\n".join(extra_text))
     hardening = describe_hardening(kind, data)
     similarity = similarity_digests(data)
+    embedded = scan_signatures(data, kind)
+    own_kinds = {"macho": {"macho", "macho-fat"}, "iso": {"iso"}}.get(kind, set())
+    hidden_executables = [
+        item for item in embedded["items"]
+        if item["offset"] > 0 and item["kind"] in {"pe", "elf", "macho", "macho-fat", "dex", "java-class", "wasm"} and item["kind"] not in own_kinds
+    ]
+    if hidden_executables:
+        first = hidden_executables[0]
+        findings.append(
+            {
+                "level": "warning",
+                "code": "embedded-executable",
+                "message": f"Executable headers appear inside the file ({len(hidden_executables)}; first: {first['label']} at offset 0x{first['offset']:x}). They were located, not extracted.",
+            }
+        )
+    if embedded["private_keys"]:
+        findings.append(
+            {
+                "level": "warning",
+                "code": "embedded-private-key",
+                "message": f"PEM private key blocks are present ({embedded['private_keys']}). Handle the file as sensitive material.",
+            }
+        )
     return {
         "file_name": safe_name,
         "format": kind,
@@ -1363,6 +1387,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             "ssdeep": similarity["ssdeep"],
         },
         "similarity_engine": similarity["engine"],
+        "embedded": embedded,
         "magic_hex": data[:16].hex(),
         "entropy": entropy,
         "metadata": metadata,
@@ -1379,6 +1404,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             "Embedded indicators are syntactic string matches, not reputation or attribution.",
             "Hashes identify these exact bytes and do not establish safety or provenance.",
             "TLSH and ssdeep measure byte-level resemblance; a close digest is not shared authorship or intent.",
+            "Embedded signatures mark where another format appears to start; they are not validated or carved.",
         ],
         "analysis_engine": "python-stdlib",
     }

@@ -22,6 +22,18 @@ int32_t gi_domain_distance(const uint8_t *left, size_t left_length,
 int32_t gi_domain_skeleton(const uint8_t *input, size_t input_length,
                            uint8_t *output, size_t output_capacity);
 
+typedef struct {
+    uint64_t offset;
+    uint32_t kind;  /* ids listed in garbage_intel/modules/embedded_scan.py */
+    uint32_t extra;
+} gi_signature;
+
+/* Embedded signature scan. Writes the hits sorted by offset and sets *count.
+ * Returns 0, 1 when the scan stopped at 65536 hits, -1 for invalid
+ * arguments, -2 when capacity < *count. */
+int32_t gi_signature_scan(const uint8_t *data, size_t length,
+                          gi_signature *out, size_t capacity, size_t *count);
+
 #ifdef __cplusplus
 }
 #endif

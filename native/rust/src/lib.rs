@@ -1,9 +1,12 @@
-//! Optional Rust string-similarity helpers for domain lookalike analysis.
+//! Optional Rust helpers: string similarity for domain lookalike analysis and
+//! the embedded signature scan (`signatures`).
 //!
 //! The exported functions are pure and allocation-bounded. They never resolve
 //! DNS, open files, touch the network or execute input.
 
 use core::slice;
+
+pub mod signatures;
 
 const MAX_INPUT: usize = 253;
 const ABI_VERSION: u32 = 1;

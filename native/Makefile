@@ -44,7 +44,7 @@ $(LIB_CPP): cpp/garbage_graph.cpp include/garbage_graph.h | $(BUILD)
 
 rust: $(LIB_RUST)
 
-$(LIB_RUST): rust/src/lib.rs rust/Cargo.toml | $(BUILD)
+$(LIB_RUST): rust/src/lib.rs rust/src/signatures.rs rust/Cargo.toml | $(BUILD)
 	cd rust && $(CARGO) build --release
 	cp $(RUST_SOURCE) $@
 

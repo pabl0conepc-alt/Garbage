@@ -177,6 +177,7 @@ def native_status() -> dict[str, Any]:
             "cpp_graph_metrics": bool(_CPP),
             "cpp_graph_analytics": bool(globals().get("_CPP_ANALYTICS")),
             "c_similarity_digests": bool(globals().get("_C_FUZZY")),
+            "rust_signature_scan": bool(globals().get("_RUST_SIGNATURES")),
             "rust_similarity": bool(_RUST),
         },
         "directory": str(_build_directories()[-1]),
@@ -776,3 +777,47 @@ def fuzzy_compare(kind: str, left: str, right: str) -> int | None:
     function = _C_FUZZY.gi_tlsh_distance if kind == "tlsh" else _C_FUZZY.gi_ssdeep_compare
     value = function(left.encode("ascii", errors="replace"), right.encode("ascii", errors="replace"))
     return None if value < 0 else int(value)
+
+
+# ---------------------------------------------------------------------------
+# Embedded signature scan (Rust, optional symbol)
+
+
+class _Signature(ctypes.Structure):
+    _fields_ = [("offset", ctypes.c_uint64), ("kind", ctypes.c_uint32), ("extra", ctypes.c_uint32)]
+
+
+def _configure_rust_signatures(library: ctypes.CDLL | None) -> ctypes.CDLL | None:
+    if library is None:
+        return None
+    try:
+        library.gi_signature_scan.argtypes = [
+            ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(_Signature), ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        library.gi_signature_scan.restype = ctypes.c_int32
+    except AttributeError:
+        return None
+    return library
+
+
+_RUST_SIGNATURES = _configure_rust_signatures(_RUST)
+
+
+def signature_scan(data: bytes | bytearray | memoryview) -> tuple[list[tuple[int, int, int]], bool] | None:
+    """Native embedded signature scan, or None when Rust is not built."""
+    if _RUST_SIGNATURES is None:
+        return None
+    payload = _as_bytes(data)
+    count = ctypes.c_size_t()
+    capacity = 1024
+    while True:
+        records = (_Signature * capacity)()
+        status = _RUST_SIGNATURES.gi_signature_scan(payload, len(payload), records, capacity, ctypes.byref(count))
+        if status == -2 and count.value > capacity:
+            capacity = count.value
+            continue
+        if status < 0:
+            return None
+        hits = [(int(record.offset), int(record.kind), int(record.extra)) for record in records[: count.value]]
+        return hits, status == 1
