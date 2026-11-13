@@ -57,7 +57,8 @@ G.NAV = [
     items: [
       { view: "board", label: "Quadro de investigação", icon: "board", module: "investigation-board" },
       { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
-      { view: "analytics", label: "Painel analítico", icon: "chart" },
+      { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
+      { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
     ],
   },
   {
@@ -71,7 +72,7 @@ G.NAV = [
     label: "Inteligência de ameaças",
     items: [
       { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
-      { view: "attack", label: "MITRE ATT&CK", icon: "matrix" },
+      { view: "attack", label: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
     ],
   },
   {
@@ -244,6 +245,8 @@ const ICON_PATHS = {
   files: "M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h4.5",
   board: "M3 4.5h18v15H3zM7 8.5h4v3H7zM14 13h4v3h-4zM11 10l3 4.5",
   chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
+  merge: "M6 4v4a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 4v4a6 6 0 0 1-6 6M12 14v6M4 6l2-2 2 2M16 6l2-2 2 2",
+  transform: "M4 12h10M10 7l5 5-5 5M18 5v14",
   matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
   graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
   evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
@@ -597,6 +600,18 @@ const ERROR_PATTERNS = [
   [/^the source returned invalid JSON$/, () => "A fonte retornou JSON inválido"],
   [/^certificate could not be parsed: (.+)$/, (m) => `Não foi possível interpretar o certificado: ${m[1]}`],
   [/^connector failed unexpectedly$/, () => "O conector falhou de forma inesperada"],
+  [/^transforms do not run on people, usernames or profiles$/, () => "Transformações não rodam sobre pessoas, nomes de usuário ou perfis"],
+  [/^the entity has no identifier a transform can query$/, () => "A entidade não tem um identificador que uma transformação possa consultar"],
+  [/^the entity's identifier is not a domain, IP, CIDR, URL, email, hash, ASN or CVE$/, () => "O identificador da entidade não é domínio, IP, CIDR, URL, e-mail, hash, ASN nem CVE"],
+  [/^the identifier was read as (\S+), which does not match the entity type (\S+)$/, (m) => `O identificador foi lido como ${m[1]}, o que não combina com o tipo ${entityTypeLabel(m[2]).toLowerCase()}`],
+  [/^transforms must be a non-empty list of transform ids$/, () => "Selecione pelo menos uma transformação"],
+  [/^at most 30 transforms run at once$/, () => "No máximo 30 transformações por vez"],
+  [/^unknown transforms: (.+)$/, (m) => `Transformações desconhecidas: ${m[1]}`],
+  [/^transforms that do not accept (\S+): (.+)$/, (m) => `Transformações que não aceitam ${m[1]}: ${m[2]}`],
+  [/^max_new_entities must be between (\d+) and (\d+)$/, (m) => `O limite de novas entidades deve ficar entre ${m[1]} e ${m[2]}`],
+  [/^an entity cannot be merged into itself$/, () => "Uma entidade não pode ser fundida nela mesma"],
+  [/^two different entity ids are required$/, () => "São necessárias duas entidades diferentes"],
+  [/^a person, username or profile can only be merged with the same kind of entity$/, () => "Pessoa, nome de usuário ou perfil só pode ser fundido com o mesmo tipo de entidade"],
   [/^no CISA KEV cache; run an explicit refresh first$/, () => "Sem cache do CISA KEV; faça uma atualização explícita primeiro"],
   [/^the run has no findings to record$/, () => "A consulta não tem resultados para registrar"],
   [/^value was detected as (\w+), not (\w+)$/, (m) => `O valor foi detectado como ${m[1]}, não ${m[2]}`],
@@ -704,6 +719,9 @@ const ACTIVITY_PATTERNS = [
   [/^YARA rule set deleted: (.+)$/, "Conjunto de regras YARA excluído: $1"],
   [/^API key saved: (.+)$/, "Chave de API salva: $1"],
   [/^API key removed: (.+)$/, "Chave de API removida: $1"],
+  [/^Transforms on (\S+) (.+): (\d+) run, (\d+) new entities$/, (m) => `Transformações em ${m[2]}: ${m[3]} executada(s), ${m[4]} entidade(s) nova(s)`],
+  [/^Entity merged: (.+) into (.+)$/, "Entidade fundida: $1 em $2"],
+  [/^Entity pair marked as distinct$/, "Par de entidades marcado como distinto"],
 ];
 
 const FORMAT_LABEL_PT = {
@@ -759,10 +777,13 @@ const TEXT_PT = {
   "Multi-source intelligence runs and source status": "Consultas multifonte e status das fontes",
   "YARA rule sets and file similarity digests": "Conjuntos de regras YARA e hashes de semelhança de arquivos",
   "Local API keys for keyed intelligence connectors": "Chaves de API locais para conectores com chave",
+  "Offline MITRE ATT&CK and case techniques": "MITRE ATT&CK offline e técnicas por caso",
+  "Transforms, entity resolution and module registry corrections": "Transformações, resolução de entidades e correções no registro de módulos",
   "TLSH and ssdeep measure byte-level resemblance; a close digest is not shared authorship or intent.": "TLSH e ssdeep medem semelhança de bytes; um hash próximo não indica mesma autoria nem mesma intenção.",
   "Embedded signatures mark where another format appears to start; they are not validated or carved.": "Assinaturas embutidas marcam onde outro formato parece começar; não são validadas nem recortadas.",
   "planned, not implemented": "planejado, não implementado",
   "explicit manual refresh": "atualização manual explícita",
+  "explicit multi-source query": "consulta multifonte explícita",
 };
 
 function translateText(value) {
@@ -823,8 +844,14 @@ const MODULE_TEXT = {
   "global-search": ["Pesquisa global", "Pesquisa unificada em casos, entidades, evidências e fontes."],
   "module-manager": ["Gerenciador de módulos", "Registro controlado dos módulos disponíveis e planejados."],
   settings: ["Configurações", "Preferências de interface e de relatórios salvas, com efeito real."],
-  "nvd-connector": ["Conector NVD CVE", "Conector planejado de metadados descritivos de CVE do NVD; não implementado."],
-  "external-osint-connectors": ["Conectores OSINT externos", "Consultas externas autorizadas planejadas; nenhum conector foi implementado."],
+  "nvd-connector": ["Conector NVD CVE", "Registro do NIST NVD para uma CVE (descrição, CVSS, CWE, referências) como conector da pesquisa multifonte."],
+  "external-osint-connectors": ["Conectores OSINT externos", "Fontes passivas de terceiros (DNS, RDAP, CT, arquivos da web, roteamento, reputação) usadas pela pesquisa multifonte e pelas transformações."],
+  transforms: ["Transformações", "Transformações de entidade para entidade sobre os conectores, com parâmetros, log por execução, duração e histórico de enriquecimento."],
+  "entity-resolution": ["Resolução de entidades", "Candidatos a duplicata exatos, prováveis e fracos, com fusão aprovada pelo analista e auditada."],
+  "attack-matrix": ["MITRE ATT&CK", "Matriz Enterprise ATT&CK offline, detalhe de técnicas e técnicas vinculadas aos casos."],
+  "yara-rules": ["Regras YARA", "Conjuntos locais de regras YARA verificados, testados e aplicados às análises de arquivos."],
+  analytics: ["Painel analítico", "Gráficos do workspace e do caso calculados a partir dos registros salvos."],
+  "cti-export": ["Exportação CTI", "Pacotes STIX 2.1, eventos MISP e CSV de IOCs gerados a partir dos registros do caso."],
   "media-forensics": ["Perícia de mídia", "Análise de mídia mais profunda planejada; hoje existem apenas hash e metadados."],
 };
 

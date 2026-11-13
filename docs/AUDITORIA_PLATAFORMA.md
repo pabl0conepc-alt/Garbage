@@ -28,7 +28,7 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | --- | --- | --- |
 | 5. Motor global com detecção de tipo | parcial | Detecta domínio, IP, CIDR, URL, e-mail, hashes, ASN e CVE. Falta: imagem/documento como entrada da pesquisa (hoje vão pela Análise de arquivos), repositórios e organizações |
 | 6. Investigação visual | parcial | Existe grafo, painel por nó, pivô, layouts, foco, exportação SVG. Falta: seleção múltipla, fixar/ocultar nós, minimapa, desfazer/refazer, exportação PNG e dos dados do grafo (JSON/GraphML), ícones por tipo no nó, histórico de enriquecimento por nó |
-| 7. Motor de transformações | parcial | Conectores + promoção já fazem "entidade → consulta → novas entidades". Falta o conceito explícito de transform (entrada → saída, parâmetros, logs, tempo estimado) e registro extensível por plugin |
+| 7. Motor de transformações | existe (Fundação) | Transformações declaradas sobre os conectores: entrada, saídas (tipo de entidade e relação), parâmetros, log por execução, tempo médio medido e histórico por entidade, no painel da entidade e no grafo. Falta o registro por plugin (etapa 5) |
 | 8. SOCMINT | parcial / fora | Dentro do escopo: dados públicos de **organizações e comunidades** (repositórios e organizações do GitHub, metadados públicos de canais e servidores). Fora: perfis e histórico de pessoas |
 | 9. Identidade digital | fora | Ver seção 4 |
 | 10. Infraestrutura | existe (quase todo) | DNS, rDNS (IPinfo/Shodan), RDAP, ASN, geolocalização de rede, CT, TLS, cabeçalhos, tecnologias, portas (Shodan), histórico (Wayback). Falta: árvore de subdomínios dedicada e DNS passivo (só com provedor pago) |
@@ -40,7 +40,7 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | 16. Evidências | parcial | SHA-256 e reverificação existem. Falta: cadeia de custódia (eventos), anotações por evidência, exportação/importação |
 | 17. Monitoramento | falta | Previsto como fase 9 do plano |
 | 18. Plugins | falta | Há registro de conectores e de módulos, mas não um formato de plugin com manifesto, permissões e isolamento |
-| 19. Normalização e resolução | parcial | Resultados já são normalizados (tipo, valor, fonte, hash da resposta, data). Falta a resolução explícita com níveis exata/provável/fraca |
+| 19. Normalização e resolução | existe (Fundação) | Candidatos exatos, prováveis e fracos com regra explicada; fusão aprovada pelo analista, com alias e registro de atividade; pares marcados como distintos não voltam. Pessoas ficam de fora |
 | 20. Pesquisa global | parcial | Busca existe sem ranking; FTS5 previsto na fase 10 |
 | 21. Relatórios | parcial | HTML, JSON, CSV, Markdown, STIX, MISP e impressão. Falta: escolher seções, incluir grafo e metodologia |
 | 22. Arquitetura | existe | SQLite com migrações, cache, limites de taxa, erros estruturados. Execução assíncrona de consultas falta (fase 9) |
@@ -49,8 +49,9 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 
 ## 3. Problemas encontrados
 
-1. O registro de módulos ainda marca `nvd-connector` e `external-osint-connectors` como "planejado, não implementado", mas os conectores existem desde as fases 2 e 7. A tela de módulos fica inconsistente.
-2. Telas novas (ATT&CK, YARA, painel analítico) não aparecem no registro de módulos e não podem ser desligadas por ele.
+1. ~~O registro de módulos marcava `nvd-connector` e `external-osint-connectors` como "planejado".~~ Corrigido na migração 8; desativá-los agora desliga os conectores correspondentes.
+2. ~~Telas novas fora do registro de módulos.~~ ATT&CK, YARA, painel analítico e exportação CTI agora são módulos e protegem suas rotas.
+8. ~~Excluir caso, entidade, evidência, fonte ou relação não funcionava: o redesign traduziu o método HTTP `DELETE` para "EXCLUIR".~~ Corrigido na Fundação.
 3. Os resumos de atividade são gravados em inglês no backend e traduzidos por padrões no front; cada ação nova exige um padrão novo (três estavam faltando e foram corrigidos agora).
 4. O arquivo original analisado não é guardado (só o resultado), então regras YARA novas não podem ser reaplicadas a análises antigas; isso está documentado na tela.
 5. O grafo carrega no máximo 500 entidades e 1000 relacionamentos.
@@ -77,7 +78,7 @@ coleta automática é feita sobre eles e as exportações CTI os omitem.
 
 Ordem de trabalho, cada item com testes, verificação no navegador e PR:
 
-1. **Fundação** — formato de transform (entrada, saída, parâmetros, logs, tempo) sobre os conectores; registro de módulos corrigido e completo; resolução de entidades com níveis exata/provável/fraca.
+1. **Fundação** (feito) — formato de transform (entrada, saída, parâmetros, logs, tempo) sobre os conectores; registro de módulos corrigido e completo; resolução de entidades com níveis exata/provável/fraca.
 2. **Investigação visual** — seleção múltipla, fixar e ocultar, minimapa, desfazer/refazer, exportação PNG e JSON/GraphML (e importação), ícones por tipo, histórico de enriquecimento no painel do nó.
 3. **Pesquisa** — consultas assíncronas com progresso por fonte; FTS5 com ranking na busca global; conectores públicos de organizações e comunidades (GitHub, metadados públicos de canais e servidores).
 4. **Inteligência especializada** — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).

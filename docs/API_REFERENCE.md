@@ -392,6 +392,41 @@ entity, with confidence `possible`, status `not-verified` and the finding's
 source URL as reference. Duplicate relationships and unusable findings (null
 MX, the source itself) are reported under `skipped`.
 
+## Transforms
+
+A transform is a connector run from an entity. It accepts the entity's
+canonical artifact, runs through the same gates, cache and rate limits as a
+multi-source query, and turns declared result types into entities linked to
+the input (confidence `possible`, status `not-verified`, source URL as
+reference). Person, username and profile entities are never inputs.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/transforms?entity_id=` | Transforms for an entity (or all): `kind` (`pivot` or `enrichment`), `inputs`, `outputs` (`result_type`, `entity_type`, `relationship_type`), `availability`, `estimate_ms` (mean of real, uncached runs) and `estimate_samples` |
+| POST | `/api/transforms/run` | `{entity_id, transforms: [ids], investigation_id?, parameters?}`; parameters are `use_cache` (true), `promote` (true) and `max_new_entities` (1-50, default 25). Returns one log per transform |
+| GET | `/api/entities/{id}/transforms` | Enrichment history of the entity, newest first |
+
+Each log holds `status`, `result_count`, `created_count`, `reused_count`,
+`relationship_count`, `duration_ms`, `parameters` and `log`, a list of events:
+`input`, `source` (status, count, cached, elapsed, error), `limit`,
+`not-promoted` and `promoted`.
+
+## Entity resolution
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/resolution/candidates?investigation_id=&level=` | Candidate duplicates with `level` (`exact`, `probable`, `weak`), `rule`, `detail` and both entities |
+| POST | `/api/resolution/dismiss` | `{first, second, note?}`: the pair is distinct and is not proposed again |
+| POST | `/api/resolution/merge` | `{keep_id, merge_id, note?, level?}`: moves relationships, case links, sources, board elements and transform history to `keep_id`, drops duplicate edges and self-loops, deletes `merge_id` and records it as an alias |
+| GET | `/api/entities/{id}/aliases` | Entities merged into this one |
+
+Rules: `same-artifact` (exact; same canonical value under different entity
+types), `organization-name` (exact when the names are equal ignoring case,
+otherwise probable; legal suffixes, accents and punctuation removed),
+`www-prefix` and `url-variant` (probable), `same-label-other-suffix` and
+`similar-organization-name` (weak). Person, username and profile entities are
+never compared.
+
 ## Modules
 
 | Method | Path | Purpose |
@@ -400,6 +435,12 @@ MX, the source itself) are reported under `skipped`.
 | PATCH | `/api/modules/{module_id}` | Set `enabled` or `disabled` |
 
 Enabling a `planned` module returns `409`. Built-in modules cannot be removed.
+
+Disabling `external-osint-connectors`, `nvd-connector` or `cisa-kev` turns the
+matching connectors off (`module-disabled` in runs and listings).
+`transforms`, `entity-resolution`, `attack-matrix`, `yara-rules`, `analytics`
+and `cti-export` gate their routes; with `yara-rules` disabled, file analyses
+skip the YARA scan.
 
 ## Reports
 

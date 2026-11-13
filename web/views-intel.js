@@ -188,6 +188,8 @@
   }
 
   async function renderEntity(root, entityId) {
+    let lastOutcome = null;
+
     async function load() {
       return api(`/api/entities/${entityId}`);
     }
@@ -319,6 +321,20 @@
                 })
               : el("p", { class: "panel-empty" }, "Nenhum relacionamento registrado."),
           ),
+          moduleEnabled("entity-resolution") ? G.entityAliasesPanel(entity.id) : null,
+          moduleEnabled("transforms") && moduleEnabled("intel-orchestrator")
+            ? G.transformPanel(entity, {
+                investigationId: entity.investigations.length === 1 ? entity.investigations[0].id : null,
+                lastOutcome,
+                onRun: async (outcome) => {
+                  lastOutcome = outcome;
+                  const top = window.scrollY;
+                  await draw();
+                  window.scrollTo(0, top);
+                },
+              })
+            : null,
+          moduleEnabled("transforms") ? G.transformHistoryPanel(entity.id) : null,
         ),
       );
     }
@@ -1217,7 +1233,7 @@
                 )
                   return;
                 try {
-                  await api(`/api/sources/${source.id}`, { method: "EXCLUIR" });
+                  await api(`/api/sources/${source.id}`, { method: "DELETE" });
                   toast("Fonte excluída.");
                   go("sources");
                 } catch (error) {

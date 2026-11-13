@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 from .db import (
     _connection,
+    module_enabled,
     new_id,
     record_activity,
     require_module,
@@ -55,6 +56,7 @@ RESULT_STATUSES = (
     "network-disabled",
     "target-contact-disabled",
     "key-missing",
+    "module-disabled",
     "unsupported",
 )
 MAX_FINDINGS_PER_CONNECTOR = 200
@@ -158,6 +160,25 @@ def unregister_connector(connector_id: str) -> None:
 def connectors() -> list[Connector]:
     with _REGISTRY_LOCK:
         return sorted(_REGISTRY.values(), key=lambda item: item.connector_id)
+
+
+_CONNECTOR_MODULES = {"nvd": "nvd-connector", "cisa-kev-local": "cisa-kev"}
+
+
+def connector_module(connector: Connector) -> str:
+    """Registry module that switches this connector on and off ('' for none)."""
+    if connector.connector_id in _CONNECTOR_MODULES:
+        return _CONNECTOR_MODULES[connector.connector_id]
+    return "external-osint-connectors" if connector.network else ""
+
+
+def _disabled_connectors(connection: Any, selected: list[Connector]) -> set[str]:
+    return {
+        connector.connector_id
+        for connector in selected
+        if connector_module(connector)
+        and not module_enabled(connection, connector_module(connector))
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -269,10 +290,13 @@ def list_connectors(database: str) -> dict[str, Any]:
             row["connector_id"]: dict(row)
             for row in connection.execute("SELECT * FROM intel_source_status")
         }
+        disabled = _disabled_connectors(connection, connectors())
     items = []
     for connector in connectors():
         status = status_rows.get(connector.connector_id)
-        if connector.network and not network_allowed:
+        if connector.connector_id in disabled:
+            availability = "module-disabled"
+        elif connector.network and not network_allowed:
             availability = "network-disabled"
         elif connector.contacts_target and not target_allowed:
             availability = "target-contact-disabled"
@@ -294,6 +318,7 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "rate_per_minute": connector.rate_per_minute,
                 "ttl_seconds": connector.ttl_seconds,
                 "source_url": connector.source_url,
+                "module_id": connector_module(connector),
                 "availability": availability,
                 "status": status,
             }
@@ -376,6 +401,7 @@ def run_query(
         network_allowed = setting_bool(connection, "intel.allow_network", False)
         target_allowed = setting_bool(connection, "intel.allow_target_contact", False)
         workers = setting_int(connection, "intel.max_workers", 4, 1, 16)
+        disabled = _disabled_connectors(connection, selected)
         connection.execute(
             """INSERT INTO intel_runs
                (id, investigation_id, query_type, query_value, status,
@@ -402,6 +428,8 @@ def run_query(
     for connector in selected:
         if kind not in connector.accepts:
             outcomes[connector.connector_id] = ("unsupported", [], "", 0, False)
+        elif connector.connector_id in disabled:
+            outcomes[connector.connector_id] = ("module-disabled", [], "", 0, False)
         elif connector.connector_id in cached:
             hit = cached[connector.connector_id]
             outcomes[connector.connector_id] = ("ok" if hit else "empty", hit, "", 0, True)
@@ -722,6 +750,11 @@ def promote_results(
                 collection_basis="public",
             )
             created.append(entity)
+        except ValidationError as exc:
+            # One malformed finding (a hostname with an underscore, say)
+            # must not abort the rest of the pivot.
+            skipped.append({"result_id": finding["id"], "reason": f"invalid identifier: {exc}"})
+            continue
         except ConflictError:
             normalized = _normalize_identifier(str(entity_type), identifier)
             with _connection(database) as connection:

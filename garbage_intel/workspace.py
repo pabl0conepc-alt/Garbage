@@ -920,7 +920,7 @@ def system_info(database: str) -> dict[str, Any]:
             {
                 "module_id": "nvd-connector",
                 "source_url": "https://services.nvd.nist.gov/rest/json/cves/2.0",
-                "mode": "planned, not implemented",
+                "mode": "explicit multi-source query",
             },
         ],
     }

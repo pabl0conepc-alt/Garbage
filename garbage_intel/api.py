@@ -53,6 +53,8 @@ from .evidence import (
 from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
 from .modules import attack
+from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
+from .transforms import entity_history, list_transforms, run_transforms
 from .intel_keys import delete_key, list_keys, set_key
 from .intel import (
     detect_artifact,
@@ -142,6 +144,7 @@ _STATIC_FILES = {
     "graph-views.js": "text/javascript; charset=utf-8",
     "views-analytics.js": "text/javascript; charset=utf-8",
     "views-attack.js": "text/javascript; charset=utf-8",
+    "views-transforms.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -554,6 +557,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         )
 
     def _send_cti_export(self, investigation_id: str, file_format: str, tlp: str) -> None:
+        self._module("cti-export")
         name = build_report(self.database_path, investigation_id)["investigation"]["name"]
         if file_format == "stix":
             body = json.dumps(build_stix(self.database_path, investigation_id, tlp=tlp)["bundle"], ensure_ascii=False, indent=2)
@@ -1115,12 +1119,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
         self._module("file-intelligence")
+        self._module("yara-rules")
         self._json(200, list_rulesets(self.database_path))
 
     def api_yara_create(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("file-intelligence")
+        self._module("yara-rules")
         unknown = set(payload) - {"name", "description", "source", "enabled"}
         if unknown:
             raise ValidationError(f"unsupported rule set fields: {', '.join(sorted(unknown))}")
@@ -1139,12 +1145,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
         self._module("file-intelligence")
+        self._module("yara-rules")
         self._json(200, get_ruleset(self.database_path, match.group(1)))
 
     def api_yara_patch(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("file-intelligence")
+        self._module("yara-rules")
         unknown = set(payload) - {"name", "description", "source", "enabled"}
         if unknown:
             raise ValidationError(f"unsupported rule set fields: {', '.join(sorted(unknown))}")
@@ -1156,12 +1164,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
         self._module("file-intelligence")
+        self._module("yara-rules")
         self._json(200, delete_ruleset(self.database_path, match.group(1)))
 
     def api_yara_test(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("file-intelligence")
+        self._module("yara-rules")
         unknown = set(payload) - {"source", "content_base64"}
         if unknown:
             raise ValidationError(f"unsupported test fields: {', '.join(sorted(unknown))}")
@@ -1313,27 +1323,34 @@ class RequestHandler(BaseHTTPRequestHandler):
     # --- MITRE ATT&CK --------------------------------------------------------
 
     def api_attack_status(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         self._json(200, attack.status(self.database_path))
 
     def api_attack_refresh(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         try:
             self._json(200, attack.refresh(self.database_path))
         except attack.AttackError as exc:
             self._error(502, str(exc))
 
     def api_attack_matrix(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         self._json(200, attack.matrix(self.database_path, investigation_id=_query_text(query, "investigation_id", "") or None))
 
     def api_attack_technique(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         self._json(200, attack.technique(self.database_path, match.group(1)))
 
     def api_attack_search(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         self._json(200, attack.search(self.database_path, _query_text(query, "q", "")))
 
     def api_case_techniques(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         self._json(200, attack.case_techniques(self.database_path, match.group(1)))
 
     def api_case_technique_link(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("attack-matrix")
         unknown = set(payload) - {"technique_id", "note", "source"}
         if unknown:
             raise ValidationError(f"unsupported technique fields: {', '.join(sorted(unknown))}")
@@ -1343,9 +1360,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._json(201, attack.link(self.database_path, match.group(1), payload.get("technique_id"), note=payload.get("note", ""), source=source))
 
     def api_case_technique_unlink(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         self._json(200, attack.unlink(self.database_path, match.group(1), match.group(2)))
 
     def api_case_technique_suggestions(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
         self._json(200, attack.suggestions(self.database_path, match.group(1)))
 
     def api_cisa_kev_refresh(
@@ -1376,6 +1395,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def api_analytics(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
+        self._module("analytics")
         self._json(
             200,
             workspace_analytics(
@@ -1493,6 +1513,103 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    # --- Transforms and entity resolution -------------------------------------
+
+    def api_transforms_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("transforms")
+        self._json(
+            200,
+            list_transforms(self.database_path, entity_id=_query_text(query, "entity_id", "") or None),
+        )
+
+    def api_transforms_run(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("transforms")
+        self._module("intel-orchestrator")
+        self._module("entities")
+        unknown = set(payload) - {"entity_id", "transforms", "investigation_id", "parameters"}
+        if unknown:
+            raise ValidationError(f"unsupported transform fields: {', '.join(sorted(unknown))}")
+        self._json(
+            201,
+            run_transforms(
+                self.database_path,
+                entity_id=payload.get("entity_id"),
+                transform_ids=payload.get("transforms"),
+                investigation_id=payload.get("investigation_id"),
+                parameters=payload.get("parameters"),
+            ),
+        )
+
+    def api_entity_transforms(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("transforms")
+        self._json(
+            200,
+            entity_history(self.database_path, match.group(1), limit=_query_int(query, "limit", 50)),
+        )
+
+    def api_entity_aliases(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("entities")
+        self._json(200, entity_aliases(self.database_path, match.group(1)))
+
+    def api_resolution_candidates(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("entity-resolution")
+        self._json(
+            200,
+            find_candidates(
+                self.database_path,
+                investigation_id=_query_text(query, "investigation_id", "") or None,
+                level=_query_text(query, "level", "") or None,
+            ),
+        )
+
+    def api_resolution_dismiss(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("entity-resolution")
+        unknown = set(payload) - {"first", "second", "note", "level", "rule"}
+        if unknown:
+            raise ValidationError(f"unsupported resolution fields: {', '.join(sorted(unknown))}")
+        self._json(
+            200,
+            dismiss_pair(
+                self.database_path,
+                payload.get("first"),
+                payload.get("second"),
+                note=payload.get("note", ""),
+                level=payload.get("level", ""),
+                rule=payload.get("rule", ""),
+            ),
+        )
+
+    def api_resolution_merge(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("entity-resolution")
+        self._module("entities")
+        unknown = set(payload) - {"keep_id", "merge_id", "note", "level"}
+        if unknown:
+            raise ValidationError(f"unsupported merge fields: {', '.join(sorted(unknown))}")
+        self._json(
+            200,
+            merge_entities(
+                self.database_path,
+                keep_id=payload.get("keep_id"),
+                merge_id=payload.get("merge_id"),
+                note=payload.get("note", ""),
+                level=payload.get("level", ""),
+            ),
+        )
+
     def api_print_report(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1584,6 +1701,23 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         MAX_BODY_BYTES,
     ),
     ("GET", re.compile(r"^/api/graph$"), "api_graph", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/transforms$"), "api_transforms_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/transforms/run$"), "api_transforms_run", MAX_BODY_BYTES),
+    (
+        "GET",
+        re.compile(rf"^/api/entities/{_ID_PATTERN}/transforms$"),
+        "api_entity_transforms",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(rf"^/api/entities/{_ID_PATTERN}/aliases$"),
+        "api_entity_aliases",
+        MAX_BODY_BYTES,
+    ),
+    ("GET", re.compile(r"^/api/resolution/candidates$"), "api_resolution_candidates", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/resolution/dismiss$"), "api_resolution_dismiss", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/resolution/merge$"), "api_resolution_merge", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/entities$"), "api_entities_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/entities$"), "api_entity_post", MAX_BODY_BYTES),
     (

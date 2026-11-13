@@ -867,6 +867,9 @@
               button("Abrir registro da entidade", () => go("entities", node.id), {
                 variant: "button-primary",
               }),
+              G.moduleEnabled("transforms") && G.moduleEnabled("intel-orchestrator") && !["person", "username", "profile"].includes(node.entity_type)
+                ? button("Transformações", () => G.transformDialog(node, { investigationId: investigationId || null, onDone: () => loadGraph() }))
+                : null,
               G.moduleEnabled("intel-orchestrator") && (node.identifier || node.name)
                 ? button("Pivotar", () => pivotDialog(node))
                 : null,

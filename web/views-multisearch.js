@@ -128,6 +128,7 @@
     "network-disabled": ["Rede desativada", "warning"],
     "target-contact-disabled": ["Contato com o alvo desativado", "warning"],
     "key-missing": ["Sem chave", "neutral"],
+    "module-disabled": ["Módulo desativado", "warning"],
     unsupported: ["Não se aplica", "neutral"],
     ready: ["Pronto", "success"],
   };
@@ -271,7 +272,7 @@
 
   function sourceList(run, connectorsById) {
     const list = el("ol", { class: "source-list", "aria-label": "Status por fonte" });
-    const order = { ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4, "network-disabled": 5, unsupported: 6 };
+    const order = { ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4, "network-disabled": 5, "module-disabled": 6, unsupported: 7 };
     const sources = [...run.sources].sort(
       (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.connector_id.localeCompare(b.connector_id),
     );
@@ -937,6 +938,8 @@
   G.connectorLabel = (id) => connectorName(id, id);
   G.resultTypeLabel = (type) => RESULT_LABELS[type] || type;
   G.sourceStatusLabel = (status) => (STATUS_TEXT[status] || [status])[0];
+  G.sourceStatusTone = (status) => (STATUS_TEXT[status] || [status, "neutral"])[1];
+  G.connectorDescription = (id, fallback) => connectorDescription(id, fallback);
   G.multiSearch = function multiSearch(value) {
     state.pendingMultiSearch = value;
     go("multisearch");
