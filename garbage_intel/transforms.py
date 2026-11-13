@@ -51,6 +51,8 @@ TRANSFORM_OUTPUTS: dict[str, tuple[str, ...]] = {
     "tls-certificate": ("cert-san",),
     "web-fingerprint": ("http-redirect",),
     "local-workspace": ("lookalike",),
+    "github": ("website", "repository", "repo-homepage", "fork-of"),
+    "security-txt": ("security-contact-email", "security-contact-url", "security-policy"),
 }
 
 # Relationship recorded from the input entity to each new entity.
@@ -80,6 +82,13 @@ RELATIONSHIP_FOR_RESULT: dict[str, str] = {
     "subdomain": "related-to",
     "hostname": "related-to",
     "lookalike": "related-to",
+    "website": "references",
+    "repository": "owns",
+    "repo-homepage": "references",
+    "fork-of": "derived-from",
+    "security-contact-email": "associated-with",
+    "security-contact-url": "associated-with",
+    "security-policy": "references",
 }
 
 PARAMETERS = (
