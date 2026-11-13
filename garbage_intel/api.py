@@ -51,6 +51,7 @@ from .evidence import (
     verify_evidence,
 )
 from .analytics import workspace_analytics
+from .cti_export import build_ioc_csv, build_misp, build_stix
 from .modules import attack
 from .intel_keys import delete_key, list_keys, set_key
 from .intel import (
@@ -516,8 +517,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
         self._module("report-center")
-        report = build_report(self.database_path, match.group(1))
         file_format = _query_text(query, "format", "html").strip().lower()
+        if file_format in ("stix", "misp", "iocs"):
+            self._send_cti_export(match.group(1), file_format, _query_text(query, "tlp", "amber").strip().lower())
+            return
+        report = build_report(self.database_path, match.group(1))
         if file_format == "json":
             body = json.dumps(report, ensure_ascii=False, indent=2)
             content_type = "application/json; charset=utf-8"
@@ -536,7 +540,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             suffix = "html"
         else:
             raise ValidationError(
-                "format must be one of: json, html, csv, markdown"
+                "format must be one of: json, html, csv, markdown, stix, misp, iocs"
             )
         self._send(
             200,
@@ -547,6 +551,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                     _report_filename(report["investigation"]["name"], suffix)
                 )
             },
+        )
+
+    def _send_cti_export(self, investigation_id: str, file_format: str, tlp: str) -> None:
+        name = build_report(self.database_path, investigation_id)["investigation"]["name"]
+        if file_format == "stix":
+            body = json.dumps(build_stix(self.database_path, investigation_id, tlp=tlp)["bundle"], ensure_ascii=False, indent=2)
+            content_type, suffix = "application/stix+json; charset=utf-8", "stix.json"
+        elif file_format == "misp":
+            body = json.dumps(build_misp(self.database_path, investigation_id, tlp=tlp), ensure_ascii=False, indent=2)
+            content_type, suffix = "application/json; charset=utf-8", "misp.json"
+        else:
+            body = build_ioc_csv(self.database_path, investigation_id)
+            content_type, suffix = "text/csv; charset=utf-8", "iocs.csv"
+        self._send(
+            200,
+            content_type,
+            body.encode("utf-8"),
+            {"Content-Disposition": _attachment_disposition(_report_filename(name, suffix).replace("-report.", "-"))},
         )
 
     def api_investigation_observations(

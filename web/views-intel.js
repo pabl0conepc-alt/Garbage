@@ -1297,6 +1297,9 @@
       ["json", "JSON"],
       ["csv", "CSV"],
       ["markdown", "Markdown"],
+      ["stix", "STIX 2.1"],
+      ["misp", "MISP"],
+      ["iocs", "IOCs"],
     ];
     root.append(
       pageHeader({

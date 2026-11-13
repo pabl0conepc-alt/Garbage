@@ -1914,6 +1914,28 @@
       ["csv", "Exportação CSV"],
       ["markdown", "Markdown"],
     ];
+    const tlpSelect = el(
+      "select",
+      { class: "input compact-select", "aria-label": "Marcação TLP das exportações CTI" },
+      ...["white", "green", "amber", "red"].map((value) => el("option", { value, selected: value === "amber" }, `TLP:${value.toUpperCase()}`)),
+    );
+    const cti = [
+      ["stix", "STIX 2.1", "Bundle com indicadores, observáveis, relacionamentos, técnicas ATT&CK e o relatório. Validado pelo validador da OASIS."],
+      ["misp", "Evento MISP", "Atributos, hashes de semelhança, etiqueta TLP e galáxia ATT&CK. to_ids só em registros verificados."],
+      ["iocs", "IOCs em CSV", "Domínios, IPs, URLs, e-mails e hashes com origem e status de verificação."],
+    ];
+    const ctiLinks = cti.map(([format, label, text]) => {
+      const link = el("a", { class: "export-card", href: `/api/investigations/${investigation.id}/export?format=${format}&tlp=amber`, download: "" }, el("strong", {}, label), el("span", {}, text));
+      return [format, link];
+    });
+    tlpSelect.addEventListener("change", () => {
+      for (const [format, link] of ctiLinks) link.href = `/api/investigations/${investigation.id}/export?format=${format}&tlp=${tlpSelect.value}`;
+    });
+    const ctiPanel = panel(
+      { eyebrow: "INTERCÂMBIO CTI", title: "Exportar para outras plataformas", caption: "Pessoas e perfis ficam de fora", actions: [tlpSelect] },
+      el("div", { class: "export-grid" }, ...ctiLinks.map(([, link]) => link)),
+      el("p", { class: "tool-limit" }, "Indicadores saem com tipo \"unknown\" e com o status de verificação de cada registro: exportar não transforma associação em atribuição."),
+    );
     return el(
       "div",
       { class: "report-tab" },
@@ -1947,6 +1969,7 @@
           ),
         ),
       ),
+      ctiPanel,
       panel(
         { eyebrow: "INTERPRETAÇÃO", title: "Classes de registro" },
         el(
