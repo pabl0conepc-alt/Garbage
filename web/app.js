@@ -71,6 +71,7 @@ G.NAV = [
     label: "Inteligência de ameaças",
     items: [
       { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
+      { view: "attack", label: "MITRE ATT&CK", icon: "matrix" },
     ],
   },
   {
@@ -243,6 +244,7 @@ const ICON_PATHS = {
   files: "M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h4.5",
   board: "M3 4.5h18v15H3zM7 8.5h4v3H7zM14 13h4v3h-4zM11 10l3 4.5",
   chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
+  matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
   graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
   evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
   sources: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2",

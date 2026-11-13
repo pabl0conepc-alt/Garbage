@@ -51,6 +51,7 @@ from .evidence import (
     verify_evidence,
 )
 from .analytics import workspace_analytics
+from .modules import attack
 from .intel_keys import delete_key, list_keys, set_key
 from .intel import (
     detect_artifact,
@@ -139,6 +140,7 @@ _STATIC_FILES = {
     "graph-layouts.js": "text/javascript; charset=utf-8",
     "graph-views.js": "text/javascript; charset=utf-8",
     "views-analytics.js": "text/javascript; charset=utf-8",
+    "views-attack.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -1286,6 +1288,44 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    # --- MITRE ATT&CK --------------------------------------------------------
+
+    def api_attack_status(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, attack.status(self.database_path))
+
+    def api_attack_refresh(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        try:
+            self._json(200, attack.refresh(self.database_path))
+        except attack.AttackError as exc:
+            self._error(502, str(exc))
+
+    def api_attack_matrix(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, attack.matrix(self.database_path, investigation_id=_query_text(query, "investigation_id", "") or None))
+
+    def api_attack_technique(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, attack.technique(self.database_path, match.group(1)))
+
+    def api_attack_search(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, attack.search(self.database_path, _query_text(query, "q", "")))
+
+    def api_case_techniques(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, attack.case_techniques(self.database_path, match.group(1)))
+
+    def api_case_technique_link(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        unknown = set(payload) - {"technique_id", "note", "source"}
+        if unknown:
+            raise ValidationError(f"unsupported technique fields: {', '.join(sorted(unknown))}")
+        source = payload.get("source", "analyst")
+        if source not in ("analyst", "suggestion"):
+            raise ValidationError("source must be analyst or suggestion")
+        self._json(201, attack.link(self.database_path, match.group(1), payload.get("technique_id"), note=payload.get("note", ""), source=source))
+
+    def api_case_technique_unlink(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, attack.unlink(self.database_path, match.group(1), match.group(2)))
+
+    def api_case_technique_suggestions(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, attack.suggestions(self.database_path, match.group(1)))
+
     def api_cisa_kev_refresh(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
@@ -1768,6 +1808,60 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "GET",
         re.compile(r"^/api/intel/connectors$"),
         "api_intel_connectors",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/attack$"),
+        "api_attack_status",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "POST",
+        re.compile(r"^/api/attack/refresh$"),
+        "api_attack_refresh",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/attack/matrix$"),
+        "api_attack_matrix",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/attack/search$"),
+        "api_attack_search",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(r"^/api/attack/techniques/(T\d{4}(?:\.\d{3})?)$"),
+        "api_attack_technique",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(rf"^/api/investigations/{_ID_PATTERN}/techniques$"),
+        "api_case_techniques",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "POST",
+        re.compile(rf"^/api/investigations/{_ID_PATTERN}/techniques$"),
+        "api_case_technique_link",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "GET",
+        re.compile(rf"^/api/investigations/{_ID_PATTERN}/techniques/suggestions$"),
+        "api_case_technique_suggestions",
+        MAX_BODY_BYTES,
+    ),
+    (
+        "DELETE",
+        re.compile(rf"^/api/investigations/{_ID_PATTERN}/techniques/(T\d{{4}}(?:\.\d{{3}})?)$"),
+        "api_case_technique_unlink",
         MAX_BODY_BYTES,
     ),
     (

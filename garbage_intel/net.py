@@ -211,8 +211,8 @@ def fetch(
     """Perform one bounded request; raise NetworkPolicyError or NetworkError."""
     if method not in {"GET", "HEAD", "POST"}:
         raise NetworkPolicyError(f"method is not allowed: {method}")
-    if max_bytes < 1 or max_bytes > 32 * 1024 * 1024:
-        raise NetworkPolicyError("max_bytes must be between 1 byte and 32 MiB")
+    if max_bytes < 1 or max_bytes > 96 * 1024 * 1024:
+        raise NetworkPolicyError("max_bytes must be between 1 byte and 96 MiB")
     resolver = resolver or _system_resolver
     connection_factory = connection_factory or _default_connection
     allowed = list(allowed_hosts) if allowed_hosts is not None else None

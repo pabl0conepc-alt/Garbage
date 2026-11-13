@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -802,6 +802,61 @@ def _migrate_api_keys(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_attack(connection: sqlite3.Connection) -> None:
+    """Version 7: offline MITRE ATT&CK and techniques linked to cases."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS attack_meta (
+               domain TEXT PRIMARY KEY,
+               version TEXT NOT NULL,
+               source_url TEXT NOT NULL,
+               sha256 TEXT NOT NULL,
+               fetched_at TEXT NOT NULL
+           );
+           CREATE TABLE IF NOT EXISTS attack_tactics (
+               id TEXT PRIMARY KEY,
+               shortname TEXT NOT NULL,
+               name TEXT NOT NULL,
+               description TEXT NOT NULL DEFAULT '',
+               url TEXT NOT NULL DEFAULT '',
+               position INTEGER NOT NULL DEFAULT 0
+           );
+           CREATE TABLE IF NOT EXISTS attack_techniques (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               tactics TEXT NOT NULL DEFAULT '',
+               platforms TEXT NOT NULL DEFAULT '',
+               is_subtechnique INTEGER NOT NULL DEFAULT 0,
+               description TEXT NOT NULL DEFAULT '',
+               detection TEXT NOT NULL DEFAULT '',
+               url TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS attack_objects (
+               id TEXT PRIMARY KEY,
+               kind TEXT NOT NULL,
+               name TEXT NOT NULL,
+               aliases TEXT NOT NULL DEFAULT '',
+               description TEXT NOT NULL DEFAULT '',
+               url TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS attack_relations (
+               source_id TEXT NOT NULL,
+               target_id TEXT NOT NULL,
+               kind TEXT NOT NULL,
+               PRIMARY KEY (source_id, target_id, kind)
+           );
+           CREATE INDEX IF NOT EXISTS attack_relations_target ON attack_relations(target_id, kind);
+           CREATE TABLE IF NOT EXISTS case_techniques (
+               id TEXT PRIMARY KEY,
+               investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+               technique_id TEXT NOT NULL,
+               note TEXT NOT NULL DEFAULT '',
+               source TEXT NOT NULL DEFAULT 'analyst',
+               created_at TEXT NOT NULL,
+               UNIQUE (investigation_id, technique_id)
+           );"""
+    )
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -822,6 +877,7 @@ MIGRATIONS = (
     (4, "Multi-source intelligence runs and source status", _migrate_intelligence_runs),
     (5, "YARA rule sets and file similarity digests", _migrate_file_engines),
     (6, "Local API keys for keyed intelligence connectors", _migrate_api_keys),
+    (7, "Offline MITRE ATT&CK and case techniques", _migrate_attack),
 )
 
 
