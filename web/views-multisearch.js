@@ -21,6 +21,7 @@
     "first-epss": ["FIRST EPSS", "Probabilidade e percentil de exploração (EPSS) de uma CVE."],
     "tls-certificate": ["Certificado TLS", "Um handshake TLS na porta 443 do alvo: confiança, protocolo, titular, emissor, validade, SANs, chave, fingerprints e pin SPKI."],
     github: ["GitHub", "Metadados públicos de uma organização (site, repositórios) ou de um repositório a partir de uma URL do github.com. Contas pessoais não são coletadas."],
+    typosquat: ["Typosquatting", "Gera erros de digitação, caracteres parecidos, bits trocados e outros TLDs do domínio e pergunta a um resolvedor DNS-over-HTTPS quais existem. Nunca contata as variações."],
     "security-txt": ["security.txt", "O arquivo RFC 9116 que a organização publica: contatos de segurança, política, chave, validade e assinatura. Um GET HTTPS ao servidor do alvo."],
     "web-fingerprint": ["Impressão digital web", "Um GET HTTPS da página do alvo (e do favicon): status, redirecionamentos, cabeçalhos de segurança, cookies, título, tecnologias e hash do favicon."],
     "shodan-internetdb": ["Shodan InternetDB", "Portas abertas, nomes, CPEs, tags e CVEs que as varreduras do Shodan registraram para um IP."],
@@ -78,6 +79,7 @@
     "security-contact": "Contato de segurança", "security-policy": "Política de divulgação",
     "security-encryption": "Chave de criptografia", "security-acknowledgments": "Agradecimentos",
     "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
+    typosquat: "Variação existente", "typosquat-summary": "Resumo de typosquatting",
   };
 
   const DATA_LABELS = {
@@ -131,6 +133,8 @@
     location: "local", public_repos: "repositórios públicos", verified: "verificada", email: "e-mail",
     repository: "repositório", owner: "dono", expires: "expira", signed: "assinado", canonical: "canônico",
     preferred_languages: "idiomas", missing_expires: "sem Expires",
+    kind: "técnica", nameservers: "servidores de nomes", generated: "geradas", checked: "checadas",
+    existing: "existentes", unanswered: "sem resposta", engine: "motor",
   };
 
   const STATUS_TEXT = {

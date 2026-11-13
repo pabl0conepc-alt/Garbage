@@ -178,6 +178,7 @@ def native_status() -> dict[str, Any]:
             "cpp_graph_analytics": bool(globals().get("_CPP_ANALYTICS")),
             "c_similarity_digests": bool(globals().get("_C_FUZZY")),
             "rust_signature_scan": bool(globals().get("_RUST_SIGNATURES")),
+            "rust_typosquat": bool(globals().get("_RUST_TYPOSQUAT")),
             "rust_similarity": bool(_RUST),
         },
         "directory": str(_build_directories()[-1]),
@@ -821,3 +822,45 @@ def signature_scan(data: bytes | bytearray | memoryview) -> tuple[list[tuple[int
             return None
         hits = [(int(record.offset), int(record.kind), int(record.extra)) for record in records[: count.value]]
         return hits, status == 1
+
+
+# ---------------------------------------------------------------------------
+# Typosquatting candidates (Rust, optional symbol)
+
+
+def _configure_rust_typosquat(library: ctypes.CDLL | None) -> ctypes.CDLL | None:
+    if library is None:
+        return None
+    try:
+        library.gi_typosquat.argtypes = [
+            ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t),
+        ]
+        library.gi_typosquat.restype = ctypes.c_int32
+    except AttributeError:
+        return None
+    return library
+
+
+_RUST_TYPOSQUAT = _configure_rust_typosquat(_RUST)
+
+
+def typosquat_variants(label: str) -> list[tuple[int, str]] | None:
+    """(kind, candidate) pairs from the Rust engine, or None when not built."""
+    if _RUST_TYPOSQUAT is None:
+        return None
+    payload = label.encode("ascii", "ignore")
+    if not payload or len(payload) > 63:
+        return []
+    written = ctypes.c_size_t()
+    capacity = 64 * 1024
+    while True:
+        buffer = ctypes.create_string_buffer(capacity)
+        status = _RUST_TYPOSQUAT.gi_typosquat(payload, len(payload), buffer, capacity, ctypes.byref(written))
+        if status == -2 and written.value > capacity:
+            capacity = written.value
+            continue
+        if status < 0:
+            return None
+        lines = buffer.raw[: written.value].decode("ascii").splitlines()
+        return [(int(kind), candidate) for kind, candidate in (line.split("\t", 1) for line in lines)]
+

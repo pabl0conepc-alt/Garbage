@@ -214,6 +214,49 @@ definitions; the server stores them for images and ignores them otherwise.
 `/similar` adds `phash_distance` and `dhash_distance` (bits out of 64) and
 keeps a candidate when pHash is within 10 bits.
 
+## TAXII 2.1 feeds
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET, POST | `/api/taxii/servers` | List or add a server (`name`, `discovery_url` https, optional `username` and `password` for HTTP Basic; the password is never returned) |
+| DELETE | `/api/taxii/servers/{id}` | Remove the server and its stored objects |
+| GET | `/api/taxii/servers/{id}/discover` | Discovery document: title, `default` root and `api_roots` (absolute) |
+| GET | `/api/taxii/servers/{id}/collections?api_root=` | Collections of one root (the root must be on the server's host) |
+| POST | `/api/taxii/servers/{id}/pull` | `{api_root, collection_id, max_objects (1-20000), object_types?, added_after?}`: pages of 500 through `next`; returns counts by type and `status` `completed` or `partial` (an error after some pages) |
+| GET | `/api/taxii/objects?server_id&collection_id&type&q&limit&offset` | Stored objects and counts by type |
+| GET | `/api/taxii/object?server_id&collection_id&object_id` | One stored STIX object as received |
+| POST | `/api/taxii/objects/to-case` | `{investigation_id, server_id, collection_id, object_ids}`: equality comparisons of the selected indicators' STIX patterns (domain, IP, URL, email, file hashes) become one observation in the case |
+
+Requests go through the SSRF-safe fetcher, limited to the server's host, with
+`Accept: application/taxii+json;version=2.1`; 502, 503 and 504 are retried
+twice. MITRE's public server (`https://attack-taxii.mitre.org/taxii2/`) is
+offered as a one-click example.
+
+## Sigma rules
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/sigma` | Loaded release, rule count, counts by level and licence |
+| POST | `/api/sigma/refresh` | Download the latest SigmaHQ `sigma_core.zip` (hosts pinned to GitHub release assets) and replace the stored set |
+| GET | `/api/sigma/rules?technique&q&level&product&limit` | Search; `technique` matches sub-techniques too (`T1059` finds `T1059.001`) |
+| GET | `/api/sigma/rules/{id}` | One rule with its full YAML |
+
+`GET /api/attack/techniques/{id}` adds `sigma` (total and up to 15 rules)
+when the set is loaded. Rules are SigmaHQ's under the Detection Rule License
+1.1; the interface credits them on every rule. GARBAGE does not convert or
+run them.
+
+## Typosquatting
+
+The `typosquat` connector (domain, network) generates candidates for the
+registrable label (omission, repetition, transposition, QWERTY neighbour
+replacement and insertion, ASCII homoglyphs, hyphenation, vowel swap, bit
+flips, addition, subdomain dot) plus TLD swaps, one entry per spelling, and
+asks Cloudflare's DNS-over-HTTPS resolver for NS records of up to 160 of
+them (TLD swaps and homoglyphs first). NOERROR counts as existing, NXDOMAIN
+as not. The candidates themselves are never contacted. Generation runs in
+Rust (`gi_typosquat`) when built, with an identical Python reference.
+
 ## GEOINT
 
 `GET /api/geoint?investigation_id=` returns `points` of two kinds: `photo`

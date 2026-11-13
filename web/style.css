@@ -5563,3 +5563,11 @@ dialog:focus-visible,
 .geo-swatch.kind-network { border: 2px solid var(--viz-2); }
 .geo-detail .hash { overflow-wrap: anywhere; }
 @media (max-width: 900px) { .geo-shell { grid-template-columns: minmax(0, 1fr); } }
+
+/* CTI feeds */
+.clamp-2, .clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.clamp-2 { -webkit-line-clamp: 2; line-clamp: 2; }
+.clamp-3 { -webkit-line-clamp: 3; line-clamp: 3; }
+.inline-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.attack-list { margin: 6px 0 10px; padding-left: 18px; line-height: 1.7; font-size: 13px; }
+.attack-list li { overflow-wrap: anywhere; }

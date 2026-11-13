@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -318,6 +318,22 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "Analytics",
         "Workspace and case charts computed from stored records.",
         "Analysis",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "taxii-feeds",
+        "TAXII feeds",
+        "TAXII 2.1 client: discovery, collections and paged pulls of STIX objects, with indicators written into cases.",
+        "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "sigma-rules",
+        "Sigma rules",
+        "SigmaHQ detection rules downloaded on request and indexed by ATT&CK technique.",
+        "Threat Intelligence",
         "1.0.0",
         "enabled",
     ),
@@ -1026,6 +1042,70 @@ def _migrate_search_index(connection: sqlite3.Connection) -> None:
         )
 
 
+def _migrate_cti_feeds(connection: sqlite3.Connection) -> None:
+    """Version 10: TAXII servers and objects, Sigma rules."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS taxii_servers (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               discovery_url TEXT NOT NULL,
+               username TEXT NOT NULL DEFAULT '',
+               password TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               last_pull_at TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS taxii_objects (
+               server_id TEXT NOT NULL REFERENCES taxii_servers(id) ON DELETE CASCADE,
+               collection_id TEXT NOT NULL,
+               object_id TEXT NOT NULL,
+               type TEXT NOT NULL,
+               name TEXT NOT NULL DEFAULT '',
+               pattern TEXT NOT NULL DEFAULT '',
+               modified TEXT NOT NULL DEFAULT '',
+               raw_json TEXT NOT NULL,
+               fetched_at TEXT NOT NULL,
+               PRIMARY KEY (server_id, collection_id, object_id)
+           );
+           CREATE INDEX IF NOT EXISTS taxii_objects_type ON taxii_objects(type);
+           CREATE TABLE IF NOT EXISTS taxii_pulls (
+               id TEXT PRIMARY KEY,
+               server_id TEXT NOT NULL,
+               collection_id TEXT NOT NULL,
+               started_at TEXT NOT NULL,
+               finished_at TEXT NOT NULL,
+               object_count INTEGER NOT NULL DEFAULT 0,
+               page_count INTEGER NOT NULL DEFAULT 0,
+               status TEXT NOT NULL,
+               error TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS sigma_rules (
+               id TEXT PRIMARY KEY,
+               title TEXT NOT NULL,
+               status TEXT NOT NULL DEFAULT '',
+               level TEXT NOT NULL DEFAULT '',
+               description TEXT NOT NULL DEFAULT '',
+               tags TEXT NOT NULL DEFAULT '',
+               techniques TEXT NOT NULL DEFAULT '',
+               product TEXT NOT NULL DEFAULT '',
+               category TEXT NOT NULL DEFAULT '',
+               service TEXT NOT NULL DEFAULT '',
+               references_json TEXT NOT NULL DEFAULT '[]',
+               falsepositives_json TEXT NOT NULL DEFAULT '[]',
+               date TEXT NOT NULL DEFAULT '',
+               modified TEXT NOT NULL DEFAULT '',
+               path TEXT NOT NULL DEFAULT '',
+               raw TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS sigma_meta (
+               version TEXT NOT NULL,
+               source_url TEXT NOT NULL,
+               sha256 TEXT NOT NULL,
+               rule_count INTEGER NOT NULL,
+               fetched_at TEXT NOT NULL
+           );"""
+    )
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -1049,6 +1129,7 @@ MIGRATIONS = (
     (7, "Offline MITRE ATT&CK and case techniques", _migrate_attack),
     (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
     (9, "Full-text search index", _migrate_search_index),
+    (10, "TAXII feeds and Sigma rules", _migrate_cti_feeds),
 )
 
 

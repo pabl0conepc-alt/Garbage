@@ -54,6 +54,8 @@ from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
 from .modules import attack
 from .geoint import geo_points
+from .net import NetworkError
+from .modules import sigma, taxii
 from .graph_io import import_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
 from .transforms import entity_history, list_transforms, run_transforms
@@ -152,6 +154,7 @@ _STATIC_FILES = {
     "image-hash.js": "text/javascript; charset=utf-8",
     "world.json": "application/json; charset=utf-8",
     "views-geoint.js": "text/javascript; charset=utf-8",
+    "views-feeds.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -1347,7 +1350,12 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def api_attack_technique(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._module("attack-matrix")
-        self._json(200, attack.technique(self.database_path, match.group(1)))
+        detail = attack.technique(self.database_path, match.group(1))
+        if self._module_enabled("sigma-rules"):
+            # Detection rules for this technique, when the Sigma set is loaded.
+            found = sigma.search(self.database_path, technique=detail["id"], limit=15)
+            detail["sigma"] = {"total": found["total"], "items": found["items"], "license": found["license"]}
+        self._json(200, detail)
 
     def api_attack_search(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._module("attack-matrix")
@@ -1565,6 +1573,89 @@ class RequestHandler(BaseHTTPRequestHandler):
             entity_history(self.database_path, match.group(1), limit=_query_int(query, "limit", 50)),
         )
 
+    # --- TAXII and Sigma ------------------------------------------------------
+
+    def api_taxii_servers(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.list_servers(self.database_path))
+
+    def api_taxii_server_add(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        unknown = set(payload) - {"name", "discovery_url", "username", "password"}
+        if unknown:
+            raise ValidationError(f"unsupported TAXII fields: {', '.join(sorted(unknown))}")
+        self._json(201, taxii.add_server(self.database_path, name=payload.get("name"), discovery_url=payload.get("discovery_url"),
+                                         username=payload.get("username", ""), password=payload.get("password", "")))
+
+    def api_taxii_server_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.delete_server(self.database_path, match.group(1)))
+
+    def api_taxii_discover(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        try:
+            self._json(200, taxii.discover(self.database_path, match.group(1)))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_taxii_collections(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        try:
+            self._json(200, taxii.collections(self.database_path, match.group(1), _query_text(query, "api_root", "")))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_taxii_pull(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        unknown = set(payload) - {"api_root", "collection_id", "added_after", "object_types", "max_objects"}
+        if unknown:
+            raise ValidationError(f"unsupported pull fields: {', '.join(sorted(unknown))}")
+        try:
+            self._json(201, taxii.pull(self.database_path, match.group(1), api_root=payload.get("api_root"),
+                                       collection_id=payload.get("collection_id"), added_after=payload.get("added_after"),
+                                       object_types=payload.get("object_types"), max_objects=payload.get("max_objects", 5000)))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_taxii_objects(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.list_objects(
+            self.database_path,
+            server_id=_query_text(query, "server_id", "") or None,
+            collection_id=_query_text(query, "collection_id", "") or None,
+            object_type=_query_text(query, "type", "") or None,
+            search=_query_text(query, "q", ""),
+            limit=_query_int(query, "limit", 100),
+            offset=_query_int(query, "offset", 0),
+        ))
+
+    def api_taxii_object(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.get_object(self.database_path, _query_text(query, "server_id", ""), _query_text(query, "collection_id", ""), _query_text(query, "object_id", "")))
+
+    def api_taxii_to_case(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        unknown = set(payload) - {"investigation_id", "server_id", "collection_id", "object_ids"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(201, taxii.indicators_to_case(self.database_path, investigation_id=payload.get("investigation_id"),
+                                                 server_id=payload.get("server_id"), collection_id=payload.get("collection_id"),
+                                                 object_ids=payload.get("object_ids")))
+
+    def api_sigma_status(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, sigma.status(self.database_path))
+
+    def api_sigma_refresh(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        try:
+            self._json(200, sigma.refresh(self.database_path))
+        except sigma.SigmaError as exc:
+            self._error(502, str(exc))
+
+    def api_sigma_rules(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, sigma.search(
+            self.database_path,
+            technique=_query_text(query, "technique", "") or None,
+            query=_query_text(query, "q", ""),
+            level=_query_text(query, "level", "") or None,
+            product=_query_text(query, "product", "") or None,
+            limit=_query_int(query, "limit", 50),
+        ))
+
+    def api_sigma_rule(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, sigma.get_rule(self.database_path, match.group(1)))
+
     def api_geoint(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1743,6 +1834,19 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("GET", re.compile(r"^/api/graph$"), "api_graph", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
     ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/taxii/servers$"), "api_taxii_servers", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/taxii/servers$"), "api_taxii_server_add", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}$"), "api_taxii_server_delete", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}/discover$"), "api_taxii_discover", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}/collections$"), "api_taxii_collections", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}/pull$"), "api_taxii_pull", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/taxii/objects$"), "api_taxii_objects", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/taxii/object$"), "api_taxii_object", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/taxii/objects/to-case$"), "api_taxii_to_case", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/sigma$"), "api_sigma_status", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/sigma/refresh$"), "api_sigma_refresh", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/sigma/rules$"), "api_sigma_rules", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/sigma/rules/([0-9a-fA-F-]{8,64})$"), "api_sigma_rule", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/transforms$"), "api_transforms_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/transforms/run$"), "api_transforms_run", MAX_BODY_BYTES),
     (

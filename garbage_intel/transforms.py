@@ -53,6 +53,7 @@ TRANSFORM_OUTPUTS: dict[str, tuple[str, ...]] = {
     "local-workspace": ("lookalike",),
     "github": ("website", "repository", "repo-homepage", "fork-of"),
     "security-txt": ("security-contact-email", "security-contact-url", "security-policy"),
+    "typosquat": ("typosquat",),
 }
 
 # Relationship recorded from the input entity to each new entity.
@@ -89,6 +90,7 @@ RELATIONSHIP_FOR_RESULT: dict[str, str] = {
     "security-contact-email": "associated-with",
     "security-contact-url": "associated-with",
     "security-policy": "references",
+    "typosquat": "related-to",
 }
 
 PARAMETERS = (

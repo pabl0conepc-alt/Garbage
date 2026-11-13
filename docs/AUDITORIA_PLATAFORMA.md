@@ -34,7 +34,7 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | 10. Infraestrutura | existe (quase todo) | DNS, rDNS (IPinfo/Shodan), RDAP, ASN, geolocalização de rede, CT, TLS, cabeçalhos, tecnologias, portas (Shodan), histórico (Wayback). Falta: árvore de subdomínios dedicada e DNS passivo (só com provedor pago) |
 | 11. Mídia | parcial | EXIF completo com GPS (etapa 4a), pHash/dHash e imagens visualmente parecidas. Falta: OCR (dependeria do Tesseract, opcional), frames de vídeo (dependeria do ffmpeg, opcional) |
 | 12. GEOINT | existe (etapa 4a) | Mapa local (Natural Earth) com GPS do EXIF de imagens analisadas e localização aproximada de redes, sempre com origem e precisão |
-| 13. CTI | parcial | Falta: Sigma, cliente TAXII 2.1, feeds periódicos, perfis de grupos (os dados do ATT&CK já estão no banco) |
+| 13. CTI | quase todo (etapa 4b) | Cliente TAXII 2.1 com coleta paginada e envio de indicadores ao caso; regras Sigma do SigmaHQ por técnica; typosquatting em Rust. Falta: coleta periódica (etapa 7) e perfis de grupos |
 | 14. Dark web | fora por ora | Exige Tor e fontes curadas; sem desenho seguro definido. Pode entrar depois como consulta a listas públicas de domínios onion em feeds de CTI |
 | 15. Casos | parcial | Falta: objetivo, arquivar, duplicar, exportar/importar o caso inteiro |
 | 16. Evidências | parcial | SHA-256 e reverificação existem. Falta: cadeia de custódia (eventos), anotações por evidência, exportação/importação |
@@ -82,7 +82,7 @@ Ordem de trabalho, cada item com testes, verificação no navegador e PR:
 1. **Fundação** (feito) — formato de transform (entrada, saída, parâmetros, logs, tempo) sobre os conectores; registro de módulos corrigido e completo; resolução de entidades com níveis exata/provável/fraca.
 2. **Investigação visual** (feito) — seleção múltipla, fixar e ocultar, minimapa, desfazer/refazer, exportação PNG e JSON/GraphML (e importação), ícones por tipo, histórico de enriquecimento no painel do nó.
 3. **Pesquisa** (feito) — consultas assíncronas com progresso por fonte; FTS5 com ranking na busca global; conectores de organizações (GitHub, security.txt). Metadados de canais e servidores de chat ficaram de fora: as APIs públicas de convite expõem quem criou o convite.
-4. **Inteligência especializada** — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).
+4. **Inteligência especializada** (feito) — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).
 5. **Plugins** — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.
 6. **Casos e evidências** — objetivo, arquivar, duplicar, exportar/importar caso; cadeia de custódia e anotações de evidência; relatórios com seleção de seções, grafo e metodologia.
 7. **Monitoramento** — consultas salvas com agenda local, diferença entre execuções e notificações.
