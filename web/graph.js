@@ -27,20 +27,35 @@
     other: "other",
   };
   const TYPE_COLORS = {
-    person: "#e5b567",
-    username: "#e5b567",
-    profile: "#d9a441",
-    email: "#d9a441",
-    organization: "#c78be0",
-    domain: "#5aa9e6",
-    url: "#5aa9e6",
-    ipv4: "#6fcf97",
-    ipv6: "#6fcf97",
-    file: "#e07a7a",
-    image: "#e07a7a",
-    hash: "#e07a7a",
-    ioc: "#f2c94c",
-    other: "#8fa0b5",
+    person: "#C5A36B",
+    username: "#C5A36B",
+    profile: "#B08F5A",
+    email: "#B08F5A",
+    organization: "#A592B5",
+    domain: "#829EB7",
+    url: "#829EB7",
+    ipv4: "#79A98A",
+    ipv6: "#79A98A",
+    file: "#CE7777",
+    image: "#CE7777",
+    hash: "#CE7777",
+    ioc: "#C5A36B",
+    other: "#8A939B",
+  };
+  /* Community colours: muted, distinguishable, cycled after eight groups. */
+  const COMMUNITY_COLORS = ["#829EB7", "#79A98A", "#C5A36B", "#A592B5", "#CE7777", "#6FA3A0", "#B08F5A", "#9AA4AD"];
+  const PIVOT_TYPES = {
+    "dns-a": ["ipv4", "hosted-on"], "dns-aaaa": ["ipv6", "hosted-on"], "dns-ns": ["domain", "associated-with"],
+    "dns-cname": ["domain", "references"], "dns-mx": ["domain", "associated-with"], nameserver: ["domain", "associated-with"],
+    "ct-name": ["domain", "related-to"], "cert-san": ["domain", "related-to"], organization: ["organization", "belongs-to"],
+    "abuse-contact": ["email", "associated-with"], "archive-capture": ["url", "references"], "http-redirect": ["url", "references"],
+    lookalike: ["domain", "related-to"], asn: ["other", "belongs-to"], "as-name": ["organization", "belongs-to"], cidr: ["other", "belongs-to"],
+  };
+  const PIVOT_LABELS = {
+    "dns-a": "DNS A", "dns-aaaa": "DNS AAAA", "dns-ns": "DNS NS", "dns-cname": "DNS CNAME", "dns-mx": "DNS MX",
+    nameserver: "Servidor de nomes", "ct-name": "Nome em certificado", "cert-san": "SAN do certificado",
+    organization: "Organização", "abuse-contact": "Contato de abuso", "archive-capture": "Captura arquivada",
+    "http-redirect": "Redirecionamento", lookalike: "Domínio semelhante", asn: "ASN", "as-name": "Nome do AS", cidr: "CIDR",
   };
 
   function button(label, onClick, options = {}) {
@@ -90,6 +105,9 @@
     let dragging = null;
     let searchTimer = null;
     let requestToken = 0;
+    let colorMode = "type";
+    let pathIds = new Set();
+    let pathEdgeIds = new Set();
 
     const canvas = el("div", { class: "graph-canvas", tabindex: "0" });
     const svg = svgEl("svg", {
@@ -155,6 +173,16 @@
       placeholder: "Filtrar entidades por nome ou identificador",
       "aria-label": "Pesquisar entidades no grafo",
     });
+    const colorSelect = el(
+      "select",
+      { class: "input compact-select", "aria-label": "Cor dos nós" },
+      el("option", { value: "type" }, "Cor por tipo"),
+      el("option", { value: "community" }, "Cor por comunidade"),
+    );
+    colorSelect.addEventListener("change", () => {
+      colorMode = colorSelect.value;
+      render();
+    });
     const layoutSelect = el(
       "select",
       { class: "input compact-select", "aria-label": "Layout do grafo" },
@@ -184,6 +212,8 @@
           byId.get(edge.target_entity_id).degree += 1;
         }
         if (selectedId && !byId.has(selectedId)) selectedId = null;
+        pathIds = new Set();
+        pathEdgeIds = new Set();
         if (focusedId && !byId.has(focusedId)) focusedId = null;
         if (query.trim() || investigationId || entityType) {
           rememberQuery();
@@ -324,6 +354,142 @@
       );
     }
 
+    function nodeColor(node) {
+      if (colorMode === "community") {
+        const metrics = graph.analytics?.nodes?.[node.id];
+        if (metrics) return COMMUNITY_COLORS[metrics.community % COMMUNITY_COLORS.length];
+      }
+      return TYPE_COLORS[node.entity_type] || TYPE_COLORS.other;
+    }
+
+    function percent(value) {
+      return `${(Number(value || 0) * 100).toFixed(1)}%`;
+    }
+
+    async function showPath(fromId, toId) {
+      try {
+        const parameters = new URLSearchParams({ from: fromId, to: toId });
+        if (investigationId) parameters.set("investigation_id", investigationId);
+        const result = await api(`/api/graph/path?${parameters}`);
+        pathIds = new Set(result.path.map((item) => item.id));
+        pathEdgeIds = new Set(result.hops.map((hop) => hop.relationship_id).filter(Boolean));
+        if (!result.path.length) toast("Não há caminho de relacionamentos entre essas entidades.", "warning");
+        else toast(`Caminho de ${result.length} salto(s): ${result.path.map((item) => item.name).join(" → ")}`);
+        render();
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    async function pivotDialog(node) {
+      const value = node.identifier || node.name;
+      const dialog = el("dialog", { class: "app-dialog pivot-dialog", "aria-label": `Pivotar a partir de ${node.name}` });
+      const body = el("div", { class: "pivot-body" }, loadingBlock(`Consultando fontes sobre ${value}…`));
+      const submit = el("button", { class: "button button-primary", type: "button", disabled: true }, "Adicionar ao grafo");
+      dialog.append(
+        el(
+          "div",
+          { class: "dialog-form" },
+          el(
+            "div",
+            { class: "dialog-heading" },
+            el(
+              "div",
+              {},
+              el("p", { class: "eyebrow" }, "PIVÔ"),
+              el("h2", {}, node.name),
+              el("p", { class: "dialog-description" }, "Escolha quais resultados viram entidades ligadas a este nó. Cada relacionamento fica como \"possível\" e não verificado, citando a fonte."),
+            ),
+          ),
+          body,
+          el(
+            "div",
+            { class: "dialog-actions" },
+            el("button", { class: "button button-secondary", type: "button", onClick: () => dialog.close() }, "Cancelar"),
+            submit,
+          ),
+        ),
+      );
+      document.body.append(dialog);
+      dialog.addEventListener("close", () => dialog.remove());
+      dialog.showModal();
+      let run;
+      try {
+        run = await api("/api/intel/runs", {
+          method: "POST",
+          body: JSON.stringify({ value, investigation_id: investigationId || null }),
+        });
+      } catch (error) {
+        body.replaceChildren(G.inlineError(error.message));
+        return;
+      }
+      const self = String(value).toLowerCase();
+      const candidates = run.results.filter((item) => {
+        if (!PIVOT_TYPES[item.result_type] || item.data?.null_mx) return false;
+        const clean = String(item.value).replace(/^\d+\s+/, "").replace(/^\*\./, "").replace(/\.$/, "").toLowerCase();
+        return clean && clean !== self;
+      });
+      if (!candidates.length) {
+        const skipped = run.sources.filter((item) => item.status === "network-disabled" || item.status === "target-contact-disabled").length;
+        body.replaceChildren(
+          el("p", { class: "panel-empty" }, skipped
+            ? "Nenhum resultado aproveitável. Fontes de rede estão desativadas: ative-as na Pesquisa multifonte."
+            : "Nenhuma fonte retornou resultados que possam virar entidades."),
+        );
+        return;
+      }
+      const rows = candidates.map((item) => {
+        const [entityType, relationship] = PIVOT_TYPES[item.result_type];
+        const check = el("input", { type: "checkbox", checked: ["dns-a", "dns-aaaa", "dns-ns", "dns-mx", "asn", "organization"].includes(item.result_type) });
+        const typeSelect = el("select", { class: "input compact-select", "aria-label": "Categoria da entidade" },
+          ...G.ENTITY_TYPES.map(([key, label]) => el("option", { value: key, selected: key === entityType }, label)));
+        const relSelect = el("select", { class: "input compact-select", "aria-label": "Tipo de relacionamento" },
+          ...G.RELATIONSHIP_TYPES.map(([key, label]) => el("option", { value: key, selected: key === relationship }, label)));
+        return { item, check, typeSelect, relSelect };
+      });
+      body.replaceChildren(
+        el("p", { class: "run-meta" }, `${run.result_count} resultado(s) de ${run.sources.filter((item) => item.status === "ok").length} fonte(s) · ${candidates.length} podem virar entidades`),
+        el(
+          "div",
+          { class: "pivot-list" },
+          ...rows.map(({ item, check, typeSelect, relSelect }) =>
+            el(
+              "label",
+              { class: "pivot-row" },
+              check,
+              el("span", { class: "pivot-kind" }, PIVOT_LABELS[item.result_type] || item.result_type),
+              el("code", { class: "pivot-value" }, item.value),
+              typeSelect,
+              relSelect,
+            ),
+          ),
+        ),
+      );
+      submit.disabled = false;
+      submit.addEventListener("click", async () => {
+        const items = rows
+          .filter((row) => row.check.checked)
+          .map((row) => ({ result_id: row.item.id, entity_type: row.typeSelect.value, relationship_type: row.relSelect.value }));
+        if (!items.length) {
+          toast("Selecione pelo menos um resultado.", "warning");
+          return;
+        }
+        submit.disabled = true;
+        try {
+          const result = await api(`/api/intel/runs/${run.id}/promote`, {
+            method: "POST",
+            body: JSON.stringify({ source_entity_id: node.id, investigation_id: investigationId || null, items }),
+          });
+          toast(`${result.created_entities.length} entidade(s) nova(s), ${result.reused_entities.length} reaproveitada(s), ${result.relationships.length} relacionamento(s).`);
+          dialog.close();
+          await loadGraph();
+        } catch (error) {
+          submit.disabled = false;
+          toast(error.message, "error");
+        }
+      });
+    }
+
     function render() {
       applyTransform();
       const visible = visibleNodeSet();
@@ -343,7 +509,7 @@
         if (!source || !target) continue;
         const path = svgEl("path", {
           d: updatePath(source, target, viewport.zoom),
-          class: `graph-edge verification-${edge.verification_status || "not-verified"}`,
+          class: `graph-edge verification-${edge.verification_status || "not-verified"}${pathEdgeIds.has(edge.id) ? " is-path" : ""}`,
           "data-id": edge.id,
         });
         path.append(
@@ -355,7 +521,7 @@
       for (const node of visibleNodes) {
         const radius = 10 + Math.min(12, node.degree * 1.6);
         const group = svgEl("g", {
-          class: `graph-node type-${node.entity_type}${node.id === selectedId ? " is-selected" : ""}`,
+          class: `graph-node type-${node.entity_type}${node.id === selectedId ? " is-selected" : ""}${pathIds.has(node.id) ? " is-path" : ""}`,
           transform: `translate(${node.x} ${node.y})`,
           tabindex: "0",
           role: "button",
@@ -364,7 +530,7 @@
         });
         const circle = svgEl("circle", {
           r: radius,
-          fill: TYPE_COLORS[node.entity_type] || TYPE_COLORS.other,
+          fill: nodeColor(node),
           class: "graph-node-circle",
         });
         circle.append(svgEl("title", {}, `${node.name} · ${entityTypeLabel(node.entity_type)}`));
@@ -507,6 +673,22 @@
               ["Confiança", titleCase(node.confidence)],
               ["Relacionamentos", String(node.degree)],
             ]),
+            graph.analytics?.nodes?.[node.id]
+              ? el(
+                  "div",
+                  {},
+                  el("h3", { class: "subheading" }, "Posição no grafo"),
+                  G.kvList([
+                    ["Centralidade de grau", percent(graph.analytics.nodes[node.id].degree)],
+                    ["Intermediação", percent(graph.analytics.nodes[node.id].betweenness)],
+                    ["Proximidade harmônica", percent(graph.analytics.nodes[node.id].harmonic)],
+                    [
+                      "Comunidade",
+                      `#${graph.analytics.nodes[node.id].community + 1} · ${graph.analytics.nodes[node.id].community_size} entidade(s)`,
+                    ],
+                  ]),
+                )
+              : null,
             node.description ? el("p", { class: "prose" }, node.description) : null,
             el(
               "div",
@@ -514,6 +696,9 @@
               button("Abrir registro da entidade", () => go("entities", node.id), {
                 variant: "button-primary",
               }),
+              G.moduleEnabled("intel-orchestrator") && (node.identifier || node.name)
+                ? button("Pivotar", () => pivotDialog(node))
+                : null,
               button(
                 focusedId === node.id ? "Limpar foco" : "Focar vizinhança",
                 () => {
@@ -522,6 +707,33 @@
                 },
               ),
             ),
+            nodes.length > 1
+              ? el(
+                  "div",
+                  { class: "field" },
+                  el("label", {}, "Caminho até"),
+                  el(
+                    "select",
+                    {
+                      class: "input",
+                      "aria-label": "Mostrar caminho até outra entidade",
+                      onChange: (event) => {
+                        if (event.target.value) showPath(node.id, event.target.value);
+                        else {
+                          pathIds = new Set();
+                          pathEdgeIds = new Set();
+                          render();
+                        }
+                      },
+                    },
+                    el("option", { value: "" }, "Escolha uma entidade"),
+                    ...nodes
+                      .filter((item) => item.id !== node.id)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((item) => el("option", { value: item.id }, item.name)),
+                  ),
+                )
+              : null,
             el("h3", { class: "subheading" }, `Relacionamentos (${related.length})`),
             related.length
               ? el(
@@ -611,7 +823,22 @@
       if (graphMetrics.engine) {
         metricRows.push(["Motor de métricas", graphMetrics.engine]);
       }
+      const analytics = graph.analytics;
+      if (analytics && nodes.length) {
+        metricRows.push(
+          ["Comunidades", String(analytics.communities)],
+          ["Modularidade", Number(analytics.modularity).toFixed(3)],
+        );
+      }
+      const bridges = analytics
+        ? nodes
+            .map((node) => ({ node, value: analytics.nodes[node.id]?.betweenness || 0 }))
+            .filter((item) => item.value > 0)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5)
+        : [];
       inspector.replaceChildren(
+        ...[
         panel(
           { eyebrow: "GRAFO DE RELACIONAMENTOS", title: "Visão geral do grafo" },
           G.kvList(metricRows),
@@ -623,6 +850,24 @@
               )
             : null,
         ),
+        bridges.length
+          ? panel(
+              { eyebrow: "ANÁLISE", title: "Entidades-ponte" },
+              el(
+                "div",
+                { class: "graph-relation-list" },
+                ...bridges.map(({ node, value }) =>
+                  el(
+                    "div",
+                    { class: "graph-relation" },
+                    el("button", { class: "link-button", type: "button", onClick: () => { selectedId = node.id; render(); } }, node.name),
+                    el("span", { class: "record-meta" }, `intermediação ${percent(value)}`),
+                  ),
+                ),
+              ),
+              el("p", { class: "panel-note" }, "Entidades que mais aparecem nos caminhos mais curtos entre outras. Indicam ligação estrutural, não papel real."),
+            )
+          : null,
         panel(
           { eyebrow: "CAMADAS", title: "Tipos de entidade" },
           el("div", { class: "graph-type-list" }, ...typeLegendNodes()),
@@ -632,6 +877,7 @@
           }),
         ),
         historyPanel(),
+        ].filter(Boolean),
       );
     }
 
@@ -844,6 +1090,7 @@
         caseSelect,
         typeSelect,
         layoutSelect,
+        colorSelect,
         el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
       ),
       shell,

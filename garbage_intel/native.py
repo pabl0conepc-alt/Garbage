@@ -175,6 +175,7 @@ def native_status() -> dict[str, Any]:
         "engines": {
             "c_file_intelligence": bool(_C),
             "cpp_graph_metrics": bool(_CPP),
+            "cpp_graph_analytics": bool(globals().get("_CPP_ANALYTICS")),
             "rust_similarity": bool(_RUST),
         },
         "directory": str(_build_directories()[-1]),
@@ -408,3 +409,319 @@ def python_domain_skeleton(value: str) -> str:
 def python_graph_components(nodes: list[Mapping[str, Any]], edges: list[Mapping[str, Any]]) -> int:
     """Small compatibility helper for callers that only need component count."""
     return int(graph_metrics(nodes, edges)["components"])
+
+
+# ---------------------------------------------------------------------------
+# Graph analytics: centrality, communities and shortest paths.
+#
+# The Python implementation is the reference. The C++ engine implements the
+# same algorithms with the same iteration order, so results match exactly on
+# the same input (tests/test_native.py checks parity when the library loads).
+
+
+def _graph_indexes(
+    nodes: list[Mapping[str, Any]], edges: list[Mapping[str, Any]]
+) -> tuple[list[str], list[int], list[int]]:
+    identifiers = [str(node.get("id", "")) for node in nodes]
+    index = {identifier: position for position, identifier in enumerate(identifiers)}
+    sources: list[int] = []
+    targets: list[int] = []
+    for edge in edges:
+        source = index.get(str(edge.get("source_entity_id", "")))
+        target = index.get(str(edge.get("target_entity_id", "")))
+        if source is None or target is None:
+            continue
+        sources.append(source)
+        targets.append(target)
+    return identifiers, sources, targets
+
+
+def _simple_adjacency(count: int, sources: list[int], targets: list[int]) -> list[list[int]]:
+    """Undirected, sorted neighbour lists without self-loops or duplicates."""
+    neighbours: list[set[int]] = [set() for _ in range(count)]
+    for source, target in zip(sources, targets):
+        if source == target:
+            continue
+        neighbours[source].add(target)
+        neighbours[target].add(source)
+    return [sorted(items) for items in neighbours]
+
+
+def python_centrality(
+    count: int, sources: list[int], targets: list[int]
+) -> tuple[list[float], list[float], list[float]]:
+    adjacency = _simple_adjacency(count, sources, targets)
+    scale = 1.0 / (count - 1) if count > 1 else 0.0
+    degree = [len(items) * scale for items in adjacency]
+    betweenness = [0.0] * count
+    harmonic = [0.0] * count
+    for start in range(count):
+        # Brandes (2001), unweighted, one BFS per source.
+        stack: list[int] = []
+        predecessors: list[list[int]] = [[] for _ in range(count)]
+        sigma = [0.0] * count
+        distance = [-1] * count
+        sigma[start] = 1.0
+        distance[start] = 0
+        queue = [start]
+        head = 0
+        while head < len(queue):
+            current = queue[head]
+            head += 1
+            stack.append(current)
+            for neighbour in adjacency[current]:
+                if distance[neighbour] < 0:
+                    distance[neighbour] = distance[current] + 1
+                    queue.append(neighbour)
+                if distance[neighbour] == distance[current] + 1:
+                    sigma[neighbour] += sigma[current]
+                    predecessors[neighbour].append(current)
+        reach = 0.0
+        for node in range(count):
+            if distance[node] > 0:
+                reach += 1.0 / distance[node]
+        harmonic[start] = reach * scale
+        delta = [0.0] * count
+        while stack:
+            node = stack.pop()
+            for predecessor in predecessors[node]:
+                delta[predecessor] += (sigma[predecessor] / sigma[node]) * (1.0 + delta[node])
+            if node != start:
+                betweenness[node] += delta[node]
+    # Undirected pairs are counted twice; normalise by (n-1)(n-2).
+    norm = 1.0 / ((count - 1) * (count - 2)) if count > 2 else 0.0
+    return degree, [value * norm for value in betweenness], harmonic
+
+
+def python_communities(
+    count: int, sources: list[int], targets: list[int], max_levels: int = 16
+) -> tuple[list[int], float]:
+    """Deterministic Louvain (Blondel et al., 2008) on the undirected graph."""
+    if count == 0:
+        return [], 0.0
+    # Level graph: weighted adjacency with self-loops for aggregated nodes.
+    # Same simple graph as the centrality measures: one unit per entity pair.
+    weights: list[dict[int, float]] = [
+        {neighbour: 1.0 for neighbour in items}
+        for items in _simple_adjacency(count, sources, targets)
+    ]
+    total = sum(sum(row.values()) for row in weights)  # = 2m
+    membership = list(range(count))
+    if total == 0.0:
+        return membership, 0.0
+    graph = weights
+    for _ in range(max_levels):
+        size = len(graph)
+        strength = [sum(row.values()) for row in graph]
+        community = list(range(size))
+        totals = strength[:]
+        improved = False
+        for _pass in range(100):
+            moved = False
+            for node in range(size):
+                current = community[node]
+                links: dict[int, float] = {}
+                for neighbour in sorted(graph[node]):
+                    if neighbour == node:
+                        continue
+                    target_community = community[neighbour]
+                    links[target_community] = links.get(target_community, 0.0) + graph[node][neighbour]
+                totals[current] -= strength[node]
+                best = current
+                best_gain = links.get(current, 0.0) - totals[current] * strength[node] / total
+                for candidate in sorted(links):
+                    gain = links[candidate] - totals[candidate] * strength[node] / total
+                    if gain > best_gain + 1e-12:
+                        best, best_gain = candidate, gain
+                totals[best] += strength[node]
+                if best != current:
+                    community[node] = best
+                    moved = True
+                    improved = True
+            if not moved:
+                break
+        if not improved:
+            break
+        renumber: dict[int, int] = {}
+        for node in range(size):
+            renumber.setdefault(community[node], len(renumber))
+        membership = [renumber[community[item]] for item in membership]
+        aggregated: list[dict[int, float]] = [dict() for _ in range(len(renumber))]
+        for node in range(size):
+            left = renumber[community[node]]
+            for neighbour, weight in graph[node].items():
+                right = renumber[community[neighbour]]
+                aggregated[left][right] = aggregated[left].get(right, 0.0) + weight
+        if len(aggregated) == size:
+            break
+        graph = aggregated
+    modularity = _modularity(weights, membership, total)
+    return membership, modularity
+
+
+def _modularity(weights: list[dict[int, float]], membership: list[int], total: float) -> float:
+    inside: dict[int, float] = {}
+    degrees: dict[int, float] = {}
+    for node, row in enumerate(weights):
+        label = membership[node]
+        degrees[label] = degrees.get(label, 0.0) + sum(row.values())
+        for neighbour, weight in row.items():
+            if membership[neighbour] == label:
+                inside[label] = inside.get(label, 0.0) + weight
+    return sum(
+        inside.get(label, 0.0) / total - (degrees[label] / total) ** 2 for label in degrees
+    )
+
+
+def python_shortest_path(
+    count: int, sources: list[int], targets: list[int], start: int, goal: int
+) -> list[int]:
+    adjacency = _simple_adjacency(count, sources, targets)
+    parent = [-1] * count
+    seen = [False] * count
+    seen[start] = True
+    queue = [start]
+    head = 0
+    while head < len(queue):
+        current = queue[head]
+        head += 1
+        if current == goal:
+            break
+        for neighbour in adjacency[current]:
+            if not seen[neighbour]:
+                seen[neighbour] = True
+                parent[neighbour] = current
+                queue.append(neighbour)
+    if not seen[goal]:
+        return []
+    path = [goal]
+    while path[-1] != start:
+        path.append(parent[path[-1]])
+    return path[::-1]
+
+
+def graph_analytics(
+    nodes: list[Mapping[str, Any]], edges: list[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Per-node centrality and community labels, native when available."""
+    identifiers, sources, targets = _graph_indexes(nodes, edges)
+    count = len(identifiers)
+    engine = "python-fallback"
+    result = _native_analytics(count, sources, targets) if count else None
+    if result is not None:
+        degree, betweenness, harmonic, labels, modularity = result
+        engine = "cpp-native"
+    else:
+        degree, betweenness, harmonic = python_centrality(count, sources, targets)
+        labels, modularity = python_communities(count, sources, targets)
+    sizes: dict[int, int] = {}
+    for label in labels:
+        sizes[label] = sizes.get(label, 0) + 1
+    return {
+        "engine": engine,
+        "communities": len(sizes),
+        "modularity": round(modularity, 6),
+        "nodes": {
+            identifiers[position]: {
+                "degree": round(degree[position], 6),
+                "betweenness": round(betweenness[position], 6),
+                "harmonic": round(harmonic[position], 6),
+                "community": labels[position],
+                "community_size": sizes[labels[position]],
+            }
+            for position in range(count)
+        },
+    }
+
+
+def shortest_path(
+    nodes: list[Mapping[str, Any]], edges: list[Mapping[str, Any]], start_id: str, goal_id: str
+) -> dict[str, Any]:
+    identifiers, sources, targets = _graph_indexes(nodes, edges)
+    index = {identifier: position for position, identifier in enumerate(identifiers)}
+    if start_id not in index or goal_id not in index:
+        return {"engine": "none", "path": [], "hops": None}
+    start, goal = index[start_id], index[goal_id]
+    path = _native_path(len(identifiers), sources, targets, start, goal)
+    engine = "cpp-native"
+    if path is None:
+        path = python_shortest_path(len(identifiers), sources, targets, start, goal)
+        engine = "python-fallback"
+    return {
+        "engine": engine,
+        "path": [identifiers[position] for position in path],
+        "hops": len(path) - 1 if path else None,
+    }
+
+
+def _native_analytics(
+    count: int, sources: list[int], targets: list[int]
+) -> tuple[list[float], list[float], list[float], list[int], float] | None:
+    if _CPP_ANALYTICS is None:
+        return None
+    source_array = (ctypes.c_uint32 * len(sources))(*sources)
+    target_array = (ctypes.c_uint32 * len(targets))(*targets)
+    degree = (ctypes.c_double * count)()
+    betweenness = (ctypes.c_double * count)()
+    harmonic = (ctypes.c_double * count)()
+    labels = (ctypes.c_uint32 * count)()
+    modularity = ctypes.c_double()
+    status = _CPP_ANALYTICS.gi_graph_centrality(
+        count, source_array, target_array, len(sources), degree, betweenness, harmonic
+    )
+    if status != 0:
+        return None
+    status = _CPP_ANALYTICS.gi_graph_communities(
+        count, source_array, target_array, len(sources), labels, ctypes.byref(modularity)
+    )
+    if status != 0:
+        return None
+    return list(degree), list(betweenness), list(harmonic), list(labels), float(modularity.value)
+
+
+def _native_path(
+    count: int, sources: list[int], targets: list[int], start: int, goal: int
+) -> list[int] | None:
+    if _CPP_ANALYTICS is None:
+        return None
+    source_array = (ctypes.c_uint32 * len(sources))(*sources)
+    target_array = (ctypes.c_uint32 * len(targets))(*targets)
+    path = (ctypes.c_uint32 * count)()
+    length = ctypes.c_size_t()
+    status = _CPP_ANALYTICS.gi_graph_shortest_path(
+        count, source_array, target_array, len(sources), start, goal, path, count, ctypes.byref(length)
+    )
+    if status not in (0, 1):
+        return None
+    return list(path[: length.value]) if status == 0 else []
+
+
+def _configure_cpp_analytics(library: ctypes.CDLL | None) -> ctypes.CDLL | None:
+    """The analytics symbols are optional: an older build keeps its metrics."""
+    if library is None:
+        return None
+    pointer_u32 = ctypes.POINTER(ctypes.c_uint32)
+    pointer_double = ctypes.POINTER(ctypes.c_double)
+    try:
+        library.gi_graph_centrality.argtypes = [
+            ctypes.c_size_t, pointer_u32, pointer_u32, ctypes.c_size_t,
+            pointer_double, pointer_double, pointer_double,
+        ]
+        library.gi_graph_centrality.restype = ctypes.c_int
+        library.gi_graph_communities.argtypes = [
+            ctypes.c_size_t, pointer_u32, pointer_u32, ctypes.c_size_t,
+            pointer_u32, pointer_double,
+        ]
+        library.gi_graph_communities.restype = ctypes.c_int
+        library.gi_graph_shortest_path.argtypes = [
+            ctypes.c_size_t, pointer_u32, pointer_u32, ctypes.c_size_t,
+            ctypes.c_uint32, ctypes.c_uint32, pointer_u32, ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        library.gi_graph_shortest_path.restype = ctypes.c_int
+    except AttributeError:
+        return None
+    return library
+
+
+_CPP_ANALYTICS = _configure_cpp_analytics(_CPP)

@@ -194,3 +194,88 @@ class NativeEngineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GraphAnalyticsReferenceTests(unittest.TestCase):
+    """The Python reference algorithms, checked against hand-computed values."""
+
+    # Two triangles joined by the bridge 2-3, a duplicate edge, a self-loop
+    # and the isolate 6.
+    N = 7
+    SOURCES = [0, 1, 2, 3, 4, 5, 2, 0, 4]
+    TARGETS = [1, 2, 0, 4, 5, 3, 3, 1, 4]
+
+    def test_centrality(self):
+        degree, betweenness, harmonic = native.python_centrality(self.N, self.SOURCES, self.TARGETS)
+        self.assertAlmostEqual(degree[2], 3 / 6)
+        self.assertAlmostEqual(degree[6], 0.0)
+        # Node 2 lies on the 6 shortest paths between {0, 1} and {3, 4, 5};
+        # there are (n-1)(n-2)/2 = 15 pairs it could lie between.
+        self.assertAlmostEqual(betweenness[2], 6 / 15)
+        self.assertAlmostEqual(betweenness[3], 6 / 15)
+        self.assertAlmostEqual(betweenness[0], 0.0)
+        self.assertAlmostEqual(harmonic[2], (1 + 1 + 1 + 0.5 + 0.5) / 6)
+
+    def test_communities_and_modularity(self):
+        labels, modularity = native.python_communities(self.N, self.SOURCES, self.TARGETS)
+        self.assertEqual(labels, [0, 0, 0, 1, 1, 1, 2])
+        # m = 7 simple edges; each triangle: 3 internal edges, degree sum 7.
+        expected = 2 * (3 / 7 - (7 / 14) ** 2)
+        self.assertAlmostEqual(modularity, expected)
+
+    def test_shortest_path(self):
+        self.assertEqual(native.python_shortest_path(self.N, self.SOURCES, self.TARGETS, 0, 5), [0, 2, 3, 5])
+        self.assertEqual(native.python_shortest_path(self.N, self.SOURCES, self.TARGETS, 0, 6), [])
+        self.assertEqual(native.python_shortest_path(self.N, self.SOURCES, self.TARGETS, 4, 4), [4])
+
+    def test_empty_and_edgeless_graphs(self):
+        self.assertEqual(native.python_communities(0, [], []), ([], 0.0))
+        self.assertEqual(native.python_communities(3, [], []), ([0, 1, 2], 0.0))
+        self.assertEqual(native.python_centrality(1, [], []), ([0.0], [0.0], [0.0]))
+
+    def test_graph_analytics_payload(self):
+        nodes = [{"id": f"n{index}"} for index in range(self.N)]
+        edges = [
+            {"source_entity_id": f"n{s}", "target_entity_id": f"n{t}"}
+            for s, t in zip(self.SOURCES, self.TARGETS)
+        ]
+        result = native.graph_analytics(nodes, edges)
+        self.assertEqual(result["communities"], 3)
+        self.assertEqual(result["nodes"]["n6"]["community_size"], 1)
+        path = native.shortest_path(nodes, edges, "n0", "n5")
+        self.assertEqual((path["path"], path["hops"]), (["n0", "n2", "n3", "n5"], 3))
+        self.assertEqual(native.shortest_path(nodes, edges, "n0", "missing")["path"], [])
+
+
+@unittest.skipUnless(
+    NATIVE_BUILT and native._CPP_ANALYTICS is not None, "C++ graph analytics are not built"
+)
+class GraphAnalyticsParityTests(unittest.TestCase):
+    def test_cpp_matches_python_exactly_on_random_graphs(self):
+        generator = random.Random(11)
+        for _ in range(150):
+            count = generator.randint(1, 50)
+            edges = generator.randint(0, count * 4)
+            sources = [generator.randrange(count) for _ in range(edges)]
+            targets = [generator.randrange(count) for _ in range(edges)]
+            degree, betweenness, harmonic, labels, modularity = native._native_analytics(count, sources, targets)
+            self.assertEqual(
+                (degree, betweenness, harmonic),
+                tuple(list(values) for values in native.python_centrality(count, sources, targets)),
+            )
+            python_labels, python_modularity = native.python_communities(count, sources, targets)
+            self.assertEqual(labels, python_labels)
+            self.assertAlmostEqual(modularity, python_modularity, places=12)
+            start, goal = generator.randrange(count), generator.randrange(count)
+            self.assertEqual(
+                native._native_path(count, sources, targets, start, goal),
+                native.python_shortest_path(count, sources, targets, start, goal),
+            )
+
+    def test_invalid_indexes_are_rejected(self):
+        values = (ctypes_array := __import__("ctypes").c_double * 2)()
+        u32 = __import__("ctypes").c_uint32
+        status = native._CPP_ANALYTICS.gi_graph_centrality(
+            2, (u32 * 1)(0), (u32 * 1)(9), 1, values, ctypes_array(), ctypes_array()
+        )
+        self.assertEqual(status, -2)

@@ -5,6 +5,20 @@
 const G = (window.GARBAGE = window.GARBAGE || {});
 G.views = G.views || {};
 
+/* Deferred scripts run only after the stylesheet settles, so a missing design
+   token here means the request failed (seen when the local server restarts
+   mid-load). Retry a few times instead of leaving the page unstyled. */
+(function ensureStylesheet(attempt) {
+  if (getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || attempt > 3) return;
+  const current = document.querySelector('link[rel="stylesheet"]');
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = `/style.css?retry=${attempt}`;
+  link.addEventListener("load", () => current?.remove(), { once: true });
+  link.addEventListener("error", () => link.remove() || setTimeout(() => ensureStylesheet(attempt + 1), 400 * attempt), { once: true });
+  document.head.append(link);
+})(1);
+
 const statusNode = document.querySelector("#status");
 const loadingNode = document.querySelector("#loading-state");
 const viewRoot = document.querySelector("#view-root");
