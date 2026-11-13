@@ -175,7 +175,7 @@ Mantendo o design system monocromático do PR #8:
 
 A fase 6 não depende de rede e pode andar em paralelo às fases 1–5.
 
-| 11 | Visualizações de vínculos: layouts de grafo (força, hierárquico, radial, por comunidade), linha do tempo de entidades, matriz de adjacência, mapa de calor de indicadores, gráficos de fontes e de achados de arquivos; tudo em SVG/Canvas próprio, sem bibliotecas externas | 5 |
+| 11 | Visualizações — **concluída**: 8 layouts de grafo (força, comunidade, hierárquico, radial, concêntrico por centralidade, colunas por tipo, circular, grade), tamanho por métrica, foco de 1 a 3 saltos, setas e rótulos, destaque de vizinhos, exportação SVG, matriz de adjacência, linha do tempo, painel analítico com gráficos (paleta validada para daltonismo); tudo em SVG próprio, sem bibliotecas | 5 |
 
 Pedido de 2026-11-12, **fora do escopo e mantido excluído**: busca de contas de
 pessoas no Discord, no Roblox ou por nome completo. Isso é rastreamento e

@@ -360,7 +360,24 @@ The HTTP client loads the system CA bundle when the interpreter's compiled-in
 default is empty (standalone Python builds on NixOS), so TLS verification works
 without `SSL_CERT_FILE`.
 
+## Analytics
+
+`GET /api/analytics?investigation_id=&days=` (`days` is 7, 30, 90 or 365)
+returns `totals`; `activity` (`days` plus one series per action) and
+`intel_runs_by_day`; `entity_types`, `relationship_types` and
+`relationship_verification`; per-source `sources` (`results`, `runs`,
+`errors`, `statuses`); `result_types`; `file_formats`, `finding_levels` and
+`finding_codes`; and `evidence_types`. Scoped to one investigation when given.
+Counts only; every number can be traced to rows elsewhere in the workspace.
+
 ## Graph analytics and pivot
+
+Graph nodes and edges include `created_at`. The UI offers eight layouts (force,
+community, hierarchical, radial, concentric by betweenness, columns by type,
+circle, grid), node size by degree, betweenness or harmonic closeness, focus
+on 1-3 hops, edge labels and direction arrows, an adjacency matrix ordered by
+community, a recording timeline and a standalone SVG export of the visible
+graph.
 
 `GET /api/graph` now also returns `analytics`: `{engine, communities,
 modularity, nodes: {id: {degree, betweenness, harmonic, community,

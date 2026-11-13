@@ -9,7 +9,12 @@
     formatDate, titleCase, entityTypeLabel, relationshipLabel, statusBadge, go,
   } = G;
 
-  const MAX_FORCE_NODES = 220;
+  const SIZE_MODES = {
+    degree: "Tamanho por conexões",
+    betweenness: "Tamanho por intermediação",
+    harmonic: "Tamanho por proximidade",
+    uniform: "Tamanho uniforme",
+  };
   const TYPE_LAYER_CLASS = {
     person: "people",
     username: "accounts",
@@ -42,8 +47,11 @@
     ioc: "#C5A36B",
     other: "#8A939B",
   };
-  /* Community colours: muted, distinguishable, cycled after eight groups. */
-  const COMMUNITY_COLORS = ["#829EB7", "#79A98A", "#C5A36B", "#A592B5", "#CE7777", "#6FA3A0", "#B08F5A", "#9AA4AD"];
+  /* Community colours: the validated categorical slots (style.css --viz-N).
+     The seven largest communities get a slot; the rest share a neutral
+     "other" colour instead of recycling hues. */
+  const COMMUNITY_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9"];
+  const OTHER_COMMUNITY = "#6b7178";
   const PIVOT_TYPES = {
     "dns-a": ["ipv4", "hosted-on"], "dns-aaaa": ["ipv6", "hosted-on"], "dns-ns": ["domain", "associated-with"],
     "dns-cname": ["domain", "references"], "dns-mx": ["domain", "associated-with"], nameserver: ["domain", "associated-with"],
@@ -76,12 +84,12 @@
     return `layer-${TYPE_LAYER_CLASS[type] || "other"}`;
   }
 
-  function updatePath(source, target, zoom) {
+  function updatePath(source, target, radiusOf) {
     const dx = target.x - source.x;
     const dy = target.y - source.y;
     const distance = Math.max(1, Math.hypot(dx, dy));
-    const radius = 10 + Math.min(12, (source.degree || 0) * 1.6);
-    const targetRadius = 10 + Math.min(12, (target.degree || 0) * 1.6);
+    const radius = radiusOf(source);
+    const targetRadius = radiusOf(target) + 3;
     const x1 = source.x + (dx / distance) * radius;
     const y1 = source.y + (dy / distance) * radius;
     const x2 = target.x - (dx / distance) * targetRadius;
@@ -108,6 +116,12 @@
     let colorMode = "type";
     let pathIds = new Set();
     let pathEdgeIds = new Set();
+    let sizeMode = "degree";
+    let focusDepth = 1;
+    let edgeLabels = false;
+    let hoverId = null;
+    let viewMode = "graph";
+    let communityColor = new Map();
 
     const canvas = el("div", { class: "graph-canvas", tabindex: "0" });
     const svg = svgEl("svg", {
@@ -117,6 +131,20 @@
       role: "img",
       "aria-label": "Grafo de relacionamentos entre entidades",
     });
+    const legendHost = el("div", { class: "graph-legend" });
+    const defs = svgEl("defs");
+    const arrow = svgEl("marker", {
+      id: "graph-arrow",
+      viewBox: "0 0 10 10",
+      refX: "9",
+      refY: "5",
+      markerWidth: "7",
+      markerHeight: "7",
+      orient: "auto-start-reverse",
+    });
+    arrow.append(svgEl("path", { d: "M 0 1 L 9 5 L 0 9 z", class: "graph-arrow-head" }));
+    defs.append(arrow);
+    svg.append(defs);
     const view = svgEl("g", { class: "graph-viewport" });
     const edgeLayer = svgEl("g", { class: "graph-edges" });
     const nodeLayer = svgEl("g", { class: "graph-nodes" });
@@ -138,6 +166,7 @@
           button("−", () => zoomBy(0.85), { title: "Diminuir zoom" }),
           button("＋", () => zoomBy(1.18), { title: "Aumentar zoom" }),
           button("Ajustar", () => fit(), { title: "Ajustar grafo à tela" }),
+          button("Exportar SVG", () => exportSvg(), { title: "Baixar o grafo visível como SVG" }),
           button("Redefinir", () => {
             focusedId = null;
             selectedId = null;
@@ -146,7 +175,7 @@
             render();
           }),
         ),
-        el("div", { class: "graph-legend" }, legend()),
+        legendHost,
       ),
       inspector,
     );
@@ -186,10 +215,35 @@
     const layoutSelect = el(
       "select",
       { class: "input compact-select", "aria-label": "Layout do grafo" },
-      el("option", { value: "force" }, "Layout por força"),
-      el("option", { value: "circle" }, "Layout circular"),
-      el("option", { value: "grid" }, "Layout em grade"),
+      ...Object.entries(G.graphLayouts).map(([key, item]) => el("option", { value: key }, item.label)),
     );
+    const sizeSelect = el(
+      "select",
+      { class: "input compact-select", "aria-label": "Tamanho dos nós" },
+      ...Object.entries(SIZE_MODES).map(([key, text]) => el("option", { value: key }, text)),
+    );
+    sizeSelect.addEventListener("change", () => {
+      sizeMode = sizeSelect.value;
+      render();
+    });
+    const depthSelect = el(
+      "select",
+      { class: "input compact-select", "aria-label": "Alcance do foco" },
+      el("option", { value: "1" }, "Foco: 1 salto"),
+      el("option", { value: "2" }, "Foco: 2 saltos"),
+      el("option", { value: "3" }, "Foco: 3 saltos"),
+    );
+    depthSelect.addEventListener("change", () => {
+      focusDepth = Number(depthSelect.value);
+      render();
+    });
+    const edgeLabelToggle = el("input", { type: "checkbox", id: "graph-edge-labels" });
+    edgeLabelToggle.addEventListener("change", () => {
+      edgeLabels = edgeLabelToggle.checked;
+      render();
+    });
+    const viewTabs = el("div", { class: "graph-view-tabs" });
+    const altHost = el("div", { class: "graph-alt", hidden: true });
 
     async function loadGraph() {
       const token = ++requestToken;
@@ -218,6 +272,7 @@
         if (query.trim() || investigationId || entityType) {
           rememberQuery();
         }
+        rankCommunities();
         layoutNodes();
         fit();
         render();
@@ -249,86 +304,33 @@
       if (!nodes.length) return;
       const width = Math.max(640, canvas.clientWidth || 960);
       const height = Math.max(480, canvas.clientHeight || 620);
-      const mode =
-        layout === "force" && nodes.length > MAX_FORCE_NODES ? "circle" : layout;
-      if (mode === "circle") {
-        const radius = Math.min(width, height) * 0.36;
-        nodes.forEach((node, index) => {
-          const angle = (index / nodes.length) * Math.PI * 2 - Math.PI / 2;
-          node.x = width / 2 + Math.cos(angle) * radius;
-          node.y = height / 2 + Math.sin(angle) * radius;
-        });
-        return;
-      }
-      if (mode === "grid") {
-        const columns = Math.max(1, Math.ceil(Math.sqrt(nodes.length)));
-        nodes.forEach((node, index) => {
-          node.x = 100 + (index % columns) * 190;
-          node.y = 90 + Math.floor(index / columns) * 150;
-        });
-        return;
-      }
-      const k = Math.sqrt((width * height) / nodes.length) * 0.62;
-      nodes.forEach((node, index) => {
-        const angle = (index / nodes.length) * Math.PI * 2;
-        node.x = width / 2 + Math.cos(angle) * Math.min(width, height) * 0.28;
-        node.y = height / 2 + Math.sin(angle) * Math.min(width, height) * 0.28;
-        node.vx = 0;
-        node.vy = 0;
+      (G.graphLayouts[layout] || G.graphLayouts.force).run(nodes, edges, {
+        width,
+        height,
+        rootId: selectedId,
+        analytics: graph.analytics,
       });
-      const byId = new Map(nodes.map((node) => [node.id, node]));
-      const iterations = 240;
-      let temperature = width / 6;
-      const cooling = temperature / (iterations + 1);
-      for (let iteration = 0; iteration < iterations; iteration += 1) {
-        for (let i = 0; i < nodes.length; i += 1) {
-          const a = nodes[i];
-          for (let j = i + 1; j < nodes.length; j += 1) {
-            const b = nodes[j];
-            let dx = a.x - b.x;
-            let dy = a.y - b.y;
-            if (dx === 0 && dy === 0) {
-              dx = (i % 2 ? 1 : -1) * 0.5;
-              dy = (j % 2 ? 1 : -1) * 0.5;
-            }
-            const distance = Math.max(0.5, Math.hypot(dx, dy));
-            const force = (k * k) / distance;
-            const fx = (dx / distance) * force;
-            const fy = (dy / distance) * force;
-            a.vx += fx;
-            a.vy += fy;
-            b.vx -= fx;
-            b.vy -= fy;
-          }
-        }
-        for (const edge of edges) {
-          const a = byId.get(edge.source_entity_id);
-          const b = byId.get(edge.target_entity_id);
-          if (!a || !b) continue;
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const distance = Math.max(1, Math.hypot(dx, dy));
-          const force = (distance * distance) / k;
-          const fx = (dx / distance) * force;
-          const fy = (dy / distance) * force;
-          a.vx -= fx * 0.02;
-          a.vy -= fy * 0.02;
-          b.vx += fx * 0.02;
-          b.vy += fy * 0.02;
-        }
-        for (const node of nodes) {
-          node.vx += (width / 2 - node.x) * 0.012;
-          node.vy += (height / 2 - node.y) * 0.012;
-          const speed = Math.max(0.01, Math.hypot(node.vx, node.vy));
-          node.x += (node.vx / speed) * Math.min(speed, temperature);
-          node.y += (node.vy / speed) * Math.min(speed, temperature);
-          node.vx = 0;
-          node.vy = 0;
-          node.x = Math.max(40, Math.min(width - 40, node.x));
-          node.y = Math.max(40, Math.min(height - 40, node.y));
-        }
-        temperature = Math.max(0.5, temperature - cooling);
+    }
+
+    function radiusOf(node) {
+      const metrics = graph.analytics?.nodes?.[node.id];
+      if (sizeMode === "uniform") return 11;
+      if (sizeMode === "betweenness" && metrics) return 8 + Math.sqrt(metrics.betweenness) * 26;
+      if (sizeMode === "harmonic" && metrics) return 7 + metrics.harmonic * 16;
+      return 10 + Math.min(12, node.degree * 1.6);
+    }
+
+    function rankCommunities() {
+      const sizes = new Map();
+      for (const node of nodes) {
+        const id = graph.analytics?.nodes?.[node.id]?.community;
+        if (id !== undefined) sizes.set(id, (sizes.get(id) || 0) + 1);
       }
+      communityColor = new Map(
+        [...sizes.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+          .map(([id, size], rank) => [id, size > 1 && rank < COMMUNITY_COLORS.length ? COMMUNITY_COLORS[rank] : OTHER_COMMUNITY]),
+      );
     }
 
     function visibleNodeSet() {
@@ -338,9 +340,18 @@
       );
       if (focusedId && set.has(focusedId)) {
         const neighbors = new Set([focusedId]);
-        for (const edge of graph.edges) {
-          if (edge.source_entity_id === focusedId) neighbors.add(edge.target_entity_id);
-          if (edge.target_entity_id === focusedId) neighbors.add(edge.source_entity_id);
+        let frontier = [focusedId];
+        for (let hop = 0; hop < focusDepth; hop += 1) {
+          const next = [];
+          for (const edge of graph.edges) {
+            for (const [from, to] of [[edge.source_entity_id, edge.target_entity_id], [edge.target_entity_id, edge.source_entity_id]]) {
+              if (frontier.includes(from) && !neighbors.has(to)) {
+                neighbors.add(to);
+                next.push(to);
+              }
+            }
+          }
+          frontier = next;
         }
         for (const id of [...set]) if (!neighbors.has(id)) set.delete(id);
       }
@@ -357,7 +368,7 @@
     function nodeColor(node) {
       if (colorMode === "community") {
         const metrics = graph.analytics?.nodes?.[node.id];
-        if (metrics) return COMMUNITY_COLORS[metrics.community % COMMUNITY_COLORS.length];
+        if (metrics) return communityColor.get(metrics.community) || OTHER_COMMUNITY;
       }
       return TYPE_COLORS[node.entity_type] || TYPE_COLORS.other;
     }
@@ -490,6 +501,120 @@
       });
     }
 
+    /* Alternative views ------------------------------------------- */
+
+    function visibleSubgraph() {
+      const visible = visibleNodeSet();
+      const shown = nodes.filter((node) => visible.has(node.id));
+      const links = edges.filter((edge) => visible.has(edge.source_entity_id) && visible.has(edge.target_entity_id));
+      return { shown, links };
+    }
+
+    function selectFromView(id) {
+      selectedId = id;
+      viewMode = "graph";
+      renderViewTabs();
+      render();
+    }
+
+    function renderViewTabs() {
+      viewTabs.replaceChildren(
+        G.tabs({
+          items: [
+            { key: "graph", label: "Grafo" },
+            { key: "matrix", label: "Matriz" },
+            { key: "timeline", label: "Linha do tempo" },
+          ],
+          active: viewMode,
+          onSelect: (key) => {
+            viewMode = key;
+            renderViewTabs();
+          },
+        }),
+      );
+      shell.hidden = viewMode !== "graph";
+      altHost.hidden = viewMode === "graph";
+      if (viewMode === "graph") return;
+      const { shown, links } = visibleSubgraph();
+      if (!shown.length) {
+        altHost.replaceChildren(el("p", { class: "panel-empty" }, "Nenhuma entidade no grafo atual."));
+        return;
+      }
+      if (viewMode === "matrix") {
+        const result = G.graphViews.matrix({ nodes: shown, edges: links, analytics: graph.analytics, onSelect: selectFromView });
+        altHost.replaceChildren(
+          panel(
+            {
+              eyebrow: "MATRIZ DE ADJACÊNCIA",
+              title: `${shown.length} entidades · ${links.length} relacionamentos`,
+              caption: result.truncated ? "Mostrando as 150 entidades mais conectadas" : "Linhas e colunas agrupadas por comunidade",
+            },
+            result.legend,
+            result.element,
+            el("p", { class: "tool-limit" }, "Cada célula é um relacionamento registrado, nas duas direções. Blocos na diagonal são comunidades; clique numa célula para ver a entidade no grafo."),
+          ),
+        );
+        return;
+      }
+      altHost.replaceChildren(
+        panel(
+          { eyebrow: "LINHA DO TEMPO", title: "Quando cada registro entrou no grafo", caption: "Data de registro no workspace, não data do fato" },
+          G.charts.legend([
+            { label: "Entidade", color: "var(--viz-1)" },
+            { label: "Relacionamento", color: "var(--viz-2)" },
+          ]),
+          G.graphViews.timeline({ nodes: shown, edges: links, onSelect: selectFromView }),
+        ),
+      );
+    }
+
+    /* Standalone SVG of what is on screen, with computed styles inlined. */
+    function exportSvg() {
+      const { shown } = visibleSubgraph();
+      if (!shown.length) {
+        toast("Não há nada visível para exportar.", "warning");
+        return;
+      }
+      if (hoverId) {
+        hoverId = null;
+        render();
+      }
+      const margin = 60;
+      const minX = Math.min(...shown.map((node) => node.x)) - margin;
+      const minY = Math.min(...shown.map((node) => node.y)) - margin;
+      const width = Math.max(...shown.map((node) => node.x)) + margin - minX;
+      const height = Math.max(...shown.map((node) => node.y)) + margin - minY;
+      const copy = svg.cloneNode(true);
+      const inline = (source, target) => {
+        if (source.nodeType !== 1) return;
+        const style = getComputedStyle(source);
+        const properties = ["fill", "stroke", "stroke-width", "stroke-dasharray", "opacity", "font-size", "font-family", "font-weight"];
+        target.setAttribute("style", properties.map((name) => `${name}:${style.getPropertyValue(name)}`).join(";"));
+        [...source.children].forEach((child, index) => inline(child, target.children[index]));
+      };
+      inline(svg, copy);
+      copy.querySelector(".graph-viewport").removeAttribute("transform");
+      copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      copy.setAttribute("viewBox", `${minX} ${minY} ${width} ${height}`);
+      copy.setAttribute("width", String(Math.round(width)));
+      copy.setAttribute("height", String(Math.round(height)));
+      const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      background.setAttribute("x", minX);
+      background.setAttribute("y", minY);
+      background.setAttribute("width", width);
+      background.setAttribute("height", height);
+      background.setAttribute("fill", getComputedStyle(canvas).backgroundColor || "#15181B");
+      copy.insertBefore(background, copy.firstChild.nextSibling);
+      const blob = new Blob([new XMLSerializer().serializeToString(copy)], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const link = el("a", { href: url, download: `grafo-${new Date().toISOString().slice(0, 10)}.svg` });
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("SVG do grafo exportado.");
+    }
+
     function render() {
       applyTransform();
       const visible = visibleNodeSet();
@@ -507,21 +632,46 @@
         const source = byId.get(edge.source_entity_id);
         const target = byId.get(edge.target_entity_id);
         if (!source || !target) continue;
+        const near = hoverId && (edge.source_entity_id === hoverId || edge.target_entity_id === hoverId);
         const path = svgEl("path", {
-          d: updatePath(source, target, viewport.zoom),
-          class: `graph-edge verification-${edge.verification_status || "not-verified"}${pathEdgeIds.has(edge.id) ? " is-path" : ""}`,
+          d: updatePath(source, target, radiusOf),
+          class: `graph-edge verification-${edge.verification_status || "not-verified"}${pathEdgeIds.has(edge.id) ? " is-path" : ""}${near ? " is-near" : ""}`,
           "data-id": edge.id,
+          "marker-end": "url(#graph-arrow)",
         });
         path.append(
           svgEl("title", {}, `${source.name} — ${relationshipLabel(edge.relationship_type)} → ${target.name}`),
         );
         edgeLayer.append(path);
+        if (edgeLabels) {
+          labelLayer.append(
+            svgEl(
+              "text",
+              {
+                x: (source.x + target.x) / 2,
+                y: (source.y + target.y) / 2 - 4,
+                "text-anchor": "middle",
+                class: `graph-edge-label${near ? " is-near" : ""}`,
+                "data-edge": edge.id,
+              },
+              relationshipLabel(edge.relationship_type),
+            ),
+          );
+        }
       }
+      const neighbourIds = new Set(hoverId ? [hoverId] : []);
+      if (hoverId) {
+        for (const edge of visibleEdges) {
+          if (edge.source_entity_id === hoverId) neighbourIds.add(edge.target_entity_id);
+          if (edge.target_entity_id === hoverId) neighbourIds.add(edge.source_entity_id);
+        }
+      }
+      svg.classList.toggle("has-hover", Boolean(hoverId));
 
       for (const node of visibleNodes) {
-        const radius = 10 + Math.min(12, node.degree * 1.6);
+        const radius = radiusOf(node);
         const group = svgEl("g", {
-          class: `graph-node type-${node.entity_type}${node.id === selectedId ? " is-selected" : ""}${pathIds.has(node.id) ? " is-path" : ""}`,
+          class: `graph-node type-${node.entity_type}${node.id === selectedId ? " is-selected" : ""}${pathIds.has(node.id) ? " is-path" : ""}${neighbourIds.has(node.id) ? " is-near" : ""}`,
           transform: `translate(${node.x} ${node.y})`,
           tabindex: "0",
           role: "button",
@@ -545,6 +695,16 @@
             selectedId = node.id;
             render();
           }
+        });
+        group.addEventListener("pointerenter", () => {
+          if (dragging || panning) return;
+          hoverId = node.id;
+          render();
+        });
+        group.addEventListener("pointerleave", () => {
+          if (hoverId !== node.id) return;
+          hoverId = null;
+          render();
         });
         group.addEventListener("pointerdown", (event) => {
           if (event.button !== 0) return;
@@ -571,7 +731,7 @@
             x: node.x,
             y: node.y + radius + 14,
             "text-anchor": "middle",
-            class: "graph-node-label",
+            class: `graph-node-label${neighbourIds.has(node.id) ? " is-near" : ""}`,
             "data-id": node.id,
           },
           node.name.length > 26 ? `${node.name.slice(0, 24)}…` : node.name,
@@ -579,6 +739,7 @@
         labelLayer.append(label);
       }
       canvas.classList.toggle("is-empty", nodes.length === 0);
+      legendHost.replaceChildren(legend());
       renderInspector();
     }
 
@@ -593,7 +754,7 @@
         const id = label.dataset.id;
         const node = byId.get(id);
         if (!node) continue;
-        const radius = 10 + Math.min(12, node.degree * 1.6);
+        const radius = radiusOf(node);
         label.setAttribute("x", node.x);
         label.setAttribute("y", node.y + radius + 14);
       }
@@ -602,7 +763,15 @@
         if (!edge) continue;
         const source = byId.get(edge.source_entity_id);
         const target = byId.get(edge.target_entity_id);
-        if (source && target) path.setAttribute("d", updatePath(source, target, viewport.zoom));
+        if (source && target) path.setAttribute("d", updatePath(source, target, radiusOf));
+      }
+      for (const text of labelLayer.querySelectorAll(".graph-edge-label")) {
+        const edge = edges.find((item) => item.id === text.dataset.edge);
+        const source = edge && byId.get(edge.source_entity_id);
+        const target = edge && byId.get(edge.target_entity_id);
+        if (!source || !target) continue;
+        text.setAttribute("x", (source.x + target.x) / 2);
+        text.setAttribute("y", (source.y + target.y) / 2 - 4);
       }
     }
 
@@ -706,6 +875,15 @@
                   render();
                 },
               ),
+              button("Reorganizar a partir deste nó", () => {
+                if (!["hierarchical", "radial"].includes(layout)) {
+                  layout = "radial";
+                  layoutSelect.value = layout;
+                }
+                layoutNodes();
+                fit();
+                render();
+              }, { title: "Layout radial ou hierárquico com este nó no centro ou no topo" }),
             ),
             nodes.length > 1
               ? el(
@@ -816,9 +994,7 @@
       }
       metricRows.push([
         "Layout",
-        nodes.length > MAX_FORCE_NODES && layout === "force"
-          ? "Circular (limite de nós)"
-          : titleCase(layout),
+        (G.graphLayouts[layout] || G.graphLayouts.force).label,
       ]);
       if (graphMetrics.engine) {
         metricRows.push(["Motor de métricas", graphMetrics.engine]);
@@ -962,6 +1138,24 @@
     }
 
     function legend() {
+      if (colorMode === "community" && communityColor.size) {
+        const counts = new Map();
+        for (const node of nodes) {
+          const color = communityColor.get(graph.analytics?.nodes?.[node.id]?.community) || OTHER_COMMUNITY;
+          counts.set(color, (counts.get(color) || 0) + 1);
+        }
+        const entries = COMMUNITY_COLORS.filter((color) => counts.has(color)).map((color, index) => [color, `Comunidade ${index + 1}`]);
+        if (counts.has(OTHER_COMMUNITY)) entries.push([OTHER_COMMUNITY, "Outras / isoladas"]);
+        return el(
+          "div",
+          { class: "legend-items" },
+          ...entries.map(([color, text]) => {
+            const dot = el("span", { class: "legend-dot" });
+            dot.style.background = color;
+            return el("span", { class: "legend-item" }, dot, `${text} (${counts.get(color)})`);
+          }),
+        );
+      }
       return el(
         "div",
         { class: "legend-items" },
@@ -1091,11 +1285,17 @@
         typeSelect,
         layoutSelect,
         colorSelect,
+        sizeSelect,
+        depthSelect,
+        el("label", { class: "toolbar-check", for: "graph-edge-labels" }, edgeLabelToggle, "Rótulos nas arestas"),
         el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
       ),
+      viewTabs,
       shell,
+      altHost,
     );
 
+    renderViewTabs();
     await loadGraph();
   }
 

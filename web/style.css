@@ -5123,3 +5123,39 @@ dialog:focus-visible,
 .chart-table td, .chart-table th { font-size: var(--text-sm); }
 .analytics-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 900px) { .analytics-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---- Graph: views, labels, hover ---------------------------------- */
+
+.graph-view-tabs { margin-bottom: var(--space-3); }
+.graph-alt[hidden], .graph-shell[hidden] { display: none !important; }
+.toolbar-check { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: var(--text-sm); white-space: nowrap; }
+.graph-arrow-head { fill: var(--viz-axis); }
+.graph-edge-label { fill: var(--text-muted); font-size: 9px; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.graph-svg.has-hover .graph-node:not(.is-near) { opacity: 0.25; }
+.graph-svg.has-hover .graph-edge:not(.is-near) { opacity: 0.12; }
+.graph-svg.has-hover .graph-node-label:not(.is-near), .graph-svg.has-hover .graph-edge-label:not(.is-near) { opacity: 0.15; }
+.graph-edge.is-near { stroke: var(--text-secondary); stroke-width: 1.8; }
+
+.matrix-scroll { max-width: 100%; max-height: 72vh; overflow: auto; }
+.matrix-svg { display: block; }
+.matrix-grid { stroke: var(--viz-grid); stroke-width: 0.5; }
+.matrix-block { fill: rgba(255, 255, 255, 0.025); stroke: var(--viz-axis); stroke-width: 1; }
+.matrix-label { fill: var(--text-secondary); font-size: 10px; }
+.matrix-cell { cursor: pointer; outline: none; }
+.matrix-cell:hover, .matrix-cell:focus-visible { stroke: var(--text); stroke-width: 1.5; }
+.matrix-highlight { fill: rgba(255, 255, 255, 0.05); pointer-events: none; }
+
+.graph-timeline { width: 100%; overflow-x: auto; }
+.timeline-svg { display: block; }
+.timeline-lane { fill: var(--text-secondary); font-size: 11px; }
+.timeline-hit { fill: transparent; }
+.timeline-mark { stroke: var(--surface); stroke-width: 2; }
+.timeline-dot { cursor: pointer; outline: none; }
+.timeline-dot:hover .timeline-mark, .timeline-dot:focus-visible .timeline-mark { stroke: var(--text); }
+.chart-card .panel-heading { flex-wrap: wrap; row-gap: var(--space-2); }
+.chart-card .panel-heading-side { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+.chart-card .panel-caption { white-space: normal; text-align: right; }
+@media (max-width: 600px) {
+  .chart-card .panel-heading-side { justify-content: flex-start; }
+  .chart-card .panel-caption { text-align: left; }
+}
