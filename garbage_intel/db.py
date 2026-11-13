@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 9
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -268,18 +268,66 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
     (
         "nvd-connector",
         "NVD CVE connector",
-        "Planned descriptive NVD CVE metadata connector; not implemented.",
+        "NIST NVD record of a CVE (description, CVSS, CWE, references) as a multi-source connector.",
         "Threat Intelligence",
-        "0.0.0",
-        "planned",
+        "1.0.0",
+        "enabled",
     ),
     (
         "external-osint-connectors",
         "External OSINT connectors",
-        "Planned authorized external lookups; no connector is implemented.",
+        "Passive third-party sources (DNS, RDAP, CT, archives, routing, reputation) used by multi-source queries and transforms.",
         "Intelligence",
-        "0.0.0",
-        "planned",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "transforms",
+        "Transforms",
+        "Entity-to-entity transforms over the connectors, with parameters, per-run log, duration and enrichment history.",
+        "Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "entity-resolution",
+        "Entity resolution",
+        "Exact, probable and weak duplicate candidates with analyst-approved, audited merges.",
+        "Analysis",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "attack-matrix",
+        "MITRE ATT&CK",
+        "Offline Enterprise ATT&CK matrix, technique detail and techniques linked to cases.",
+        "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "yara-rules",
+        "YARA rules",
+        "Local YARA rule sets checked, tested and applied to file analyses.",
+        "Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "analytics",
+        "Analytics",
+        "Workspace and case charts computed from stored records.",
+        "Analysis",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "cti-export",
+        "CTI export",
+        "STIX 2.1 bundles, MISP events and IOC CSV built from case records.",
+        "Output",
+        "1.0.0",
+        "enabled",
     ),
     (
         "media-forensics",
@@ -857,6 +905,119 @@ def _migrate_attack(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_foundation(connection: sqlite3.Connection) -> None:
+    """Version 8: transform runs, entity resolution and registry corrections."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS transform_runs (
+               id TEXT PRIMARY KEY,
+               transform_id TEXT NOT NULL,
+               entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+               investigation_id TEXT REFERENCES investigations(id) ON DELETE SET NULL,
+               intel_run_id TEXT,
+               status TEXT NOT NULL,
+               result_count INTEGER NOT NULL DEFAULT 0,
+               created_count INTEGER NOT NULL DEFAULT 0,
+               reused_count INTEGER NOT NULL DEFAULT 0,
+               relationship_count INTEGER NOT NULL DEFAULT 0,
+               parameters_json TEXT NOT NULL DEFAULT '{}',
+               log_json TEXT NOT NULL DEFAULT '[]',
+               duration_ms INTEGER NOT NULL DEFAULT 0,
+               started_at TEXT NOT NULL,
+               finished_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS transform_runs_entity
+               ON transform_runs(entity_id, started_at);
+           CREATE TABLE IF NOT EXISTS resolution_decisions (
+               pair_key TEXT PRIMARY KEY,
+               entity_a TEXT NOT NULL,
+               entity_b TEXT NOT NULL,
+               decision TEXT NOT NULL,
+               level TEXT NOT NULL DEFAULT '',
+               rule TEXT NOT NULL DEFAULT '',
+               note TEXT NOT NULL DEFAULT '',
+               decided_at TEXT NOT NULL
+           );
+           CREATE TABLE IF NOT EXISTS entity_aliases (
+               id TEXT PRIMARY KEY,
+               entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+               entity_type TEXT NOT NULL,
+               name TEXT NOT NULL,
+               identifier TEXT NOT NULL DEFAULT '',
+               merged_from_id TEXT NOT NULL,
+               level TEXT NOT NULL DEFAULT '',
+               note TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS entity_aliases_entity ON entity_aliases(entity_id);"""
+    )
+    # Both connectors were registered as planned before they were built.
+    corrections = {
+        row[0]: row for row in DEFAULT_MODULES if row[0] in {"nvd-connector", "external-osint-connectors"}
+    }
+    for module_id, (_, name, description, category, version, _state) in corrections.items():
+        connection.execute(
+            """UPDATE module_registry
+               SET name = ?, description = ?, category = ?, version = ?,
+                   state = 'enabled', updated_at = ?
+               WHERE module_id = ? AND state = 'planned'""",
+            (name, description, category, version, utc_now(), module_id),
+        )
+
+# Indexed records: (kind, table, title SQL, body SQL). Expressions use the
+# NEW./OLD. row alias in triggers and the bare table in the backfill.
+SEARCH_SOURCES = (
+    ("investigations", "investigations", "{r}name", "{r}description"),
+    ("entities", "entities", "{r}name", "{r}identifier || ' ' || {r}entity_type || ' ' || {r}description"),
+    ("sources", "sources", "{r}title", "{r}reference || ' ' || {r}category || ' ' || {r}description"),
+    ("evidence", "evidence", "{r}title", "{r}description || ' ' || {r}original_name || ' ' || {r}sha256 || ' ' || {r}evidence_type"),
+    ("observations", "observations", "{r}title", "{r}content"),
+    ("files", "file_analyses", "{r}file_name", "{r}format || ' ' || {r}sha256 || ' ' || {r}media_type"),
+)
+
+
+def fts5_available(connection: sqlite3.Connection) -> bool:
+    try:
+        connection.execute("CREATE VIRTUAL TABLE IF NOT EXISTS temp._fts5_probe USING fts5(x)")
+        connection.execute("DROP TABLE IF EXISTS temp._fts5_probe")
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
+def _migrate_search_index(connection: sqlite3.Connection) -> None:
+    """Version 9: FTS5 index over cases, entities, sources, evidence,
+    observations and file analyses, kept current by triggers. Builds without
+    FTS5 skip it; global search then falls back to LIKE."""
+    if not fts5_available(connection):
+        return
+    connection.execute(
+        """CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+               kind UNINDEXED, ref_id UNINDEXED, title, body,
+               tokenize = 'unicode61 remove_diacritics 2'
+           )"""
+    )
+    for kind, table, title, body in SEARCH_SOURCES:
+        new_title, new_body = title.format(r="NEW."), body.format(r="NEW.")
+        connection.executescript(
+            f"""CREATE TRIGGER IF NOT EXISTS search_{table}_insert AFTER INSERT ON {table} BEGIN
+                    INSERT INTO search_index (kind, ref_id, title, body)
+                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+                END;
+                CREATE TRIGGER IF NOT EXISTS search_{table}_update AFTER UPDATE ON {table} BEGIN
+                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+                    INSERT INTO search_index (kind, ref_id, title, body)
+                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+                END;
+                CREATE TRIGGER IF NOT EXISTS search_{table}_delete AFTER DELETE ON {table} BEGIN
+                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+                END;"""
+        )
+        connection.execute(
+            f"""INSERT INTO search_index (kind, ref_id, title, body)
+                SELECT '{kind}', id, {title.format(r="")}, {body.format(r="")} FROM {table}"""
+        )
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -878,6 +1039,8 @@ MIGRATIONS = (
     (5, "YARA rule sets and file similarity digests", _migrate_file_engines),
     (6, "Local API keys for keyed intelligence connectors", _migrate_api_keys),
     (7, "Offline MITRE ATT&CK and case techniques", _migrate_attack),
+    (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
+    (9, "Full-text search index", _migrate_search_index),
 )
 
 

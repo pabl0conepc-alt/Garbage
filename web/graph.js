@@ -124,6 +124,13 @@
     let hoverId = null;
     let viewMode = "graph";
     let communityColor = new Map();
+    let selection = new Set();
+    let pinned = new Map();
+    let hidden = new Set();
+    let marquee = null;
+    const tools = G.graphTools;
+    const history = new tools.ViewHistory();
+    const enrichment = new Map();
 
     const canvas = el("div", { class: "graph-canvas", tabindex: "0" });
     const svg = svgEl("svg", {
@@ -151,10 +158,52 @@
     const edgeLayer = svgEl("g", { class: "graph-edges" });
     const nodeLayer = svgEl("g", { class: "graph-nodes" });
     const labelLayer = svgEl("g", { class: "graph-labels" });
-    view.append(edgeLayer, nodeLayer, labelLayer);
+    const marqueeRect = svgEl("rect", { class: "graph-marquee", visibility: "hidden" });
+    view.append(edgeLayer, nodeLayer, labelLayer, marqueeRect);
     svg.append(view);
     canvas.append(svg);
     const inspector = el("aside", { class: "graph-inspector" });
+    const undoButton = button("Desfazer", () => undo(), { title: "Desfazer a última mudança de visualização (Ctrl+Z)", disabled: true });
+    const redoButton = button("Refazer", () => redo(), { title: "Refazer (Ctrl+Shift+Z)", disabled: true });
+    const hiddenButton = button("", () => showHidden(), { title: "Mostrar de novo as entidades ocultas" });
+    hiddenButton.hidden = true;
+    const exportMenu = el(
+      "details",
+      { class: "graph-menu" },
+      el("summary", { class: "button button-secondary button-small" }, "Exportar"),
+      el(
+        "div",
+        { class: "graph-menu-list" },
+        menuItem("Imagem PNG", () => exportPng()),
+        menuItem("Imagem SVG", () => exportSvg()),
+        menuItem("GraphML (Gephi, yEd)", () => exportData("graphml")),
+        menuItem("JSON com layout", () => exportData("json")),
+      ),
+    );
+    const map = tools.minimap({
+      onNavigate: (x, y) => {
+        const rect = canvas.getBoundingClientRect();
+        viewport.x = rect.width / 2 - x * viewport.zoom;
+        viewport.y = rect.height / 2 - y * viewport.zoom;
+        applyTransform();
+      },
+    });
+
+    function menuItem(label, action) {
+      return el(
+        "button",
+        {
+          class: "graph-menu-item",
+          type: "button",
+          onClick: () => {
+            exportMenu.open = false;
+            action();
+          },
+        },
+        label,
+      );
+    }
+
     const shell = el(
       "div",
       { class: "graph-shell" },
@@ -168,16 +217,26 @@
           button("−", () => zoomBy(0.85), { title: "Diminuir zoom" }),
           button("＋", () => zoomBy(1.18), { title: "Aumentar zoom" }),
           button("Ajustar", () => fit(), { title: "Ajustar grafo à tela" }),
-          button("Exportar SVG", () => exportSvg(), { title: "Baixar o grafo visível como SVG" }),
+          undoButton,
+          redoButton,
+          exportMenu,
+          button("Importar", () => importDialog(), { title: "Importar GraphML ou JSON, ou restaurar um layout exportado" }),
+          hiddenButton,
           button("Redefinir", () => {
+            record();
             focusedId = null;
             selectedId = null;
-            viewport = { x: 0, y: 0, zoom: 1 };
-            applyTransform();
+            selection = new Set();
+            pinned = new Map();
+            hidden = new Set();
+            persistView();
+            layoutNodes();
+            fit();
             render();
-          }),
+          }, { title: "Soltar fixações, mostrar ocultos e refazer o layout" }),
         ),
         legendHost,
+        map.element,
       ),
       inspector,
     );
@@ -247,7 +306,8 @@
     const viewTabs = el("div", { class: "graph-view-tabs" });
     const altHost = el("div", { class: "graph-alt", hidden: true });
 
-    async function loadGraph() {
+    async function loadGraph(options = {}) {
+      const previous = options.keepPositions ? new Map(nodes.map((node) => [node.id, { x: node.x, y: node.y }])) : null;
       const token = ++requestToken;
       canvas.classList.add("is-loading");
       const parameters = new URLSearchParams();
@@ -275,8 +335,16 @@
           rememberQuery();
         }
         rankCommunities();
+        if (!previous) restoreSavedView();
         layoutNodes();
-        fit();
+        if (previous) {
+          placeAround(previous);
+          enrichment.clear();
+        } else {
+          history.clear();
+          fit();
+        }
+        selection = new Set([...selection].filter((id) => byId.has(id)));
         render();
       } catch (error) {
         if (token !== requestToken) return;
@@ -312,6 +380,179 @@
         rootId: selectedId,
         analytics: graph.analytics,
       });
+      for (const node of nodes) {
+        const pin = pinned.get(node.id);
+        if (pin) {
+          node.x = pin.x;
+          node.y = pin.y;
+        }
+      }
+    }
+
+    /* After a reload that added entities (transform, pivot), existing nodes
+       keep their place and new ones are set around the node they attach to. */
+    function placeAround(previous) {
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      for (const node of nodes) {
+        const old = previous.get(node.id);
+        if (old) {
+          node.x = old.x;
+          node.y = old.y;
+        }
+      }
+      const placed = new Map();
+      for (const node of nodes) {
+        if (previous.has(node.id) || pinned.has(node.id)) continue;
+        const edge = edges.find(
+          (item) =>
+            (item.source_entity_id === node.id && previous.has(item.target_entity_id)) ||
+            (item.target_entity_id === node.id && previous.has(item.source_entity_id)),
+        );
+        if (!edge) continue;
+        const anchorId = edge.source_entity_id === node.id ? edge.target_entity_id : edge.source_entity_id;
+        const anchor = byId.get(anchorId);
+        const index = placed.get(anchorId) || 0;
+        placed.set(anchorId, index + 1);
+        const angle = index * 2.399963;
+        const distance = 120 + 22 * Math.floor(index / 7);
+        node.x = anchor.x + Math.cos(angle) * distance;
+        node.y = anchor.y + Math.sin(angle) * distance;
+      }
+    }
+
+    /* View state: undo/redo and the per-scope saved view. ------------ */
+
+    function snapshot() {
+      return {
+        positions: nodes.map((node) => [node.id, node.x, node.y]),
+        pinned: [...pinned.entries()].map(([id, point]) => [id, { ...point }]),
+        hidden: [...hidden],
+        layout,
+      };
+    }
+
+    function restore(state) {
+      const positions = new Map(state.positions.map(([id, x, y]) => [id, [x, y]]));
+      for (const node of nodes) {
+        const point = positions.get(node.id);
+        if (point) [node.x, node.y] = point;
+      }
+      pinned = new Map(state.pinned);
+      hidden = new Set(state.hidden);
+      layout = state.layout;
+      layoutSelect.value = layout;
+      selection = new Set([...selection].filter((id) => !hidden.has(id)));
+      persistView();
+      render();
+    }
+
+    function record() {
+      history.push(snapshot());
+      syncHistoryButtons();
+    }
+
+    function undo() {
+      const state = history.undo(snapshot());
+      if (state) restore(state);
+      syncHistoryButtons();
+    }
+
+    function redo() {
+      const state = history.redo(snapshot());
+      if (state) restore(state);
+      syncHistoryButtons();
+    }
+
+    function syncHistoryButtons() {
+      undoButton.disabled = !history.canUndo;
+      redoButton.disabled = !history.canRedo;
+    }
+
+    function persistView() {
+      tools.saveView(investigationId, { pinned: [...pinned.entries()], hidden: [...hidden], layout });
+    }
+
+    function restoreSavedView() {
+      const saved = tools.loadView(investigationId);
+      pinned = new Map(Array.isArray(saved?.pinned) ? saved.pinned : []);
+      hidden = new Set(Array.isArray(saved?.hidden) ? saved.hidden : []);
+      if (saved?.layout && G.graphLayouts[saved.layout]) {
+        layout = saved.layout;
+        layoutSelect.value = layout;
+      }
+    }
+
+    function targets() {
+      if (selection.size) return [...selection];
+      return selectedId ? [selectedId] : [];
+    }
+
+    function selectNode(id, additive = false) {
+      if (additive) {
+        if (selection.has(id)) selection.delete(id);
+        else selection.add(id);
+        selectedId = selection.has(id) ? id : [...selection].pop() || null;
+      } else {
+        selection = new Set([id]);
+        selectedId = id;
+      }
+      render();
+    }
+
+    function pinNodes(ids, on) {
+      record();
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      for (const id of ids) {
+        const node = byId.get(id);
+        if (on && node) pinned.set(id, { x: node.x, y: node.y });
+        else pinned.delete(id);
+      }
+      persistView();
+      render();
+    }
+
+    function hideNodes(ids) {
+      record();
+      ids.forEach((id) => hidden.add(id));
+      selection = new Set([...selection].filter((id) => !hidden.has(id)));
+      if (hidden.has(selectedId)) selectedId = null;
+      persistView();
+      render();
+    }
+
+    function showHidden() {
+      if (!hidden.size) return;
+      record();
+      hidden = new Set();
+      persistView();
+      render();
+    }
+
+    function isolateSelection() {
+      record();
+      for (const node of nodes) if (!selection.has(node.id)) hidden.add(node.id);
+      persistView();
+      render();
+    }
+
+    function selectNeighbours() {
+      const visible = visibleNodeSet();
+      for (const edge of edges) {
+        if (selection.has(edge.source_entity_id) && visible.has(edge.target_entity_id)) selection.add(edge.target_entity_id);
+        if (selection.has(edge.target_entity_id) && visible.has(edge.source_entity_id)) selection.add(edge.source_entity_id);
+      }
+      render();
+    }
+
+    async function copyIdentifiers() {
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      const text = targets().map((id) => byId.get(id)).filter(Boolean).map((node) => node.identifier || node.name).join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        toast(`${targets().length} identificador(es) copiados.`);
+      } catch (error) {
+        toast("O navegador não permitiu copiar para a área de transferência.", "warning");
+      }
     }
 
     function radiusOf(node) {
@@ -338,7 +579,7 @@
     function visibleNodeSet() {
       const types = visibleTypes || new Set(graph.nodes.map((node) => node.entity_type));
       const set = new Set(
-        graph.nodes.filter((node) => types.has(node.entity_type)).map((node) => node.id),
+        graph.nodes.filter((node) => types.has(node.entity_type) && !hidden.has(node.id)).map((node) => node.id),
       );
       if (focusedId && set.has(focusedId)) {
         const neighbors = new Set([focusedId]);
@@ -365,6 +606,7 @@
         "transform",
         `translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`,
       );
+      map.setViewport(viewport, canvas.getBoundingClientRect());
     }
 
     function nodeColor(node) {
@@ -495,11 +737,187 @@
           });
           toast(`${result.created_entities.length} entidade(s) nova(s), ${result.reused_entities.length} reaproveitada(s), ${result.relationships.length} relacionamento(s).`);
           dialog.close();
-          await loadGraph();
+          await loadGraph({ keepPositions: true });
         } catch (error) {
           submit.disabled = false;
           toast(error.message, "error");
         }
+      });
+    }
+
+    /* Import ------------------------------------------------------- */
+
+    const IMPORT_REASONS = {
+      "missing or repeated node id": "id de nó ausente ou repetido",
+      "an endpoint is missing or invalid": "uma das pontas está ausente ou é inválida",
+      "both ends are the same entity": "as duas pontas são a mesma entidade",
+    };
+
+    function importDialog() {
+      let file = null;
+      let content = "";
+      let format = "";
+      let layoutPayload = null;
+      const fileInput = el("input", { class: "input", type: "file", accept: ".graphml,.xml,.json,application/json" });
+      const scope = el(
+        "select",
+        { class: "input", "aria-label": "Vincular a uma investigação" },
+        el("option", { value: "" }, "Sem vincular a um caso"),
+        ...G.state.investigations.map((item) => el("option", { value: item.id }, item.name)),
+      );
+      scope.value = investigationId;
+      const body = el("div", { class: "import-result", "aria-live": "polite" });
+      const previewButton = el("button", { class: "button button-secondary", type: "button", disabled: true }, "Pré-visualizar");
+      const commitButton = el("button", { class: "button button-primary", type: "button", disabled: true }, "Importar");
+      const layoutButton = el("button", { class: "button button-secondary", type: "button", hidden: true }, "Aplicar só o layout");
+      const dialog = el(
+        "dialog",
+        { class: "app-dialog pivot-dialog", "aria-label": "Importar grafo" },
+        el(
+          "div",
+          { class: "dialog-form" },
+          el(
+            "div",
+            { class: "dialog-heading" },
+            el(
+              "div",
+              {},
+              el("p", { class: "eyebrow" }, "IMPORTAR"),
+              el("h2", {}, "Importar grafo"),
+              el(
+                "p",
+                { class: "dialog-description" },
+                "GraphML (Gephi, yEd e outros) ou JSON (este app, Cytoscape, D3). Cada nó vira uma entidade, ou reaproveita a que já existe com o mesmo tipo e identificador; cada aresta vira um relacionamento não verificado que cita o arquivo. Nada é gravado antes da sua confirmação.",
+              ),
+            ),
+          ),
+          el(
+            "div",
+            { class: "pivot-body" },
+            el("label", { class: "field" }, el("span", {}, "Arquivo (até 8 MiB)"), fileInput),
+            el("label", { class: "field" }, el("span", {}, "Investigação"), scope),
+            body,
+          ),
+          el(
+            "div",
+            { class: "dialog-actions" },
+            el("button", { class: "button button-secondary", type: "button", onClick: () => dialog.close() }, "Fechar"),
+            layoutButton,
+            previewButton,
+            commitButton,
+          ),
+        ),
+      );
+      document.body.append(dialog);
+      dialog.addEventListener("close", () => dialog.remove());
+      dialog.showModal();
+
+      fileInput.addEventListener("change", async () => {
+        file = fileInput.files[0] || null;
+        commitButton.disabled = true;
+        layoutButton.hidden = true;
+        layoutPayload = null;
+        body.replaceChildren();
+        if (!file) return;
+        if (file.size > 8 * 1024 * 1024) {
+          body.replaceChildren(G.inlineError("O arquivo passa de 8 MiB."));
+          previewButton.disabled = true;
+          return;
+        }
+        format = /\.json$/i.test(file.name) ? "json" : "graphml";
+        content = await file.text();
+        previewButton.disabled = false;
+        if (format === "json") {
+          try {
+            const parsed = JSON.parse(content);
+            if (parsed?.format === "garbage-graph" && Array.isArray(parsed.nodes)) {
+              const present = new Set(nodes.map((node) => node.id));
+              const matches = parsed.nodes.filter((node) => present.has(node.id)).length;
+              if (matches) {
+                layoutPayload = parsed;
+                layoutButton.hidden = false;
+                layoutButton.textContent = `Aplicar só o layout (${matches} nó(s) deste grafo)`;
+              }
+            }
+          } catch (error) {
+            /* the server preview reports the parse error */
+          }
+        }
+      });
+
+      async function send(commit) {
+        previewButton.disabled = true;
+        commitButton.disabled = true;
+        body.replaceChildren(loadingBlock(commit ? "Importando…" : "Lendo o arquivo…"));
+        try {
+          const result = await api("/api/graph/import", {
+            method: "POST",
+            body: JSON.stringify({ content, format, file_name: file.name, investigation_id: scope.value || null, commit }),
+          });
+          const c = result.counts;
+          const typeRows = Object.entries(result.new_by_type).map(([type, count]) => `${entityTypeLabel(type)}: ${count}`).join(", ");
+          body.replaceChildren(
+            G.kvList([
+              ["Arquivo", `${result.nodes} nó(s), ${result.edges} aresta(s)`],
+              ["Entidades novas", `${c.new_entities}${typeRows ? ` (${typeRows})` : ""}`],
+              ["Já existentes", String(c.existing_entities)],
+              ["Nós inválidos", String(c.invalid_nodes)],
+              ["Relacionamentos novos", String(c.new_relationships)],
+              ["Relacionamentos já registrados", String(c.existing_relationships)],
+              ["Arestas ignoradas", String(c.skipped_edges)],
+            ]),
+            result.problems.length
+              ? el(
+                  "ul",
+                  { class: "import-problems" },
+                  ...result.problems.map((item) =>
+                    el("li", {}, el("code", {}, item.key || "—"), ` ${IMPORT_REASONS[item.reason] || G.translateError(item.reason)}`),
+                  ),
+                )
+              : null,
+          );
+          if (commit) {
+            toast(`Importado: ${c.new_entities} entidade(s) e ${c.new_relationships} relacionamento(s) novos.`);
+            dialog.close();
+            if (scope.value && scope.value !== investigationId) {
+              investigationId = scope.value;
+              caseSelect.value = investigationId;
+              await loadGraph();
+            } else {
+              await loadGraph({ keepPositions: true });
+            }
+          } else {
+            commitButton.disabled = c.new_entities + c.new_relationships + c.existing_entities === 0;
+            commitButton.textContent = `Importar ${c.new_entities} entidade(s) e ${c.new_relationships} relacionamento(s)`;
+          }
+        } catch (error) {
+          body.replaceChildren(G.inlineError(error.message));
+        } finally {
+          previewButton.disabled = !file;
+        }
+      }
+      previewButton.addEventListener("click", () => send(false));
+      commitButton.addEventListener("click", () => send(true));
+      layoutButton.addEventListener("click", () => {
+        record();
+        const saved = new Map(layoutPayload.nodes.map((node) => [node.id, node]));
+        for (const node of nodes) {
+          const item = saved.get(node.id);
+          if (!item) continue;
+          if (Number.isFinite(item.x) && Number.isFinite(item.y)) {
+            node.x = item.x;
+            node.y = item.y;
+          }
+          if (item.pinned) pinned.set(node.id, { x: node.x, y: node.y });
+          else pinned.delete(node.id);
+          if (item.hidden) hidden.add(node.id);
+          else hidden.delete(node.id);
+        }
+        persistView();
+        fit();
+        render();
+        toast("Layout aplicado. Use Desfazer para voltar.");
+        dialog.close();
       });
     }
 
@@ -571,11 +989,11 @@
     }
 
     /* Standalone SVG of what is on screen, with computed styles inlined. */
-    function exportSvg() {
+    function buildExportSvg() {
       const { shown } = visibleSubgraph();
       if (!shown.length) {
         toast("Não há nada visível para exportar.", "warning");
-        return;
+        return null;
       }
       if (hoverId) {
         hoverId = null;
@@ -590,8 +1008,13 @@
       const inline = (source, target) => {
         if (source.nodeType !== 1) return;
         const style = getComputedStyle(source);
-        const properties = ["fill", "stroke", "stroke-width", "stroke-dasharray", "opacity", "font-size", "font-family", "font-weight"];
-        target.setAttribute("style", properties.map((name) => `${name}:${style.getPropertyValue(name)}`).join(";"));
+        const properties = ["fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "opacity", "font-size", "font-family", "font-weight", "visibility", "paint-order"];
+        // Presentation attributes, not a style attribute: the CSP blocks
+        // inline styles even on a detached clone.
+        properties.forEach((name) => {
+          const value = style.getPropertyValue(name);
+          if (value) target.setAttribute(name, value);
+        });
         [...source.children].forEach((child, index) => inline(child, target.children[index]));
       };
       inline(svg, copy);
@@ -605,16 +1028,62 @@
       background.setAttribute("y", minY);
       background.setAttribute("width", width);
       background.setAttribute("height", height);
-      background.setAttribute("fill", getComputedStyle(canvas).backgroundColor || "#15181B");
+      // The canvas itself is transparent; paint the stage colour so light
+      // labels stay readable in viewers with a white background.
+      const stageColor = getComputedStyle(canvas.parentElement).backgroundColor;
+      background.setAttribute("fill", stageColor && !stageColor.endsWith(", 0)") ? stageColor : "#101214");
       copy.insertBefore(background, copy.firstChild.nextSibling);
-      const blob = new Blob([new XMLSerializer().serializeToString(copy)], { type: "image/svg+xml" });
-      const url = URL.createObjectURL(blob);
-      const link = el("a", { href: url, download: `grafo-${new Date().toISOString().slice(0, 10)}.svg` });
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      copy.querySelector(".graph-marquee")?.remove();
+      copy.querySelectorAll(".graph-node").forEach((node) => node.removeAttribute("tabindex"));
+      return { text: new XMLSerializer().serializeToString(copy), width, height };
+    }
+
+    function exportName(extension) {
+      const slug = (graph.investigation?.name || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 40);
+      const scope = slug ? `-${slug}` : "";
+      return `grafo${scope}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+    }
+
+    function exportSvg() {
+      const built = buildExportSvg();
+      if (!built) return;
+      tools.download(new Blob([built.text], { type: "image/svg+xml" }), exportName("svg"));
       toast("SVG do grafo exportado.");
+    }
+
+    async function exportPng() {
+      const built = buildExportSvg();
+      if (!built) return;
+      try {
+        const blob = await tools.rasterize(built.text, built.width, built.height, 2);
+        tools.download(blob, exportName("png"));
+        toast("PNG do grafo exportado em resolução dupla.");
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    function exportData(kind) {
+      const { shown, links } = visibleSubgraph();
+      if (!shown.length) {
+        toast("Não há nada visível para exportar.", "warning");
+        return;
+      }
+      const rows = shown.map((node) => ({ ...node, pinned: pinned.has(node.id) }));
+      const meta = { scope: graph.investigation?.name || "Todos os casos" };
+      if (kind === "graphml") {
+        tools.download(new Blob([tools.toGraphML(rows, links, meta)], { type: "application/graphml+xml" }), exportName("graphml"));
+        toast(`GraphML exportado: ${shown.length} entidade(s), ${links.length} relacionamento(s).`);
+      } else {
+        tools.download(new Blob([tools.toJSON(rows, links, meta)], { type: "application/json" }), exportName("json"));
+        toast(`JSON exportado: ${shown.length} entidade(s), ${links.length} relacionamento(s), com posições.`);
+      }
     }
 
     function render() {
@@ -673,7 +1142,7 @@
       for (const node of visibleNodes) {
         const radius = radiusOf(node);
         const group = svgEl("g", {
-          class: `graph-node type-${node.entity_type}${node.id === selectedId ? " is-selected" : ""}${pathIds.has(node.id) ? " is-path" : ""}${neighbourIds.has(node.id) ? " is-near" : ""}`,
+          class: `graph-node type-${node.entity_type}${node.id === selectedId || selection.has(node.id) ? " is-selected" : ""}${pinned.has(node.id) ? " is-pinned" : ""}${pathIds.has(node.id) ? " is-path" : ""}${neighbourIds.has(node.id) ? " is-near" : ""}`,
           transform: `translate(${node.x} ${node.y})`,
           tabindex: "0",
           role: "button",
@@ -685,21 +1154,22 @@
           fill: nodeColor(node),
           class: "graph-node-circle",
         });
-        circle.append(svgEl("title", {}, `${node.name} · ${entityTypeLabel(node.entity_type)}`));
-        group.append(circle);
-        group.addEventListener("click", (event) => {
-          event.stopPropagation();
-          selectedId = node.id;
-          render();
-        });
+        circle.append(svgEl("title", {}, `${node.name} · ${entityTypeLabel(node.entity_type)}${pinned.has(node.id) ? " · fixada" : ""}`));
+        group.append(circle, tools.glyph(node.entity_type, radius));
+        if (pinned.has(node.id)) {
+          group.append(svgEl("circle", { cx: radius * 0.74, cy: -radius * 0.74, r: 3.4, class: "graph-pin" }));
+        }
+        group.addEventListener("click", (event) => event.stopPropagation());
         group.addEventListener("keydown", (event) => {
           if (event.key === "Enter" || event.key === " ") {
-            selectedId = node.id;
-            render();
+            event.preventDefault();
+            selectNode(node.id, event.shiftKey);
           }
         });
         group.addEventListener("pointerenter", () => {
-          if (dragging || panning) return;
+          // Rendering replaces this element; re-entering the same node must
+          // not render again or hover would loop and swallow clicks.
+          if (dragging || panning || marquee || hoverId === node.id) return;
           hoverId = node.id;
           render();
         });
@@ -719,8 +1189,7 @@
             pointerId: event.pointerId,
             startX: event.clientX,
             startY: event.clientY,
-            originX: node.x,
-            originY: node.y,
+            origins: null,
             moved: false,
           };
           group.classList.add("is-dragging");
@@ -742,6 +1211,11 @@
       }
       canvas.classList.toggle("is-empty", nodes.length === 0);
       legendHost.replaceChildren(legend());
+      hiddenButton.hidden = hidden.size === 0;
+      hiddenButton.textContent = `Ocultas (${hidden.size}) · mostrar`;
+      syncHistoryButtons();
+      map.update(visibleNodes, selection);
+      map.setViewport(viewport, canvas.getBoundingClientRect());
       renderInspector();
     }
 
@@ -812,7 +1286,90 @@
       applyTransform();
     }
 
+    function bulkInspector() {
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      const chosen = [...selection].map((id) => byId.get(id)).filter(Boolean);
+      const counts = new Map();
+      chosen.forEach((node) => counts.set(node.entity_type, (counts.get(node.entity_type) || 0) + 1));
+      const allPinned = chosen.every((node) => pinned.has(node.id));
+      inspector.replaceChildren(
+        panel(
+          { eyebrow: "SELEÇÃO", title: `${chosen.length} entidades selecionadas` },
+          G.kvList([...counts.entries()].sort((a, b) => b[1] - a[1]).map(([type, count]) => [entityTypeLabel(type), String(count)])),
+          el(
+            "div",
+            { class: "inspector-actions" },
+            button(allPinned ? "Soltar posições" : "Fixar posições", () => pinNodes([...selection], !allPinned), { title: "Atalho: P" }),
+            button("Ocultar", () => hideNodes([...selection]), { title: "Atalho: H ou Delete" }),
+            button("Mostrar só a seleção", () => isolateSelection()),
+            button("Selecionar vizinhos", () => selectNeighbours()),
+            button("Copiar identificadores", () => copyIdentifiers()),
+            button("Limpar seleção", () => {
+              selection = new Set();
+              selectedId = null;
+              render();
+            }, { title: "Atalho: Esc" }),
+          ),
+          el(
+            "div",
+            { class: "graph-relation-list" },
+            ...chosen.slice(0, 60).map((node) =>
+              el(
+                "div",
+                { class: "graph-relation" },
+                el("button", { class: "link-button", type: "button", onClick: () => selectNode(node.id) }, node.name),
+                el("span", { class: "record-meta" }, `${entityTypeLabel(node.entity_type)}${pinned.has(node.id) ? " · fixada" : ""}`),
+              ),
+            ),
+            chosen.length > 60 ? el("p", { class: "panel-note" }, `E mais ${chosen.length - 60}.`) : null,
+          ),
+          el("p", { class: "panel-note" }, "Shift+clique adiciona ou remove; Shift+arrastar no fundo seleciona uma área; Ctrl+A seleciona tudo o que está visível."),
+        ),
+      );
+    }
+
+    function enrichmentSection(node) {
+      if (!G.moduleEnabled("transforms") || ["person", "username", "profile"].includes(node.entity_type)) return null;
+      const box = el("div", { class: "graph-enrichment" }, el("h3", { class: "subheading" }, "Enriquecimento"));
+      const fill = (history) => {
+        if (!history.items.length) {
+          box.append(el("p", { class: "panel-empty" }, "Nenhuma transformação executada nesta entidade."));
+          return;
+        }
+        box.append(
+          el(
+            "div",
+            { class: "graph-relation-list" },
+            ...history.items.slice(0, 5).map((item) =>
+              el(
+                "div",
+                { class: "graph-relation" },
+                el("strong", {}, G.connectorLabel ? G.connectorLabel(item.transform_id) : item.transform_id),
+                el(
+                  "span",
+                  { class: "record-meta" },
+                  `${G.formatDate(item.started_at, { time: true })} · ${item.result_count} resultado(s) · ${item.created_count} nova(s)`,
+                ),
+              ),
+            ),
+          ),
+          history.total > 5 ? el("a", { class: "table-link", href: `#/entities/${node.id}` }, `Ver as ${history.total} execuções`) : null,
+        );
+      };
+      let pending = enrichment.get(node.id);
+      if (!pending) {
+        pending = api(`/api/entities/${node.id}/transforms?limit=5`).catch(() => ({ items: [], total: 0 }));
+        enrichment.set(node.id, pending);
+      }
+      pending.then(fill);
+      return box;
+    }
+
     function renderInspector() {
+      if (selection.size > 1) {
+        bulkInspector();
+        return;
+      }
       if (selectedId) {
         const node = nodes.find((item) => item.id === selectedId);
         if (!node) {
@@ -861,12 +1418,18 @@
                 )
               : null,
             node.description ? el("p", { class: "prose" }, node.description) : null,
+            enrichmentSection(node),
             el(
               "div",
               { class: "inspector-actions" },
               button("Abrir registro da entidade", () => go("entities", node.id), {
                 variant: "button-primary",
               }),
+              G.moduleEnabled("transforms") && G.moduleEnabled("intel-orchestrator") && !["person", "username", "profile"].includes(node.entity_type)
+                ? button("Transformações", () => G.transformDialog(node, { investigationId: investigationId || null, onDone: () => loadGraph({ keepPositions: true }) }))
+                : null,
+              button(pinned.has(node.id) ? "Soltar posição" : "Fixar posição", () => pinNodes([node.id], !pinned.has(node.id)), { title: "Atalho: P" }),
+              button("Ocultar", () => hideNodes([node.id]), { title: "Atalho: H ou Delete" }),
               G.moduleEnabled("intel-orchestrator") && (node.identifier || node.name)
                 ? button("Pivotar", () => pivotDialog(node))
                 : null,
@@ -878,6 +1441,7 @@
                 },
               ),
               button("Reorganizar a partir deste nó", () => {
+                record();
                 if (!["hierarchical", "radial"].includes(layout)) {
                   layout = "radial";
                   layoutSelect.value = layout;
@@ -1174,36 +1738,78 @@
 
     /* Interaction -------------------------------------------------- */
 
+    function worldPoint(event) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (event.clientX - rect.left - viewport.x) / viewport.zoom,
+        y: (event.clientY - rect.top - viewport.y) / viewport.zoom,
+      };
+    }
+
+    function drawMarquee() {
+      const x = Math.min(marquee.x0, marquee.x1);
+      const y = Math.min(marquee.y0, marquee.y1);
+      marqueeRect.setAttribute("x", x);
+      marqueeRect.setAttribute("y", y);
+      marqueeRect.setAttribute("width", Math.abs(marquee.x1 - marquee.x0));
+      marqueeRect.setAttribute("height", Math.abs(marquee.y1 - marquee.y0));
+      marqueeRect.setAttribute("stroke-width", String(1.2 / viewport.zoom));
+      marqueeRect.setAttribute("visibility", "visible");
+    }
+
     canvas.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
-      if (event.target.closest(".graph-node")) return;
+      if (event.target.closest(".graph-node") || event.target.closest(".graph-minimap")) return;
       event.preventDefault();
       canvas.setPointerCapture(event.pointerId);
+      canvas.focus({ preventScroll: true });
+      if (event.shiftKey) {
+        const point = worldPoint(event);
+        marquee = { pointerId: event.pointerId, x0: point.x, y0: point.y, x1: point.x, y1: point.y };
+        drawMarquee();
+        return;
+      }
       panning = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         originX: viewport.x,
         originY: viewport.y,
+        moved: false,
       };
       canvas.classList.add("is-panning");
-      if (selectedId) {
-        selectedId = null;
-        render();
-      }
     });
 
     canvas.addEventListener("pointermove", (event) => {
       if (dragging && event.pointerId === dragging.pointerId) {
         const dx = (event.clientX - dragging.startX) / viewport.zoom;
         const dy = (event.clientY - dragging.startY) / viewport.zoom;
-        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) dragging.moved = true;
-        dragging.node.x = dragging.originX + dx;
-        dragging.node.y = dragging.originY + dy;
+        if (!dragging.moved && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+          dragging.moved = true;
+          record();
+          const moving = selection.has(dragging.node.id) && selection.size > 1
+            ? nodes.filter((node) => selection.has(node.id))
+            : [dragging.node];
+          dragging.origins = moving.map((node) => [node, node.x, node.y]);
+        }
+        if (!dragging.moved) return;
+        for (const [node, originX, originY] of dragging.origins) {
+          node.x = originX + dx;
+          node.y = originY + dy;
+          if (pinned.has(node.id)) pinned.set(node.id, { x: node.x, y: node.y });
+        }
         updateGeometry();
         return;
       }
+      if (marquee && event.pointerId === marquee.pointerId) {
+        const point = worldPoint(event);
+        marquee.x1 = point.x;
+        marquee.y1 = point.y;
+        drawMarquee();
+        return;
+      }
       if (panning && event.pointerId === panning.pointerId) {
+        if (Math.abs(event.clientX - panning.startX) + Math.abs(event.clientY - panning.startY) > 3) panning.moved = true;
         viewport.x = panning.originX + event.clientX - panning.startX;
         viewport.y = panning.originY + event.clientY - panning.startY;
         applyTransform();
@@ -1213,19 +1819,69 @@
     function endPointer(event) {
       if (dragging && event.pointerId === dragging.pointerId) {
         dragging.group.classList.remove("is-dragging");
-        if (!dragging.moved) {
-          selectedId = dragging.node.id;
+        const { node, moved } = dragging;
+        dragging = null;
+        if (!moved) selectNode(node.id, event.shiftKey || event.ctrlKey || event.metaKey);
+        else {
+          if (pinned.size) persistView();
           render();
         }
-        dragging = null;
+      }
+      if (marquee && event.pointerId === marquee.pointerId) {
+        const left = Math.min(marquee.x0, marquee.x1);
+        const right = Math.max(marquee.x0, marquee.x1);
+        const top = Math.min(marquee.y0, marquee.y1);
+        const bottom = Math.max(marquee.y0, marquee.y1);
+        const visible = visibleNodeSet();
+        const inside = nodes.filter((node) => visible.has(node.id) && node.x >= left && node.x <= right && node.y >= top && node.y <= bottom);
+        inside.forEach((node) => selection.add(node.id));
+        if (inside.length) selectedId = inside[inside.length - 1].id;
+        marquee = null;
+        marqueeRect.setAttribute("visibility", "hidden");
+        render();
       }
       if (panning && event.pointerId === panning.pointerId) {
+        const clicked = !panning.moved;
         panning = null;
         canvas.classList.remove("is-panning");
+        if (clicked && (selection.size || selectedId)) {
+          selection = new Set();
+          selectedId = null;
+          render();
+        }
       }
     }
     canvas.addEventListener("pointerup", endPointer);
     canvas.addEventListener("pointercancel", endPointer);
+
+    canvas.addEventListener("keydown", (event) => {
+      const key = event.key.toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (modifier && key === "y") {
+        event.preventDefault();
+        redo();
+      } else if (modifier && key === "a") {
+        event.preventDefault();
+        selection = new Set(visibleNodeSet());
+        selectedId = [...selection][0] || null;
+        render();
+      } else if (event.key === "Escape" && (selection.size || selectedId)) {
+        selection = new Set();
+        selectedId = null;
+        render();
+      } else if (!modifier && (event.key === "Delete" || key === "h") && targets().length) {
+        event.preventDefault();
+        hideNodes(targets());
+      } else if (!modifier && key === "p" && targets().length) {
+        event.preventDefault();
+        const ids = targets();
+        pinNodes(ids, !ids.every((id) => pinned.has(id)));
+      }
+    });
 
     canvas.addEventListener(
       "wheel",
@@ -1256,7 +1912,9 @@
       loadGraph();
     });
     layoutSelect.addEventListener("change", () => {
+      record();
       layout = layoutSelect.value;
+      persistView();
       layoutNodes();
       fit();
       render();

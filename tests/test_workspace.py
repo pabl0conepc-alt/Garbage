@@ -70,7 +70,7 @@ class WorkspaceServiceTests(unittest.TestCase):
         modules = list_modules(self.database)
         states = {item["module_id"]: item["state"] for item in modules["items"]}
         self.assertEqual(states["indicator-engine"], "enabled")
-        self.assertEqual(states["nvd-connector"], "planned")
+        self.assertEqual(states["media-forensics"], "planned")
 
         self.seed()
         report = build_report(self.database, self.investigation["id"])
@@ -91,7 +91,7 @@ class WorkspaceServiceTests(unittest.TestCase):
             0,
         )
         with self.assertRaisesRegex(ConflictError, "planned modules"):
-            set_module_state(self.database, "nvd-connector", "enabled")
+            set_module_state(self.database, "media-forensics", "enabled")
         with self.assertRaisesRegex(ConflictError, "core module"):
             set_module_state(self.database, "settings", "disabled")
         with self.assertRaisesRegex(ValidationError, "module state"):

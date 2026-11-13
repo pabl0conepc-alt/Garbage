@@ -649,7 +649,7 @@
     });
     if (!approved) return false;
     try {
-      await api(`/api/investigations/${investigation.id}`, { method: "EXCLUIR" });
+      await api(`/api/investigations/${investigation.id}`, { method: "DELETE" });
     } catch (error) {
       if (error.status !== 409) throw error;
       const forced = await confirm({
@@ -663,7 +663,7 @@
       });
       if (!forced) return false;
       await api(`/api/investigations/${investigation.id}?force=true`, {
-        method: "EXCLUIR",
+        method: "DELETE",
       });
     }
     G.invalidateInvestigations();
@@ -681,7 +681,7 @@
     });
     if (!approved) return false;
     try {
-      await api(`/api/entities/${entity.id}`, { method: "EXCLUIR" });
+      await api(`/api/entities/${entity.id}`, { method: "DELETE" });
     } catch (error) {
       if (error.status !== 409) throw error;
       const forced = await confirm({
@@ -691,7 +691,7 @@
         danger: true,
       });
       if (!forced) return false;
-      await api(`/api/entities/${entity.id}?force=true`, { method: "EXCLUIR" });
+      await api(`/api/entities/${entity.id}?force=true`, { method: "DELETE" });
     }
     toast("Entidade excluída.");
     if (onDeleted) await onDeleted();
@@ -1433,7 +1433,7 @@
                           try {
                             await api(
                               `/api/investigations/${investigation.id}/entities/${row.id}`,
-                              { method: "EXCLUIR" },
+                              { method: "DELETE" },
                             );
                             toast("Entidade desvinculada; o registro compartilhado foi preservado.");
                             await draw();
@@ -1536,7 +1536,7 @@
                             )
                               return;
                             try {
-                              await api(`/api/evidence/${row.id}`, { method: "EXCLUIR" });
+                              await api(`/api/evidence/${row.id}`, { method: "DELETE" });
                               toast("Evidência excluída.");
                               await draw();
                             } catch (error) {
@@ -1608,7 +1608,7 @@
                           try {
                             await api(
                               `/api/investigations/${investigation.id}/sources/${row.id}`,
-                              { method: "EXCLUIR" },
+                              { method: "DELETE" },
                             );
                             toast("Fonte desvinculada; o registro compartilhado foi preservado.");
                             await draw();
@@ -1682,7 +1682,7 @@
                           )
                             return;
                           try {
-                            await api(`/api/relationships/${row.id}`, { method: "EXCLUIR" });
+                            await api(`/api/relationships/${row.id}`, { method: "DELETE" });
                             toast("Relacionamento excluído.");
                             await draw();
                           } catch (error) {
