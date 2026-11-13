@@ -57,6 +57,8 @@ G.NAV = [
     items: [
       { view: "board", label: "Quadro de investigação", icon: "board", module: "investigation-board" },
       { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
+      { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
+      { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
     ],
   },
   {
@@ -70,6 +72,7 @@ G.NAV = [
     label: "Inteligência de ameaças",
     items: [
       { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
+      { view: "attack", label: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
     ],
   },
   {
@@ -241,6 +244,10 @@ const ICON_PATHS = {
   indicators: "M12 3v4M12 17v4M3 12h4M17 12h4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
   files: "M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h4.5",
   board: "M3 4.5h18v15H3zM7 8.5h4v3H7zM14 13h4v3h-4zM11 10l3 4.5",
+  chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
+  merge: "M6 4v4a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 4v4a6 6 0 0 1-6 6M12 14v6M4 6l2-2 2 2M16 6l2-2 2 2",
+  transform: "M4 12h10M10 7l5 5-5 5M18 5v14",
+  matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
   graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
   evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
   sources: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2",
@@ -593,6 +600,20 @@ const ERROR_PATTERNS = [
   [/^the source returned invalid JSON$/, () => "A fonte retornou JSON inválido"],
   [/^certificate could not be parsed: (.+)$/, (m) => `Não foi possível interpretar o certificado: ${m[1]}`],
   [/^connector failed unexpectedly$/, () => "O conector falhou de forma inesperada"],
+  [/^the run was interrupted( by a restart)?$/, (m) => `A consulta foi interrompida${m[1] ? " por um reinício" : ""}`],
+  [/^async must be a boolean$/, () => "async deve ser verdadeiro ou falso"],
+  [/^transforms do not run on people, usernames or profiles$/, () => "Transformações não rodam sobre pessoas, nomes de usuário ou perfis"],
+  [/^the entity has no identifier a transform can query$/, () => "A entidade não tem um identificador que uma transformação possa consultar"],
+  [/^the entity's identifier is not a domain, IP, CIDR, URL, email, hash, ASN or CVE$/, () => "O identificador da entidade não é domínio, IP, CIDR, URL, e-mail, hash, ASN nem CVE"],
+  [/^the identifier was read as (\S+), which does not match the entity type (\S+)$/, (m) => `O identificador foi lido como ${m[1]}, o que não combina com o tipo ${entityTypeLabel(m[2]).toLowerCase()}`],
+  [/^transforms must be a non-empty list of transform ids$/, () => "Selecione pelo menos uma transformação"],
+  [/^at most 30 transforms run at once$/, () => "No máximo 30 transformações por vez"],
+  [/^unknown transforms: (.+)$/, (m) => `Transformações desconhecidas: ${m[1]}`],
+  [/^transforms that do not accept (\S+): (.+)$/, (m) => `Transformações que não aceitam ${m[1]}: ${m[2]}`],
+  [/^max_new_entities must be between (\d+) and (\d+)$/, (m) => `O limite de novas entidades deve ficar entre ${m[1]} e ${m[2]}`],
+  [/^an entity cannot be merged into itself$/, () => "Uma entidade não pode ser fundida nela mesma"],
+  [/^two different entity ids are required$/, () => "São necessárias duas entidades diferentes"],
+  [/^a person, username or profile can only be merged with the same kind of entity$/, () => "Pessoa, nome de usuário ou perfil só pode ser fundido com o mesmo tipo de entidade"],
   [/^no CISA KEV cache; run an explicit refresh first$/, () => "Sem cache do CISA KEV; faça uma atualização explícita primeiro"],
   [/^the run has no findings to record$/, () => "A consulta não tem resultados para registrar"],
   [/^value was detected as (\w+), not (\w+)$/, (m) => `O valor foi detectado como ${m[1]}, não ${m[2]}`],
@@ -689,9 +710,32 @@ const ACTIVITY_PATTERNS = [
   [/^Module (.+) set to (\w+)$/, (m) => `Módulo ${m[1]} ${m[2] === "enabled" ? "ativado" : "desativado"}`],
   [/^Settings updated: (.+)$/, "Configurações atualizadas: $1"],
   [/^Indicator assessment set to (.+)$/, (m) => `Avaliação do indicador definida como ${statusLabel(m[1]).toLowerCase()}`],
+  [/^File analysed: (.+) \((.+)\)$/, (m) => `Arquivo analisado: ${m[1]} (${FORMAT_LABEL_PT[m[2]] || m[2]})`],
   [/^File analysed: (.+)$/, "Arquivo analisado: $1"],
   [/^Multi-source query: (\S+) (.+)$/, "Consulta multifonte: $1 $2"],
+  [/^ATT&CK technique linked: (\S+) (.+)$/, "Técnica ATT&CK vinculada: $1 $2"],
+  [/^ATT&CK technique unlinked: (\S+)$/, "Técnica ATT&CK desvinculada: $1"],
+  [/^MITRE ATT&CK refreshed: version (\S+), (\d+) techniques$/, "MITRE ATT&CK atualizado: versão $1, $2 técnicas"],
+  [/^YARA rule set created: (.+) \((\d+) rules\)$/, "Conjunto de regras YARA criado: $1 ($2 regras)"],
+  [/^YARA rule set updated: (.+)$/, "Conjunto de regras YARA editado: $1"],
+  [/^YARA rule set deleted: (.+)$/, "Conjunto de regras YARA excluído: $1"],
+  [/^API key saved: (.+)$/, "Chave de API salva: $1"],
+  [/^API key removed: (.+)$/, "Chave de API removida: $1"],
+  [/^Transforms on (\S+) (.+): (\d+) run, (\d+) new entities$/, (m) => `Transformações em ${m[2]}: ${m[3]} executada(s), ${m[4]} entidade(s) nova(s)`],
+  [/^Entity merged: (.+) into (.+)$/, "Entidade fundida: $1 em $2"],
+  [/^Entity pair marked as distinct$/, "Par de entidades marcado como distinto"],
 ];
+
+const FORMAT_LABEL_PT = {
+  "PDF document": "documento PDF", "ZIP archive": "arquivo ZIP", "Word document (OOXML)": "Word OOXML",
+  "Excel workbook (OOXML)": "Excel OOXML", "PowerPoint presentation (OOXML)": "PowerPoint OOXML",
+  "Word 97-2003 document": "Word 97-2003", "Excel 97-2003 workbook": "Excel 97-2003",
+  "PowerPoint 97-2003 presentation": "PowerPoint 97-2003", "Outlook message": "mensagem do Outlook",
+  "Windows Installer package": "pacote MSI", "Windows shortcut (LNK)": "atalho LNK", "ISO 9660 disc image": "imagem ISO",
+  "Rich Text Format document": "documento RTF", "PE executable": "executável PE", "ELF executable": "executável ELF",
+  "Mach-O executable": "executável Mach-O", "JPEG image": "imagem JPEG", "PNG image": "imagem PNG",
+  "Plain text": "texto", "Unrecognised binary": "binário não reconhecido", "OLE compound document": "documento OLE",
+};
 
 function translateActivity(summary) {
   const text = String(summary || "");
@@ -735,10 +779,32 @@ const TEXT_PT = {
   "Multi-source intelligence runs and source status": "Consultas multifonte e status das fontes",
   "YARA rule sets and file similarity digests": "Conjuntos de regras YARA e hashes de semelhança de arquivos",
   "Local API keys for keyed intelligence connectors": "Chaves de API locais para conectores com chave",
+  "Offline MITRE ATT&CK and case techniques": "MITRE ATT&CK offline e técnicas por caso",
+  "Transforms, entity resolution and module registry corrections": "Transformações, resolução de entidades e correções no registro de módulos",
   "TLSH and ssdeep measure byte-level resemblance; a close digest is not shared authorship or intent.": "TLSH e ssdeep medem semelhança de bytes; um hash próximo não indica mesma autoria nem mesma intenção.",
   "Embedded signatures mark where another format appears to start; they are not validated or carved.": "Assinaturas embutidas marcam onde outro formato parece começar; não são validadas nem recortadas.",
   "planned, not implemented": "planejado, não implementado",
   "explicit manual refresh": "atualização manual explícita",
+  "explicit multi-source query": "consulta multifonte explícita",
+  "repository not found": "repositório não encontrado",
+  "missing, private or renamed": "inexistente, privado ou renomeado",
+  "account not found": "conta não encontrada",
+  "personal account; not collected": "conta pessoal; não coletada",
+  "GitHub data about people is not collected": "dados do GitHub sobre pessoas não são coletados",
+  "not published": "não publicado",
+  "published": "publicado",
+  "not in hashlookup": "fora do hashlookup",
+  "unknown to the known-software sets; says nothing about maliciousness": "desconhecido nas bases de software conhecido; não diz nada sobre ser malicioso",
+  "not in VirusTotal": "fora do VirusTotal",
+  "never submitted or scanned; not a clean result": "nunca enviado nem analisado; não é um resultado limpo",
+  "not observed": "não observado",
+  "not seen mass-scanning and not a known benign service": "não visto varrendo a internet e não é serviço benigno conhecido",
+  "no Shodan record": "sem registro no Shodan",
+  "not indexed by Shodan's scans": "não indexado pelas varreduras do Shodan",
+  "not announced": "não anunciado",
+  "the run was interrupted": "a consulta foi interrompida",
+  "the run was interrupted by a restart": "a consulta foi interrompida por um reinício",
+  "Full-text search index": "Índice de busca em texto completo",
 };
 
 function translateText(value) {
@@ -799,8 +865,14 @@ const MODULE_TEXT = {
   "global-search": ["Pesquisa global", "Pesquisa unificada em casos, entidades, evidências e fontes."],
   "module-manager": ["Gerenciador de módulos", "Registro controlado dos módulos disponíveis e planejados."],
   settings: ["Configurações", "Preferências de interface e de relatórios salvas, com efeito real."],
-  "nvd-connector": ["Conector NVD CVE", "Conector planejado de metadados descritivos de CVE do NVD; não implementado."],
-  "external-osint-connectors": ["Conectores OSINT externos", "Consultas externas autorizadas planejadas; nenhum conector foi implementado."],
+  "nvd-connector": ["Conector NVD CVE", "Registro do NIST NVD para uma CVE (descrição, CVSS, CWE, referências) como conector da pesquisa multifonte."],
+  "external-osint-connectors": ["Conectores OSINT externos", "Fontes passivas de terceiros (DNS, RDAP, CT, arquivos da web, roteamento, reputação) usadas pela pesquisa multifonte e pelas transformações."],
+  transforms: ["Transformações", "Transformações de entidade para entidade sobre os conectores, com parâmetros, log por execução, duração e histórico de enriquecimento."],
+  "entity-resolution": ["Resolução de entidades", "Candidatos a duplicata exatos, prováveis e fracos, com fusão aprovada pelo analista e auditada."],
+  "attack-matrix": ["MITRE ATT&CK", "Matriz Enterprise ATT&CK offline, detalhe de técnicas e técnicas vinculadas aos casos."],
+  "yara-rules": ["Regras YARA", "Conjuntos locais de regras YARA verificados, testados e aplicados às análises de arquivos."],
+  analytics: ["Painel analítico", "Gráficos do workspace e do caso calculados a partir dos registros salvos."],
+  "cti-export": ["Exportação CTI", "Pacotes STIX 2.1, eventos MISP e CSV de IOCs gerados a partir dos registros do caso."],
   "media-forensics": ["Perícia de mídia", "Análise de mídia mais profunda planejada; hoje existem apenas hash e metadados."],
 };
 
@@ -1725,7 +1797,34 @@ function navigateSearchItem(item) {
   else if (item.view === "evidence" && item.investigation_id) go("evidence", item.investigation_id);
   else if (item.view === "investigations" && item.investigation_id)
     go("investigations", item.investigation_id);
+  else if (item.view === "files") go("files");
   else go(item.view);
+}
+
+const SEARCH_GROUP_PT = {
+  best: "Mais relevantes", investigations: "Investigações", entities: "Entidades", sources: "Fontes",
+  evidence: "Evidências", observations: "Observações", files: "Análises de arquivos", indicators: "Indicadores",
+};
+
+/* FTS5 marks matches with \u0002…\u0003; turn them into <mark> safely. */
+function markedText(text) {
+  const parts = String(text || "").split(/(\u0002[^\u0003]*\u0003)/);
+  return parts.filter(Boolean).map((part) =>
+    part.startsWith("\u0002") ? el("mark", {}, part.slice(1, -1)) : document.createTextNode(part),
+  );
+}
+
+function searchSubtitle(item) {
+  switch (item.kind) {
+    case "investigations": return `Investigação · ${statusLabel(item.status).toLowerCase()}`;
+    case "entities": return `${entityTypeLabel(item.entity_type)}${item.identifier ? ` · ${item.identifier}` : ""}`;
+    case "sources": return "Fonte";
+    case "evidence": return "Evidência";
+    case "observations": return `Observação · ${item.investigation_name}`;
+    case "files": return `Análise de arquivo · ${FORMAT_LABEL_PT[item.format] || item.format}`;
+    case "indicators": return `Indicador · ${indicatorTypeLabel(item.indicator_type)} · ${item.origin_count} origem(ns)`;
+    default: return item.subtitle || "";
+  }
 }
 
 function renderSearchResults(data, query = "") {
@@ -1736,7 +1835,15 @@ function renderSearchResults(data, query = "") {
     return;
   }
   const commandCount = appendCommandGroup(query, 4, 5);
-  const groups = (data.groups || []).filter((group) => group.items.length);
+  // The best-ranked hits come first; groups below skip what is already there.
+  const shown = new Set((data.best || []).map((item) => `${item.kind}:${item.id}`));
+  const groups = [
+    ...(data.best?.length ? [{ key: "best", label: "Best", total: data.best.length, items: data.best }] : []),
+    ...(data.groups || []).map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !shown.has(`${item.kind || group.key}:${item.id}`)),
+    })),
+  ].filter((group) => group.items.length);
   if (!groups.length) {
     if (!commandCount) renderSearchHint("Nenhum registro local ou comando corresponde.");
     return;
@@ -1748,7 +1855,7 @@ function renderSearchResults(data, query = "") {
       el(
         "div",
         { class: "search-group-label" },
-        el("span", {}, group.label),
+        el("span", {}, SEARCH_GROUP_PT[group.key] || group.label),
         el("span", { class: "search-group-total" }, String(group.total)),
       ),
     );
@@ -1764,8 +1871,11 @@ function renderSearchResults(data, query = "") {
               navigateSearchItem(item);
             },
           },
-          el("span", { class: "search-result-title" }, item.title),
-          el("span", { class: "search-result-subtitle" }, item.subtitle),
+          el("span", { class: "search-result-title" }, ...(item.title_marked ? markedText(item.title_marked) : [item.title])),
+          el("span", { class: "search-result-subtitle" }, searchSubtitle({ kind: group.key, ...item })),
+          item.snippet && item.snippet.includes("\u0002") && !(item.title_marked || "").includes("\u0002")
+            ? el("span", { class: "search-result-snippet" }, ...markedText(item.snippet))
+            : null,
         ),
       );
     }
@@ -1955,6 +2065,12 @@ G.openShortcuts = function openShortcuts() {
     ["R", "Atualizar tela atual"],
     ["?", "Este guia de atalhos"],
     ["Esc", "Fechar diálogo, menu ou painel"],
+    ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
+    ["Grafo · Shift + arrastar", "Selecionar uma área"],
+    ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
+    ["Grafo · P", "Fixar ou soltar a seleção"],
+    ["Grafo · H ou Delete", "Ocultar a seleção"],
+    ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
   ];
   const dialog = el(
     "dialog",

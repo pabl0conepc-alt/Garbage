@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from ..db import _connection, new_id, record_activity, utc_now
+from ..db import _connection, module_enabled, new_id, record_activity, utc_now
 from ..errors import ConflictError, NotFoundError, ValidationError
 from ..validation import clean_text
 from . import yara_engine
@@ -152,6 +152,9 @@ def enabled_sources(database: str) -> list[tuple[str, str, str]]:
 
 
 def scan_with_enabled(database: str, data: bytes) -> dict[str, Any] | None:
+    with _connection(database) as connection:
+        if not module_enabled(connection, "yara-rules"):
+            return None
     sources = enabled_sources(database)
     if not sources:
         return None

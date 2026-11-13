@@ -20,6 +20,8 @@
     wayback: ["Internet Archive (Wayback)", "Capturas arquivadas distintas de um domínio ou URL, com datas e status."],
     "first-epss": ["FIRST EPSS", "Probabilidade e percentil de exploração (EPSS) de uma CVE."],
     "tls-certificate": ["Certificado TLS", "Um handshake TLS na porta 443 do alvo: confiança, protocolo, titular, emissor, validade, SANs, chave, fingerprints e pin SPKI."],
+    github: ["GitHub", "Metadados públicos de uma organização (site, repositórios) ou de um repositório a partir de uma URL do github.com. Contas pessoais não são coletadas."],
+    "security-txt": ["security.txt", "O arquivo RFC 9116 que a organização publica: contatos de segurança, política, chave, validade e assinatura. Um GET HTTPS ao servidor do alvo."],
     "web-fingerprint": ["Impressão digital web", "Um GET HTTPS da página do alvo (e do favicon): status, redirecionamentos, cabeçalhos de segurança, cookies, título, tecnologias e hash do favicon."],
     "shodan-internetdb": ["Shodan InternetDB", "Portas abertas, nomes, CPEs, tags e CVEs que as varreduras do Shodan registraram para um IP."],
     ripestat: ["RIPEstat", "ASN de origem, titular do AS, prefixos anunciados e contato de abuso, pelo RIPE NCC."],
@@ -70,6 +72,12 @@
     "internet-noise": "Ruído na internet", "pulse-count": "Relatos (pulses)", pulse: "Relato (pulse)",
     "malware-family": "Família de malware", "attack-technique": "Técnica ATT&CK", host: "Host",
     service: "Serviço", payload: "Payload", "malicious-url": "URL maliciosa", ioc: "IOC", sample: "Amostra",
+    "github-org": "Organização no GitHub", website: "Site", repository: "Repositório", "repo-homepage": "Site do repositório",
+    "fork-of": "Fork de", "owner-type": "Tipo do dono", "security-txt": "security.txt",
+    "security-contact-email": "Contato de segurança (e-mail)", "security-contact-url": "Contato de segurança (URL)",
+    "security-contact": "Contato de segurança", "security-policy": "Política de divulgação",
+    "security-encryption": "Chave de criptografia", "security-acknowledgments": "Agradecimentos",
+    "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
   };
 
   const DATA_LABELS = {
@@ -118,6 +126,11 @@
     file_type: "tipo de arquivo", url_count: "URLs", threat: "ameaça", threat_type: "tipo de ameaça",
     malware: "malware", aliases: "outros nomes", confidence: "confiança", file_name: "nome do arquivo",
     mime: "MIME", delivery: "entrega", imphash: "imphash",
+    full_name: "nome completo", language: "linguagem", stars: "estrelas", forks: "forks", created_at: "criado em",
+    pushed_at: "último push", archived: "arquivado", fork: "fork", license: "licença", topics: "tópicos",
+    location: "local", public_repos: "repositórios públicos", verified: "verificada", email: "e-mail",
+    repository: "repositório", owner: "dono", expires: "expira", signed: "assinado", canonical: "canônico",
+    preferred_languages: "idiomas", missing_expires: "sem Expires",
   };
 
   const STATUS_TEXT = {
@@ -128,6 +141,8 @@
     "network-disabled": ["Rede desativada", "warning"],
     "target-contact-disabled": ["Contato com o alvo desativado", "warning"],
     "key-missing": ["Sem chave", "neutral"],
+    "module-disabled": ["Módulo desativado", "warning"],
+    pending: ["Consultando…", "neutral"],
     unsupported: ["Não se aplica", "neutral"],
     ready: ["Pronto", "success"],
   };
@@ -207,7 +222,7 @@
       .filter(([, value]) => value !== "" && value !== null && value !== undefined && value !== false)
       .map(([key, value]) => {
         const label = DATA_LABELS[key] ?? key;
-        const text = value === true ? "sim" : String(value);
+        const text = value === true ? "sim" : G.translateText(String(value));
         return label ? `${label}: ${text}` : text;
       })
       .join(" · ");
@@ -271,7 +286,7 @@
 
   function sourceList(run, connectorsById) {
     const list = el("ol", { class: "source-list", "aria-label": "Status por fonte" });
-    const order = { ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4, "network-disabled": 5, unsupported: 6 };
+    const order = { pending: -1, ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4, "network-disabled": 5, "module-disabled": 6, unsupported: 7 };
     const sources = [...run.sources].sort(
       (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.connector_id.localeCompare(b.connector_id),
     );
@@ -381,6 +396,7 @@
     const connectorsById = Object.fromEntries(connectorData.items.map((item) => [item.connector_id, item]));
     let detected = null;
     let currentRun = null;
+    let pollToken = 0;
     let activeTab = { conectores: "connectors", chaves: "keys" }[params[0]] || "search";
     const keysHost = el("div");
     let detectTimer = null;
@@ -424,6 +440,7 @@
           (connector.contacts_target && !connectorData.target_contact_allowed);
         const checkbox = el("input", {
           type: "checkbox",
+          "aria-label": connectorName(connector.connector_id, connector.name),
           checked: selected.has(connector.connector_id) && applies,
           disabled: !applies,
           onChange: (event) => {
@@ -497,8 +514,11 @@
             el(
               "p",
               { class: "run-meta" },
-              `${formatDate(run.started_at, { time: true })} · ${run.result_count} resultado(s) de ${run.sources.filter((item) => item.status === "ok").length} fonte(s)`,
+              run.status === "running"
+                ? `${formatDate(run.started_at, { time: true })} · ${run.progress.total - run.progress.pending} de ${run.progress.total} fonte(s) responderam · ${run.results.length} resultado(s) até agora`
+                : `${formatDate(run.started_at, { time: true })} · ${run.result_count} resultado(s) de ${run.sources.filter((item) => item.status === "ok").length} fonte(s)`,
               run.status === "completed-with-errors" ? " · com erros em fontes" : "",
+              run.status === "interrupted" ? " · interrompida" : "",
             ),
           ),
           el(
@@ -590,6 +610,21 @@
       G.hydrateIcons(resultArea);
     }
 
+    /* Each source's results land as soon as it answers; poll until the run
+       is closed, re-rendering only when something changed. */
+    async function follow(run, token) {
+      let seen = run.progress?.pending;
+      while (run.status === "running" && token === pollToken && root.isConnected) {
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
+        if (token !== pollToken || !root.isConnected) return;
+        run = await api(`/api/intel/runs/${run.id}`);
+        if (run.progress?.pending !== seen || run.status !== "running") {
+          seen = run.progress?.pending;
+          showRun(run);
+        }
+      }
+    }
+
     async function submit() {
       const value = input.value.trim();
       if (!value) {
@@ -607,18 +642,21 @@
       resultArea.replaceChildren(
         loadingBlock(`Consultando ${chosen.length} fonte(s)… fontes de rede podem levar alguns segundos.`),
       );
+      const token = ++pollToken;
       try {
-        const run = await api("/api/intel/runs", {
+        let run = await api("/api/intel/runs", {
           method: "POST",
           body: JSON.stringify({
             value,
             connectors: chosen,
             investigation_id: caseSelect.value || null,
             use_cache: cacheToggle.checked,
+            async: true,
           }),
         });
         history.replaceState(null, "", `#/multisearch/${run.id}`);
         showRun(run);
+        await follow(run, token);
         renderHistory();
       } catch (error) {
         resultArea.replaceChildren(G.inlineError(error.message));
@@ -920,6 +958,7 @@
         input.value = run.query_value;
         await detect();
         showRun(run);
+        if (run.status === "running") follow(run, ++pollToken).catch(() => {});
       } catch (error) {
         resultArea.replaceChildren(G.inlineError(error.message));
       }
@@ -934,6 +973,11 @@
   }
 
   G.views.multisearch = renderMultiSearch;
+  G.connectorLabel = (id) => connectorName(id, id);
+  G.resultTypeLabel = (type) => RESULT_LABELS[type] || type;
+  G.sourceStatusLabel = (status) => (STATUS_TEXT[status] || [status])[0];
+  G.sourceStatusTone = (status) => (STATUS_TEXT[status] || [status, "neutral"])[1];
+  G.connectorDescription = (id, fallback) => connectorDescription(id, fallback);
   G.multiSearch = function multiSearch(value) {
     state.pendingMultiSearch = value;
     go("multisearch");

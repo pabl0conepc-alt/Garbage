@@ -805,7 +805,8 @@ def graph_payload(
             dict(row)
             for row in connection.execute(
                 f"""SELECT e.id, e.entity_type, e.name, e.identifier,
-                           e.description, e.verification_status, e.confidence
+                           e.description, e.verification_status, e.confidence,
+                           e.created_at
                     FROM entities e {where}
                     ORDER BY e.name, e.id
                     LIMIT 500""",
@@ -821,7 +822,7 @@ def graph_payload(
                     f"""SELECT r.id, r.source_entity_id, r.target_entity_id,
                                r.relationship_type, r.description,
                                r.verification_status, r.confidence,
-                               r.investigation_id
+                               r.investigation_id, r.created_at
                         FROM relationships r
                         WHERE r.source_entity_id IN ({placeholders})
                           AND r.target_entity_id IN ({placeholders})

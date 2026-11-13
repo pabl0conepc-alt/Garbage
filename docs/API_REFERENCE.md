@@ -26,7 +26,7 @@ rejected where the handler validates an allowlist.
 | PATCH | `/api/settings` | Update allowlisted settings |
 | GET | `/api/activities?limit=` | Recent activity |
 | GET | `/api/overview` | Dashboard summary |
-| GET | `/api/search?q=` | Grouped cross-record search |
+| GET | `/api/search?q=` | Ranked cross-record search: `engine` (`fts5`, or `like` when SQLite lacks FTS5), `best` (top 8 by BM25, title weighted 8:1), and `groups` (investigations, entities, sources, evidence, observations, file analyses, indicators). FTS hits carry `title_marked` and `snippet` with matches between `\u0002` and `\u0003`. Terms are quoted, so operators are literal; the last term is a prefix; accents are ignored |
 
 ## Investigations
 
@@ -266,7 +266,7 @@ to every registered connector that accepts its type.
 | --- | --- | --- |
 | GET | `/api/intel/connectors` | Registered connectors, availability and health |
 | GET | `/api/intel/detect?value=` | Offline artifact detection (refangs input) |
-| POST | `/api/intel/runs` | Run one artifact against the connectors |
+| POST | `/api/intel/runs` | Run one artifact against the connectors. With `"async": true` it answers `202` at once; sources still working are `pending`, each source's results are stored as soon as it answers, and `progress: {total, pending}` on `GET /api/intel/runs/{id}` shows how far it is. Runs left `running` by a restart become `interrupted` at startup |
 | GET | `/api/intel/runs?limit=` | Recent runs |
 | GET | `/api/intel/runs/{id}` | One run with per-source status and results |
 | GET | `/api/intel/keys` | Key providers: `configured`, last-four `hint`, sign-up link (never the key) |
@@ -360,7 +360,24 @@ The HTTP client loads the system CA bundle when the interpreter's compiled-in
 default is empty (standalone Python builds on NixOS), so TLS verification works
 without `SSL_CERT_FILE`.
 
+## Analytics
+
+`GET /api/analytics?investigation_id=&days=` (`days` is 7, 30, 90 or 365)
+returns `totals`; `activity` (`days` plus one series per action) and
+`intel_runs_by_day`; `entity_types`, `relationship_types` and
+`relationship_verification`; per-source `sources` (`results`, `runs`,
+`errors`, `statuses`); `result_types`; `file_formats`, `finding_levels` and
+`finding_codes`; and `evidence_types`. Scoped to one investigation when given.
+Counts only; every number can be traced to rows elsewhere in the workspace.
+
 ## Graph analytics and pivot
+
+Graph nodes and edges include `created_at`. The UI offers eight layouts (force,
+community, hierarchical, radial, concentric by betweenness, columns by type,
+circle, grid), node size by degree, betweenness or harmonic closeness, focus
+on 1-3 hops, edge labels and direction arrows, an adjacency matrix ordered by
+community, a recording timeline and a standalone SVG export of the visible
+graph.
 
 `GET /api/graph` now also returns `analytics`: `{engine, communities,
 modularity, nodes: {id: {degree, betweenness, harmonic, community,
@@ -368,12 +385,77 @@ community_size}}}`, computed on the simple undirected graph (duplicates and
 self-loops ignored). `GET /api/graph/path?from=&to=&investigation_id=` returns
 the shortest chain of recorded relationships.
 
+`POST /api/graph/import` with `{content, format: "graphml"|"json", file_name?,
+investigation_id?, commit?}` previews (default, `200`) or commits (`201`) a
+graph built elsewhere. JSON may be this app's export, Cytoscape (`elements`),
+D3 (`nodes`/`links`) or a plain `nodes`/`edges` object; GraphML keys are read
+by `attr.name`, and Maltego type names are mapped. Each node becomes an entity
+or reuses the one with the same type and identifier (name for name-only
+types); each edge becomes an unconfirmed, not-verified relationship that cites
+`note://garbage/graph-import/{sha256 prefix}`. Unknown relationship labels map
+to `related-to` and keep the original label in the description. Limits: 8 MiB,
+2,000 nodes, 5,000 edges. A DTD or entity declaration is rejected before
+parsing. The response counts new and existing entities and relationships,
+invalid nodes and skipped edges, and lists up to 50 problems.
+
+The graph view adds multi-selection (Shift+click, Shift+drag box, Ctrl+A),
+pinned and hidden nodes (saved per case in the browser), undo and redo of
+view changes, a minimap, type glyphs on nodes, PNG export at twice the screen
+resolution (the CSP allows `blob:` images for this), GraphML and JSON export
+with positions, and restoring a layout from a JSON export.
+
 `POST /api/intel/runs/{id}/promote` with `{source_entity_id, investigation_id?,
 items: [{result_id, entity_type?, relationship_type?}]}` turns selected findings
 into entities (existing ones are reused) and relationships from the source
 entity, with confidence `possible`, status `not-verified` and the finding's
 source URL as reference. Duplicate relationships and unusable findings (null
 MX, the source itself) are reported under `skipped`.
+
+### Organisation sources
+
+- `github` (URL on github.com): an organisation's public profile, site and up
+  to 30 repositories, or one repository's metadata, homepage, licence and fork
+  parent. A personal account returns only a notice; nothing about people is
+  collected. Unauthenticated GitHub API (60 requests per hour per IP).
+- `security-txt` (domain or URL, target contact): the RFC 9116 file at
+  `/.well-known/security.txt`: contacts, policy, encryption key, expiry
+  (and whether it has expired) and PGP signature. A non-text answer or one
+  without `Contact:` is reported as not published.
+
+## Transforms
+
+A transform is a connector run from an entity. It accepts the entity's
+canonical artifact, runs through the same gates, cache and rate limits as a
+multi-source query, and turns declared result types into entities linked to
+the input (confidence `possible`, status `not-verified`, source URL as
+reference). Person, username and profile entities are never inputs.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/transforms?entity_id=` | Transforms for an entity (or all): `kind` (`pivot` or `enrichment`), `inputs`, `outputs` (`result_type`, `entity_type`, `relationship_type`), `availability`, `estimate_ms` (mean of real, uncached runs) and `estimate_samples` |
+| POST | `/api/transforms/run` | `{entity_id, transforms: [ids], investigation_id?, parameters?}`; parameters are `use_cache` (true), `promote` (true) and `max_new_entities` (1-50, default 25). Returns one log per transform |
+| GET | `/api/entities/{id}/transforms` | Enrichment history of the entity, newest first |
+
+Each log holds `status`, `result_count`, `created_count`, `reused_count`,
+`relationship_count`, `duration_ms`, `parameters` and `log`, a list of events:
+`input`, `source` (status, count, cached, elapsed, error), `limit`,
+`not-promoted` and `promoted`.
+
+## Entity resolution
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/resolution/candidates?investigation_id=&level=` | Candidate duplicates with `level` (`exact`, `probable`, `weak`), `rule`, `detail` and both entities |
+| POST | `/api/resolution/dismiss` | `{first, second, note?}`: the pair is distinct and is not proposed again |
+| POST | `/api/resolution/merge` | `{keep_id, merge_id, note?, level?}`: moves relationships, case links, sources, board elements and transform history to `keep_id`, drops duplicate edges and self-loops, deletes `merge_id` and records it as an alias |
+| GET | `/api/entities/{id}/aliases` | Entities merged into this one |
+
+Rules: `same-artifact` (exact; same canonical value under different entity
+types), `organization-name` (exact when the names are equal ignoring case,
+otherwise probable; legal suffixes, accents and punctuation removed),
+`www-prefix` and `url-variant` (probable), `same-label-other-suffix` and
+`similar-organization-name` (weak). Person, username and profile entities are
+never compared.
 
 ## Modules
 
@@ -383,6 +465,12 @@ MX, the source itself) are reported under `skipped`.
 | PATCH | `/api/modules/{module_id}` | Set `enabled` or `disabled` |
 
 Enabling a `planned` module returns `409`. Built-in modules cannot be removed.
+
+Disabling `external-osint-connectors`, `nvd-connector` or `cisa-kev` turns the
+matching connectors off (`module-disabled` in runs and listings).
+`transforms`, `entity-resolution`, `attack-matrix`, `yara-rules`, `analytics`
+and `cti-export` gate their routes; with `yara-rules` disabled, file analyses
+skip the YARA scan.
 
 ## Reports
 
