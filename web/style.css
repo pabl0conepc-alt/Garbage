@@ -4926,3 +4926,68 @@ dialog:focus-visible,
   .pivot-row { grid-template-columns: auto minmax(0, 1fr); }
   .pivot-row .input { grid-column: 2; }
 }
+
+/* ---- File engines: YARA, macros, signatures ----------------------- */
+
+.muted-text { color: var(--text-secondary); font-size: var(--text-sm); }
+.row-inline { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.data-table tr.is-selected td { background: var(--state-selected, var(--state-hover)); }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--space-3);
+}
+
+.yara-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.6fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.yara-editor .panel-body { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.yara-source {
+  min-height: 340px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  tab-size: 4;
+  white-space: pre;
+  overflow-wrap: normal;
+  resize: vertical;
+}
+
+.yara-actions { flex-wrap: wrap; gap: var(--space-2); }
+.yara-status:empty, .yara-test-result:empty { display: none; }
+.yara-ok { margin: 0; color: var(--success); font-size: var(--text-sm); }
+.yara-ok code { color: var(--text); }
+
+.yara-match {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--divider);
+}
+
+.yara-match:first-of-type { border-top: 0; }
+.yara-match-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.yara-match-head strong { font-family: var(--font-mono); font-size: var(--text-sm); }
+.yara-set { color: var(--text-secondary); font-size: var(--text-xs); }
+.yara-snippet { white-space: pre; }
+
+.macro-module { padding: var(--space-3) 0; border-top: 1px solid var(--divider); }
+.macro-module:first-of-type { border-top: 0; }
+.macro-module-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.macro-module-head code { font-size: var(--text-sm); color: var(--text); }
+.macro-source summary { margin-top: var(--space-2); cursor: pointer; color: var(--text-secondary); font-size: var(--text-sm); }
+.macro-source .code-block { max-height: 420px; margin-top: var(--space-2); white-space: pre; }
+
+@media (max-width: 960px) {
+  .yara-layout, .form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Components that set display (buttons, flex rows) must still honour hidden. */
+[hidden] { display: none !important; }

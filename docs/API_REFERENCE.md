@@ -124,6 +124,13 @@ Maximum decoded size is 4 MiB. The response includes `sha256` and
 | GET | `/api/intelligence/files?investigation_id=&limit=` | Analysis history |
 | POST | `/api/intelligence/files` | Analyse a base64 file |
 | GET | `/api/intelligence/files/{id}` | Full persisted analysis |
+| GET | `/api/intelligence/files/{id}/similar?limit=` | Stored analyses ranked by TLSH distance and ssdeep score |
+| GET | `/api/intelligence/yara` | YARA rule sets (without source) |
+| POST | `/api/intelligence/yara` | Create a rule set: `name`, `source`, optional `description`, `enabled` |
+| GET | `/api/intelligence/yara/{id}` | One rule set with source |
+| PATCH | `/api/intelligence/yara/{id}` | Change any of `name`, `description`, `source`, `enabled` |
+| DELETE | `/api/intelligence/yara/{id}` | Delete a rule set |
+| POST | `/api/intelligence/yara/test` | Compile `source`; with `content_base64`, also scan that file without storing it |
 
 Request:
 
@@ -146,7 +153,10 @@ Response (abridged):
   "format_label": "PDF document",
   "media_type": "application/pdf",
   "size_bytes": 1234,
-  "hashes": {"sha256": "...", "sha1": "...", "md5": "..."},
+  "hashes": {"sha256": "...", "sha1": "...", "md5": "...", "tlsh": "T1...", "ssdeep": "96:...:..."},
+  "similarity_engine": "c-native",
+  "embedded": {"engine": "rust-native", "items": [{"offset": 211, "kind": "pe", "label": "PE executable", "detail": "", "count": 1}], "total": 1, "truncated": false},
+  "yara": {"rulesets": [{"ruleset": "Lab", "matches": [{"rule": "x", "tags": [], "meta": {}, "strings": []}], "error": ""}], "match_count": 1, "timed_out": false},
   "entropy": 5.12,
   "magic_hex": "25 50 44 46",
   "hardening": {
@@ -174,6 +184,18 @@ Response (abridged):
 Limits: 4 MiB decoded, 500 archive entries, 1 MiB GZIP preview, 150 strings,
 96 sections and 80 imports. Nothing is executed or extracted. Invalid base64 is
 `400`; a disabled `file-intelligence` module is `409`.
+
+Formats with dedicated parsers: PDF, ZIP/OOXML (including `vbaProject.bin`),
+TAR, GZIP, images, ELF, PE, Mach-O, OLE compound files (`doc`, `xls`, `ppt`,
+`msg`, `msi` with summary properties, VBA source and MSI table names), LNK
+shortcuts, ISO 9660 images and RTF documents. `structure.compound`,
+`structure.lnk`, `structure.iso` and `structure.rtf` hold their results.
+
+Similarity digests come from the C engine when built; the Python fallback stops
+at 1 MiB (`similarity_engine: "unavailable"`). YARA rule sets run in a child
+process with a 20 s deadline. The engine supports a documented subset of the
+YARA language (no modules, no `base64`, jumps need an upper bound up to 65,536);
+rule errors return `400` with the line number in the message.
 
 ## Indicators and CTI
 
