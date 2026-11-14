@@ -41,12 +41,13 @@ class DesktopTests(unittest.TestCase):
         def create_window(title, url, **options):
             self.seen.update(title=title, url=url, options=options)
 
-        def start():
+        def start(**options):
+            self.seen["start"] = options
             self.seen["page"] = fetch(self.seen["url"])
             self.seen["health"] = fetch(self.seen["url"] + "api/health")
 
         fake.create_window, fake.start = create_window, start
-        with patch.dict(sys.modules, {"webview": fake}):
+        with patch.dict(sys.modules, {"webview": fake}), patch.object(desktop, "_gui_options", return_value={"gui": "gtk"}):
             engine = desktop.run(self.database, engine="auto")
         self.assertEqual(engine, "webview")
         self.assertEqual(self.seen["title"], "GARBAGE")
@@ -55,6 +56,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("<html", self.seen["page"][1])
         self.assertEqual(self.seen["health"][0], 200)
         self.assertTrue(fake.settings["ALLOW_DOWNLOADS"])
+        self.assertEqual(self.seen["start"], {"gui": "gtk"})
         self.assert_stopped(self.seen["url"])
 
     def test_browser_app_mode_uses_its_own_profile(self):

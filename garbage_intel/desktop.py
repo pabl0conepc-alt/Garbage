@@ -81,6 +81,18 @@ def _webview() -> Any | None:
     return webview
 
 
+def _gui_options() -> dict[str, str]:
+    """On Linux pywebview tries Qt before GTK; ask for GTK when its bindings
+    are there, so a missing Qt is not reported as an error first."""
+    if not sys.platform.startswith("linux"):
+        return {}
+    try:
+        import gi  # type: ignore[import-not-found]  # noqa: F401
+    except ImportError:
+        return {}
+    return {"gui": "gtk"}
+
+
 def run(database: str | Path, *, engine: str = "auto", port: int = 0, width: int = 1440, height: int = 900) -> str:
     """Serve the workstation and block until its window closes. Returns the
     engine used."""
@@ -104,7 +116,7 @@ def run(database: str | Path, *, engine: str = "auto", port: int = 0, width: int
             if isinstance(settings, dict):
                 settings["ALLOW_DOWNLOADS"] = True  # report and package exports
             webview.create_window(TITLE, url, width=width, height=height, min_size=(900, 600))
-            webview.start()
+            webview.start(**_gui_options())
             return "webview"
         if browser is not None:
             profile = Path(database).resolve().parent / ".garbage-window"
