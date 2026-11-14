@@ -38,6 +38,7 @@ from .db import ENTITY_TYPES, RELATIONSHIP_TYPES, _connection, record_activity, 
 from .errors import ConflictError, NotFoundError, ValidationError
 from .intel import (
     ARTIFACT_TYPES,
+    PERSONAL_ARTIFACT_TYPES,
     Connector,
     ConnectorContext,
     Finding,
@@ -97,8 +98,9 @@ def validate_manifest(raw: Any) -> dict[str, Any]:
     if not isinstance(entry, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,60}\.py", entry):
         raise ValidationError("entry must be a .py file name in the plugin folder")
     accepts = raw.get("accepts")
-    if not isinstance(accepts, list) or not accepts or not set(accepts) <= set(ARTIFACT_TYPES):
-        raise ValidationError(f"accepts must list artifact types among: {', '.join(ARTIFACT_TYPES)}")
+    allowed = [item for item in ARTIFACT_TYPES if item not in PERSONAL_ARTIFACT_TYPES]
+    if not isinstance(accepts, list) or not accepts or not set(accepts) <= set(allowed):
+        raise ValidationError(f"accepts must list artifact types among: {', '.join(allowed)}")
     outputs = []
     for item in raw.get("outputs") or []:
         if not isinstance(item, dict) or not _RESULT_TYPE.fullmatch(str(item.get("result_type", ""))):

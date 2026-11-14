@@ -41,6 +41,10 @@
     urlhaus: ["URLhaus", "URLs de distribuição de malware ligadas a uma URL, host ou hash de payload."],
     threatfox: ["ThreatFox", "Indicadores de comprometimento ligados a famílias de malware e infraestrutura de botnets."],
     malwarebazaar: ["MalwareBazaar", "Registro de amostra de malware: família, tipo, entrega e hashes de semelhança."],
+    "br-documents": ["Documentos e telefones", "Dígitos verificadores de CPF e CNPJ, região fiscal, país, DDD e tipo de linha. Offline; não busca o dono."],
+    "brasilapi-cnpj": ["BrasilAPI CNPJ", "Cadastro público da Receita Federal: razão social, situação, atividades, endereço, porte e capital. Sem nomes de sócios."],
+    "minhareceita-cnpj": ["Minha Receita", "O mesmo cadastro público da Receita Federal por outro espelho. Sem nomes de sócios."],
+    nominatim: ["OpenStreetMap", "Endereço para coordenadas ou coordenadas para endereço, com dados do OpenStreetMap."],
   };
 
   const RESULT_LABELS = {
@@ -65,7 +69,7 @@
     "open-port": "Porta aberta", hostname: "Nome de host", cpe: "CPE", tag: "Tag", cve: "CVE",
     "origin-asn": "ASN de origem", "as-holder": "Titular do AS", "announced-prefix": "Prefixo anunciado",
     routing: "Roteamento", "network-operator": "Operador de rede", "network-owner": "Dono da rede",
-    geolocation: "Localização da rede", "known-file": "Arquivo conhecido", scan: "Varredura urlscan",
+    geolocation: "Localização", "known-file": "Arquivo conhecido", scan: "Varredura urlscan",
     subdomain: "Subdomínio", certificate: "Certificado", "cve-record": "Registro da CVE",
     reference: "Referência", "affected-package": "Pacote afetado", alias: "Identificador alternativo",
     verdict: "Veredito dos motores", "threat-label": "Rótulo de ameaça", category: "Categoria",
@@ -80,6 +84,12 @@
     "security-encryption": "Chave de criptografia", "security-acknowledgments": "Agradecimentos",
     "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
     typosquat: "Variação existente", "typosquat-summary": "Resumo de typosquatting",
+    validity: "Validade", "fiscal-region": "Região fiscal", establishment: "Estabelecimento", formatted: "Formato",
+    country: "País", "phone-region": "DDD", "line-type": "Tipo de linha", "trade-name": "Nome fantasia",
+    "registration-status": "Situação cadastral", founded: "Início das atividades", "main-activity": "Atividade principal",
+    "secondary-activity": "Atividade secundária", "legal-nature": "Natureza jurídica", "company-size": "Porte",
+    "share-capital": "Capital social", address: "Endereço", "company-phone": "Telefone da empresa",
+    partners: "Sócios", "tax-regime": "Regime tributário", coordinates: "Coordenadas",
   };
 
   const DATA_LABELS = {
@@ -154,6 +164,7 @@
   const TYPE_LABELS = {
     domain: "Domínio", ipv4: "IPv4", ipv6: "IPv6", cidr: "CIDR", url: "URL", email: "E-mail",
     md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", asn: "ASN", cve: "CVE",
+    cnpj: "CNPJ", cpf: "CPF", phone: "Telefone", location: "Local",
   };
 
   /* Which findings can become a shared entity, and as which category. */

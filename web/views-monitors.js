@@ -15,7 +15,7 @@
     "": ["Ainda não rodou", "neutral"],
   };
   const INTERVALS = [[15, "15 min"], [60, "1 hora"], [360, "6 horas"], [1440, "1 dia"], [10080, "1 semana"]];
-  const TYPE_TEXT = { domain: "domínio", ipv4: "IPv4", ipv6: "IPv6", cidr: "CIDR", url: "URL", email: "e-mail", md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", asn: "ASN", cve: "CVE" };
+  const TYPE_TEXT = { domain: "domínio", ipv4: "IPv4", ipv6: "IPv6", cidr: "CIDR", url: "URL", email: "e-mail", md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", asn: "ASN", cve: "CVE", cnpj: "CNPJ", location: "local" };
 
   function button(label, onClick, options = {}) {
     return el("button", { class: `button ${options.variant || "button-secondary"} button-small`, type: "button", disabled: Boolean(options.disabled), title: options.title || "", onClick }, label);

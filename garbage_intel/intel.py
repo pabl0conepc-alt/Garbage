@@ -48,7 +48,16 @@ ARTIFACT_TYPES = (
     "sha256",
     "asn",
     "cve",
+    "cnpj",
+    "cpf",
+    "phone",
+    "location",
 )
+# Types the structural and workspace connectors understand.
+CORE_ARTIFACT_TYPES = ARTIFACT_TYPES[:11]
+# Identify or reach a person: only offline connectors may take them, so no
+# source is ever asked who owns a CPF or a phone number.
+PERSONAL_ARTIFACT_TYPES = ("cpf", "phone")
 RESULT_STATUSES = (
     "pending",
     "ok",
@@ -152,6 +161,8 @@ def register_connector(connector: Connector) -> Connector:
     unknown = set(connector.accepts) - set(ARTIFACT_TYPES)
     if unknown:
         raise ValueError(f"unknown artifact types: {', '.join(sorted(unknown))}")
+    if connector.network and set(connector.accepts) & set(PERSONAL_ARTIFACT_TYPES):
+        raise ValueError("network connectors cannot accept CPF or phone numbers")
     with _REGISTRY_LOCK:
         _REGISTRY[connector.connector_id] = connector
     return connector
@@ -192,22 +203,35 @@ def _disabled_connectors(connection: Any, selected: list[Connector]) -> set[str]
 
 def detect_artifact(raw: object) -> dict[str, str]:
     """Classify one artifact without contacting any service."""
+    from .modules.intel_br_connectors import PREFIX, detect, looks_like_address
+
     value = clean_text(raw, "value", max_length=2000, required=True)
     cve = _CVE.fullmatch(value.strip())
     if cve:
         return {"type": "cve", "value": f"CVE-{cve.group(1)}-{cve.group(2)}", "label": "CVE"}
+    # An explicit "cpf:", "cnpj:", "tel:" or "local:" prefix decides the type.
+    if PREFIX.match(value.strip()):
+        forced = detect(value)
+        if forced is None:
+            raise ValidationError("value does not match the type its prefix names")
+        return forced
     try:
         inspection = inspect_value(value)
-    except ValueError as exc:
-        raise ValidationError(str(exc)) from exc
+    except ValueError:
+        inspection = {}
     kind = inspection.get("kind", "")
     canonical = inspection.get("canonical", "")
-    if kind not in ARTIFACT_TYPES or not canonical:
-        raise ValidationError(
-            "value is not a supported artifact; use a domain, IP, CIDR, URL, "
-            "email, hash, ASN or CVE"
-        )
-    return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
+    if kind in CORE_ARTIFACT_TYPES and canonical:
+        return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
+    found = detect(value)
+    if found:
+        return found
+    if looks_like_address(value):
+        return {"type": "location", "value": " ".join(value.split()), "label": "Endereço"}
+    raise ValidationError(
+        "value is not a supported artifact; use a domain, IP, CIDR, URL, "
+        "email, hash, ASN, CVE, CNPJ, CPF, phone number or address (prefix a place name with local:)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1006,7 +1030,7 @@ register_connector(
         connector_id="local-structure",
         name="Structural facts",
         description="Syntax, canonical form and structural facts of the artifact; nothing leaves the machine.",
-        accepts=ARTIFACT_TYPES,
+        accepts=CORE_ARTIFACT_TYPES,
         run=_structure_connector,
     )
 )
@@ -1015,7 +1039,7 @@ register_connector(
         connector_id="local-workspace",
         name="Local workspace",
         description="Exact matches in local entities, evidence, file analyses and indicator index.",
-        accepts=tuple(item for item in ARTIFACT_TYPES if item != "cve"),
+        accepts=tuple(item for item in CORE_ARTIFACT_TYPES if item != "cve"),
         run=_workspace_connector,
     )
 )
@@ -1028,3 +1052,4 @@ from .modules import intel_open_connectors as _intel_open_connectors  # noqa: E4
 from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: E402,F401
 from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402,F401
 from .modules import typosquat as _typosquat  # noqa: E402,F401
+from .modules import intel_br_connectors as _intel_br_connectors  # noqa: E402,F401

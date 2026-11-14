@@ -96,7 +96,7 @@ class PerceptualAndMapTests(unittest.TestCase):
                     (str(uuid.uuid4()), run, json.dumps({"coordinates": coordinates}), when),
                 )
         result = geo_points(self.database, investigation_id=self.case)
-        self.assertEqual(result["counts"], {"photo": 1, "network": 1})
+        self.assertEqual(result["counts"], {"photo": 1, "network": 1, "place": 0})
         photo = next(item for item in result["points"] if item["kind"] == "photo")
         self.assertEqual((photo["latitude"], photo["longitude"], photo["camera"]), (-23.5613, -46.6565, "TestCam Model X"))
         network = next(item for item in result["points"] if item["kind"] == "network")

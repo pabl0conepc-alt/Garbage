@@ -10,6 +10,7 @@
   const KIND = {
     photo: { label: "GPS de imagem", color: "var(--viz-1)", note: "posição gravada pelo dispositivo" },
     network: { label: "Rede (aproximada)", color: "var(--viz-2)", note: "cidade ou região do bloco de IPs, não de uma pessoa" },
+    place: { label: "Endereço ou coordenada", color: "var(--viz-3)", note: "lugar geocodificado com o OpenStreetMap" },
   };
   const WIDTH = 360;
   const HEIGHT = 180;
@@ -28,7 +29,7 @@
     let view = { x: 0, y: 0, width: WIDTH, height: HEIGHT };
     let selected = null;
     let data = { points: [], counts: { photo: 0, network: 0 } };
-    let visibleKinds = new Set(["photo", "network"]);
+    let visibleKinds = new Set(["photo", "network", "place"]);
 
     const svg = svgEl("svg", { class: "geo-map", role: "group", "aria-label": "Mapa com as posições registradas", preserveAspectRatio: "xMidYMid meet" });
     const base = svgEl("g", { class: "geo-base" });

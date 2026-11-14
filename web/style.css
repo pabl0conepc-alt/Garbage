@@ -5555,12 +5555,14 @@ dialog:focus-visible,
 .geo-marker { cursor: pointer; }
 .geo-marker.kind-photo { fill: var(--viz-1); stroke: #0b0d0f; }
 .geo-marker.kind-network { fill: none; stroke: var(--viz-2); }
+.geo-marker.kind-place { fill: var(--viz-3); stroke: #0b0d0f; }
 .geo-marker.is-selected { stroke: #ffffff; }
 .geo-marker:focus-visible { outline: none; stroke: #ffffff; }
 .geo-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .geo-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .geo-swatch.kind-photo { background: var(--viz-1); }
 .geo-swatch.kind-network { border: 2px solid var(--viz-2); }
+.geo-swatch.kind-place { background: var(--viz-3); }
 .geo-detail .hash { overflow-wrap: anywhere; }
 @media (max-width: 900px) { .geo-shell { grid-template-columns: minmax(0, 1fr); } }
 
