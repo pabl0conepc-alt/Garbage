@@ -137,10 +137,11 @@
       class: "graph-svg",
       width: "100%",
       height: "100%",
-      role: "img",
+      role: "group",
       "aria-label": "Grafo de relacionamentos entre entidades",
     });
     const legendHost = el("div", { class: "graph-legend" });
+    const truncatedNotice = el("p", { class: "graph-truncated", role: "status", hidden: true });
     const defs = svgEl("defs");
     const arrow = svgEl("marker", {
       id: "graph-arrow",
@@ -236,6 +237,7 @@
           }, { title: "Soltar fixações, mostrar ocultos e refazer o layout" }),
         ),
         legendHost,
+        truncatedNotice,
         map.element,
       ),
       inspector,
@@ -318,6 +320,11 @@
         const data = await api(`/api/graph?${parameters}`);
         if (token !== requestToken) return;
         graph = data;
+        const cut = data.truncated;
+        truncatedNotice.hidden = !cut;
+        truncatedNotice.textContent = cut
+          ? `Mostrando as ${cut.nodes_shown} entidades mais conectadas de ${cut.nodes_total} e ${cut.edges_shown} de ${cut.edges_total} relacionamentos. Filtre por tipo ou pesquise para ver o restante.`
+          : "";
         nodes = data.nodes.map((node) => ({ ...node, degree: 0 }));
         const byId = new Map(nodes.map((node) => [node.id, node]));
         edges = data.edges.filter(
@@ -1167,16 +1174,14 @@
           }
         });
         group.addEventListener("pointerenter", () => {
-          // Rendering replaces this element; re-entering the same node must
-          // not render again or hover would loop and swallow clicks.
           if (dragging || panning || marquee || hoverId === node.id) return;
           hoverId = node.id;
-          render();
+          applyHover();
         });
         group.addEventListener("pointerleave", () => {
           if (hoverId !== node.id) return;
           hoverId = null;
-          render();
+          applyHover();
         });
         group.addEventListener("pointerdown", (event) => {
           if (event.button !== 0) return;
@@ -1219,8 +1224,29 @@
       renderInspector();
     }
 
+    /* Hover only changes classes: rebuilding every element on each
+       pointerenter cost about half a second on a 1,500-node case. */
+    function applyHover() {
+      const near = new Set(hoverId ? [hoverId] : []);
+      const touching = new Set();
+      if (hoverId) {
+        for (const edge of edges) {
+          if (edge.source_entity_id === hoverId) near.add(edge.target_entity_id);
+          else if (edge.target_entity_id === hoverId) near.add(edge.source_entity_id);
+          else continue;
+          touching.add(edge.id);
+        }
+      }
+      svg.classList.toggle("has-hover", Boolean(hoverId));
+      for (const group of nodeLayer.querySelectorAll(".graph-node")) group.classList.toggle("is-near", near.has(group.dataset.id));
+      for (const label of labelLayer.querySelectorAll(".graph-node-label")) label.classList.toggle("is-near", near.has(label.dataset.id));
+      for (const path of edgeLayer.querySelectorAll(".graph-edge")) path.classList.toggle("is-near", touching.has(path.dataset.id));
+      for (const text of labelLayer.querySelectorAll(".graph-edge-label")) text.classList.toggle("is-near", touching.has(text.dataset.edge));
+    }
+
     function updateGeometry() {
       const byId = new Map(nodes.map((node) => [node.id, node]));
+      const edgeById = new Map(edges.map((edge) => [edge.id, edge]));
       for (const group of nodeLayer.querySelectorAll(".graph-node")) {
         const node = byId.get(group.dataset.id);
         if (!node) continue;
@@ -1235,14 +1261,14 @@
         label.setAttribute("y", node.y + radius + 14);
       }
       for (const path of edgeLayer.querySelectorAll(".graph-edge")) {
-        const edge = edges.find((item) => item.id === path.dataset.id);
+        const edge = edgeById.get(path.dataset.id);
         if (!edge) continue;
         const source = byId.get(edge.source_entity_id);
         const target = byId.get(edge.target_entity_id);
         if (source && target) path.setAttribute("d", updatePath(source, target, radiusOf));
       }
       for (const text of labelLayer.querySelectorAll(".graph-edge-label")) {
-        const edge = edges.find((item) => item.id === text.dataset.edge);
+        const edge = edgeById.get(text.dataset.edge);
         const source = edge && byId.get(edge.source_entity_id);
         const target = edge && byId.get(edge.target_entity_id);
         if (!source || !target) continue;

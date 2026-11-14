@@ -194,6 +194,23 @@ One row per transform per run; the entity's enrichment history.
 
 What a merged entity was, kept on the entity it was merged into.
 
+### `monitors`
+
+`id`, `name`, `query_type`, `query_value`, `connectors_json`,
+`interval_minutes`, `investigation_id`, `enabled`, `created_at`, `updated_at`,
+`next_run_at`, `last_run_at`, `last_status`
+
+### `monitor_runs`
+
+`id`, `monitor_id`, `intel_run_id`, `trigger`, `status`, `added_count`,
+`removed_count`, `diff_json` (added, removed, per-source status), `error`,
+`started_at`, `finished_at`
+
+### `notifications`
+
+`id`, `kind` (`changed` or `error`), `monitor_id`,
+`monitor_run_id`, `title`, `body`, `created_at`, `read_at` (empty while unread)
+
 ### `application_settings`
 
 `key`, `value`, `updated_at`
@@ -222,6 +239,8 @@ Applied migration ledger used to make startup idempotent.
 | 10 | TAXII feeds and Sigma rules | `taxii_servers`, `taxii_objects`, `taxii_pulls`, `sigma_rules`, `sigma_meta` |
 | 11 | Local plugin approvals | `plugin_registry` (enabled flag, approved code SHA-256 and manifest, time) |
 | 12 | Case objective and archive, evidence custody and notes | `investigations.objective`, `investigations.archived_at`; `evidence_events` (hash-chained, kept after deletion) and `evidence_notes`; logs started for existing evidence |
+| 13 | Monitors and notifications | `monitors`, `monitor_runs`, `notifications` |
+| 14 | Search index covers case objectives | Investigation triggers recreated with `objective` in the indexed text and case rows reindexed; nothing to do without FTS5 |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

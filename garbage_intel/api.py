@@ -56,7 +56,7 @@ from .modules import attack
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
-from . import cases, custody, plugins
+from . import cases, custody, monitoring, plugins
 from .report_sections import parse_sections
 from .graph_io import import_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
@@ -157,6 +157,7 @@ _STATIC_FILES = {
     "world.json": "application/json; charset=utf-8",
     "views-geoint.js": "text/javascript; charset=utf-8",
     "views-feeds.js": "text/javascript; charset=utf-8",
+    "views-monitors.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -1707,6 +1708,40 @@ class RequestHandler(BaseHTTPRequestHandler):
             raise ValidationError("send body")
         self._json(201, custody.add_note(self.database_path, match.group(1), payload.get("body")))
 
+    def api_monitors(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.list_monitors(self.database_path))
+
+    def api_monitor_create(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        unknown = set(payload) - {"name", "value", "connectors", "interval_minutes", "investigation_id"}
+        if unknown:
+            raise ValidationError(f"unsupported monitor fields: {', '.join(sorted(unknown))}")
+        self._json(201, monitoring.create_monitor(
+            self.database_path, name=payload.get("name"), value=payload.get("value"), connector_ids=payload.get("connectors"),
+            interval_minutes=payload.get("interval_minutes", 1440), investigation_id=payload.get("investigation_id"),
+        ))
+
+    def api_monitor_patch(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(200, monitoring.update_monitor(self.database_path, match.group(1), payload))
+
+    def api_monitor_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.delete_monitor(self.database_path, match.group(1)))
+
+    def api_monitor_run(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        self._json(201, monitoring.run_monitor(self.database_path, match.group(1), trigger="manual"))
+
+    def api_monitor_runs(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.monitor_runs(self.database_path, match.group(1), limit=_query_int(query, "limit", 30)))
+
+    def api_notifications(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.notifications(self.database_path, unread_only=_query_text(query, "unread", "") == "1", limit=_query_int(query, "limit", 50)))
+
+    def api_notifications_read(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        if set(payload) - {"ids"}:
+            raise ValidationError("send ids")
+        self._json(200, monitoring.mark_read(self.database_path, payload.get("ids")))
+
     def api_plugins(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._json(200, plugins.list_plugins(self.database_path))
 
@@ -1904,6 +1939,14 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
     ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/plugins$"), "api_plugins", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/monitors$"), "api_monitors", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/monitors$"), "api_monitor_create", MAX_BODY_BYTES),
+    ("PATCH", re.compile(rf"^/api/monitors/{_ID_PATTERN}$"), "api_monitor_patch", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/monitors/{_ID_PATTERN}$"), "api_monitor_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/monitors/{_ID_PATTERN}/run$"), "api_monitor_run", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/monitors/{_ID_PATTERN}/runs$"), "api_monitor_runs", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/notifications$"), "api_notifications", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/notifications/read$"), "api_notifications_read", MAX_BODY_BYTES),
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/archive$"), "api_case_archive", MAX_BODY_BYTES),
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/duplicate$"), "api_case_duplicate", MAX_BODY_BYTES),
     ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/package$"), "api_case_package", MAX_BODY_BYTES),
@@ -2328,6 +2371,7 @@ def serve(database: str | Path, port: int = 8000) -> None:
     loaded = plugins.load_approved(str(database))
     if loaded:
         print(f"Plugins loaded: {', '.join(loaded)}")
+    monitoring.SCHEDULER.start(str(database))
     print(f"GARBAGE local interface: http://127.0.0.1:{server.server_port}/")
     try:
         server.serve_forever()
