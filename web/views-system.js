@@ -576,7 +576,7 @@
                 icon: "☰",
                 title: "Atualize o catálogo público",
                 description:
-                  "O cache do KEV está vazio. O GARBAGE faz uma única solicitação HTTPS explícita à CISA e armazena um snapshot validado e com hash. Não há consultas em segundo plano.",
+                  "Uma única solicitação à CISA salva o catálogo neste computador.",
                 action: button(
                   "Atualizar CISA KEV",
                   () => refresh(root, true),

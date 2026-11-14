@@ -34,58 +34,76 @@ const displayToggle = document.querySelector("#display-toggle");
 const displayMenu = document.querySelector("#display-menu");
 const shortcutsButton = document.querySelector("#shortcuts-button");
 
+/* Navigation is grouped into a few areas. The dock shows one entry per
+   area; the routes inside an area appear as tabs at the top of its
+   screens. Every route keeps its own hash, renderer and module. */
 G.NAV = [
   {
-    label: "Workspace",
+    key: "overview",
+    label: "Visão geral",
+    icon: "overview",
     items: [
-      { view: "overview", label: "Visão geral", icon: "overview" },
+      { view: "overview", label: "Visão geral", tab: "Visão geral", icon: "overview" },
     ],
   },
   {
-    label: "Inteligência",
+    key: "search",
+    label: "Pesquisa",
+    icon: "radar",
     items: [
-      { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
-      { view: "monitors", label: "Monitoramento", icon: "pulse", module: "monitoring" },
-      { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
-      { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
-      { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
+      { view: "multisearch", label: "Pesquisa multifonte", tab: "Multifonte", icon: "radar", module: "intel-orchestrator" },
+      { view: "monitors", label: "Monitoramento", tab: "Monitoramento", icon: "pulse", module: "monitoring" },
+      { view: "indicators", label: "Pesquisa de inteligência", tab: "Indicadores", icon: "indicators", module: "indicator-engine" },
     ],
   },
   {
+    key: "records",
+    label: "Registros",
+    icon: "entities",
+    items: [
+      { view: "entities", label: "Inteligência de entidades", tab: "Entidades", icon: "entities", module: "entities" },
+      { view: "evidence", label: "Gerenciador de evidências", tab: "Evidências", icon: "evidence", module: "evidence" },
+      { view: "sources", label: "Gerenciador de fontes", tab: "Fontes", icon: "sources", module: "source-manager" },
+      { view: "files", label: "Análise de arquivos", tab: "Arquivos", icon: "files", module: "file-intelligence" },
+    ],
+  },
+  {
+    key: "analysis",
     label: "Análise",
+    icon: "graph",
     items: [
-      { view: "board", label: "Quadro de investigação", icon: "board", module: "investigation-board" },
-      { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
-      { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
-      { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
-      { view: "geoint", label: "Mapa GEOINT", icon: "globe", module: "geoint" },
+      { view: "graph", label: "Grafo de relacionamentos", tab: "Grafo", icon: "graph", module: "relationship-graph" },
+      { view: "board", label: "Quadro de investigação", tab: "Quadro", icon: "board", module: "investigation-board" },
+      { view: "analytics", label: "Painel analítico", tab: "Painel", icon: "chart", module: "analytics" },
+      { view: "resolution", label: "Resolução de entidades", tab: "Resolução", icon: "merge", module: "entity-resolution" },
+      { view: "geoint", label: "Mapa GEOINT", tab: "GEOINT", icon: "globe", module: "geoint" },
     ],
   },
   {
-    label: "Evidências",
+    key: "threats",
+    label: "Ameaças",
+    icon: "kev",
     items: [
-      { view: "evidence", label: "Gerenciador de evidências", icon: "evidence", module: "evidence" },
-      { view: "sources", label: "Gerenciador de fontes", icon: "sources", module: "source-manager" },
+      { view: "attack", label: "MITRE ATT&CK", tab: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
+      { view: "feeds", label: "Feeds CTI", tab: "Feeds CTI", icon: "feed", module: "taxii-feeds" },
+      { view: "kev", label: "CISA KEV", tab: "CISA KEV", icon: "kev", module: "cisa-kev" },
     ],
   },
   {
-    label: "Inteligência de ameaças",
+    key: "reports",
+    label: "Relatórios",
+    icon: "reports",
     items: [
-      { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
-      { view: "attack", label: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
-      { view: "feeds", label: "Feeds CTI", icon: "feed", module: "taxii-feeds" },
+      { view: "reports", label: "Central de relatórios", tab: "Relatórios", icon: "reports", module: "report-center" },
     ],
   },
   {
-    label: "Saída",
+    key: "settings",
+    label: "Configurações",
+    icon: "settings",
+    bottom: true,
     items: [
-      { view: "reports", label: "Central de relatórios", icon: "reports", module: "report-center" },
-    ],
-  },
-  {
-    label: "Sistema",
-    items: [
-      { view: "settings", label: "Configurações", icon: "settings", module: "settings" },
+      { view: "settings", label: "Configurações", tab: "Configurações", icon: "settings", module: "settings" },
     ],
   },
 ];
@@ -1588,32 +1606,56 @@ G.confirm = confirmDialog;
 /* Navigation                                                         */
 /* ------------------------------------------------------------------ */
 
+function navLink(group, items) {
+  return el(
+    "a",
+    {
+      class: "nav-link",
+      href: `#/${items[0].view}`,
+      "aria-label": group.label,
+      dataset: { area: group.key, views: items.map((item) => item.view).join(" "), tooltip: group.label },
+    },
+    el("span", { class: "nav-icon" }, icon(group.icon, { size: 20 })),
+    el("span", { class: "nav-label", "aria-hidden": "true" }, group.label),
+  );
+}
+
 function renderNav() {
   const container = document.querySelector("#nav-groups");
   container.replaceChildren();
+  const section = el("section", { class: "nav-section", "aria-label": "Áreas" });
+  const bottom = document.querySelector("#nav-bottom");
+  bottom?.replaceChildren();
   for (const group of G.NAV) {
     const items = group.items.filter((item) => moduleEnabled(item.module));
     if (!items.length) continue;
-    const labelId = `nav-group-${G.NAV.indexOf(group)}`;
-    const section = el("section", { class: "nav-section", "aria-labelledby": labelId });
-    section.append(el("div", { class: "nav-section-label", id: labelId }, group.label));
-    for (const item of items) {
-      section.append(
-        el(
-          "a",
-          {
-            class: "nav-link",
-            href: `#/${item.view}`,
-            "aria-label": item.label,
-            dataset: { view: item.view, tooltip: item.label },
-          },
-          el("span", { class: "nav-icon" }, icon(item.icon, { size: 20 })),
-          el("span", { class: "nav-label", "aria-hidden": "true" }, item.label),
-        ),
-      );
-    }
-    container.append(section);
+    if (group.bottom && bottom) bottom.append(navLink(group, items));
+    else section.append(navLink(group, items));
   }
+  container.append(section);
+}
+
+/* Underline tabs between the routes of one area, above the screen. */
+function areaTabs(view) {
+  const group = G.NAV.find((entry) => entry.items.some((item) => item.view === view));
+  if (!group) return null;
+  const items = group.items.filter((item) => moduleEnabled(item.module));
+  if (items.length < 2) return null;
+  return el(
+    "nav",
+    { class: "area-tabs", "aria-label": group.label },
+    ...items.map((item) =>
+      el(
+        "a",
+        {
+          class: `area-tab${item.view === view ? " is-active" : ""}`,
+          href: `#/${item.view}`,
+          "aria-current": item.view === view ? "page" : null,
+        },
+        item.tab || item.label,
+      ),
+    ),
+  );
 }
 
 function renderShellState() {
@@ -1632,7 +1674,7 @@ function markActiveNav(view) {
   const params = G.state.currentParams || [];
   const home = view === "investigations" && params.length ? "overview" : extra?.home || view;
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const active = link.dataset.view === home;
+    const active = (link.dataset.views || "").split(" ").includes(home);
     link.classList.toggle("is-active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -1680,6 +1722,11 @@ async function route() {
   setLoading(true);
   viewRoot.replaceChildren();
   try {
+    const tabHost = document.querySelector("#area-tabs-host");
+    if (tabHost) {
+      tabHost.dataset.view = view;
+      tabHost.replaceChildren(...[areaTabs(view)].filter(Boolean));
+    }
     await G.views[view](viewRoot, params);
   } catch (error) {
     viewRoot.replaceChildren(

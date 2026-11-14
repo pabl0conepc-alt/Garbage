@@ -59,11 +59,11 @@
     async function drawForm() {
       const data = await loadConnectors();
       const name = el("input", { class: "input", maxlength: 120, placeholder: "ex.: Subdomínios do alvo", "aria-label": "Nome do monitor" });
-      const value = el("input", { class: "input", placeholder: "Domínio, IP, URL, hash, ASN ou CVE", "aria-label": "Artefato" });
+      const value = el("input", { class: "input", "aria-label": "Artefato" });
       const interval = el("select", { class: "input compact-select", "aria-label": "Intervalo" }, ...INTERVALS.map(([minutes, label]) => el("option", { value: minutes, selected: minutes === 1440 }, `A cada ${label}`)));
       const caseSelect = el("select", { class: "input compact-select", "aria-label": "Investigação" }, el("option", { value: "" }, "Sem investigação"),
         ...(await G.loadInvestigations()).filter((item) => !item.archived_at).map((item) => el("option", { value: item.id }, item.name)));
-      const chips = el("div", { class: "monitor-sources" }, el("p", { class: "panel-empty" }, "Digite o artefato para ver as fontes compatíveis."));
+      const chips = el("div", { class: "monitor-sources" });
       const chosen = new Set();
       let detectedType = "";
       let timer = null;
@@ -108,7 +108,7 @@
           el("div", { class: "monitor-form" }, el("label", { class: "field" }, el("span", {}, "Nome"), name), el("label", { class: "field" }, el("span", {}, "Artefato"), value), el("label", { class: "field" }, el("span", {}, "Intervalo"), interval), el("label", { class: "field" }, el("span", {}, "Investigação"), caseSelect)),
           chips,
           el("div", { class: "inline-actions" }, create),
-          el("p", { class: "tool-limit" }, "Roda enquanto o servidor do GARBAGE está ligado. Cada execução é comparada com a anterior por fonte, tipo e valor; mudanças e falhas geram notificação no sino."),
+          el("p", { class: "tool-limit" }, "Roda enquanto o servidor estiver ligado; mudanças chegam no sino."),
         ),
       );
     }
