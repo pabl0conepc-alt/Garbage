@@ -7994,3 +7994,80 @@ dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
   .panel-heading-side,
   .panel-actions { justify-content: flex-start; }
 }
+
+/* Grafo vazio: uma linha calma no centro do palco. */
+.graph-canvas.is-empty::after {
+  content: "Nenhuma entidade no grafo.";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* ================================================================== */
+/* Áreas: poucos itens no dock, abas sublinhadas no topo de cada área  */
+/* ================================================================== */
+
+.rail .nav-groups { justify-content: flex-start; padding-top: 6px; }
+.rail .nav-section { gap: 10px; padding: 8px 0; }
+.rail .nav-link,
+.rail .rail-button { width: 40px; height: 40px; border-radius: 13px; }
+.rail .sidebar-bottom { gap: 8px; padding-top: 10px; }
+.nav-bottom { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.rail .rail-search { margin-bottom: 6px; }
+
+.area-tabs-host:empty { display: none; }
+.area-tabs-host {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px 40px 0;
+}
+.area-tabs-host:not(:empty) + .view-root { padding-top: 26px; }
+
+.area-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--glass-line-faint);
+  scrollbar-width: none;
+}
+.area-tabs::-webkit-scrollbar { display: none; }
+.area-tab {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--transition), border-color var(--transition);
+}
+.area-tab:hover { color: var(--text-primary); }
+.area-tab.is-active { border-bottom-color: var(--accent); color: var(--text-primary); }
+.area-tab:focus-visible { outline-offset: -2px; }
+
+@media (max-width: 760px) {
+  .area-tabs-host { padding: 70px 18px 0; }
+  .area-tabs-host:not(:empty) + .view-root { padding-top: 22px; }
+  .rail .nav-section { gap: 4px; }
+  .rail .nav-link,
+  .rail .rail-button { width: 100%; height: 44px; }
+  .nav-bottom { align-items: stretch; }
+}
+
+[data-theme="contrast"] .area-tab.is-active { border-bottom-color: var(--text-primary); }
+@media print { .area-tabs-host { display: none !important; } }
+
+.area-tabs-host[data-view="graph"],
+.area-tabs-host[data-view="board"] { max-width: none; padding: 28px var(--dock-gap) 0 8px; }
+.area-tabs-host[data-view="graph"]:not(:empty) + .view-root,
+.area-tabs-host[data-view="board"]:not(:empty) + .view-root { padding-top: 22px; }
+@media (max-width: 760px) {
+  .area-tabs-host[data-view="graph"],
+  .area-tabs-host[data-view="board"] { padding: 70px 10px 0; }
+}
