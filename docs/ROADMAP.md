@@ -192,7 +192,8 @@ Pending:
 
 1. OCR and video frames as optional engines (Tesseract, ffmpeg) behind the
    `media-forensics` module, with the same bounded-input rules.
-2. Threat-actor profiles built from ATT&CK groups and TAXII objects.
+2. Threat-actor profiles: done from ATT&CK groups; still to add the
+   intrusion sets and reports pulled from TAXII collections.
 3. A real-browser test suite run in CI (the current end-to-end test stops at
    HTTP).
 4. Native PDF output if a dependency-free writer proves good enough; until then

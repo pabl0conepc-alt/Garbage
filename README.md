@@ -27,7 +27,7 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | Analysis | Indicator extraction with refanging and provenance, correlation, analytics dashboard, typosquatting candidates (Rust) |
 | File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; YARA rules; TLSH/ssdeep; EXIF with GPS; perceptual hashes (pHash/dHash) and similar images |
 | GEOINT | Local world map (Natural Earth) with EXIF positions and approximate network locations, always with origin and precision |
-| CTI | Offline MITRE ATT&CK with case techniques, Sigma rules from SigmaHQ, TAXII 2.1 client, CISA KEV, NVD/EPSS/OSV, STIX 2.1 / MISP / IOC export with TLP |
+| CTI | Offline MITRE ATT&CK with case techniques and threat-actor profiles (groups ranked by techniques shared with a case, never as attribution), Sigma rules from SigmaHQ, TAXII 2.1 client, CISA KEV, NVD/EPSS/OSV, STIX 2.1 / MISP / IOC export with TLP |
 | Plugins | Local folder, validated manifest, declared permissions, approval by code SHA-256, separate process with brokered network |
 | Reports | Chosen sections, generated methodology, graph picture, custody and techniques; HTML, Markdown, JSON, CSV and browser print to PDF |
 | System | FTS5 global search with ranking, settings, activity log, module registry with capability gating |

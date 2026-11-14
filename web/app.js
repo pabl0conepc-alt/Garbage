@@ -75,6 +75,7 @@ G.NAV = [
     items: [
       { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
       { view: "attack", label: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
+      { view: "actors", label: "Atores de ameaça", icon: "radar", module: "attack-matrix" },
       { view: "feeds", label: "Feeds CTI", icon: "feed", module: "taxii-feeds" },
     ],
   },

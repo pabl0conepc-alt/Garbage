@@ -40,7 +40,7 @@ Python fallback. They skip cleanly when `native/build` is absent.
 | Entities and graph | `test_entities.py`, `test_graph_io.py`, `test_foundation.py` | Relationships, graph payload and its cut by degree, GraphML/JSON import, transforms, entity resolution |
 | Multi-source intelligence | `test_intel*.py` | Connectors against recorded responses, gates, keys, cache, rate limits, async runs and recovery, target-contact switch |
 | Monitoring | `test_monitoring.py` | Validation, baseline/unchanged/changed, a failed source is not "removed", notifications, scheduler, overlapping runs |
-| CTI | `test_attack.py`, `test_feeds.py`, `test_cti_export.py`, `test_cisa_kev.py`, `test_typosquat.py` | ATT&CK, TAXII paging and retries, Sigma parsing, STIX/MISP/IOC export, KEV, typosquatting |
+| CTI | `test_attack.py`, `test_actors.py`, `test_feeds.py`, `test_cti_export.py`, `test_cisa_kev.py`, `test_typosquat.py` | ATT&CK, actor profiles and case overlap ranking, TAXII paging and retries, Sigma parsing, STIX/MISP/IOC export, KEV, typosquatting |
 | Plugins | `test_plugins.py` | Manifest validation, approval by SHA-256, process isolation, brokered network, refused personal types |
 | Files and media | `test_file_intel.py`, `test_imaging.py`, `test_geoint.py`, `test_yara.py`, `test_fuzzy_hash.py` | Parsers with malformed input, EXIF/GPS, perceptual hashes, map points, YARA, TLSH/ssdeep |
 | Evidence and boards | `test_evidence.py`, `test_boards.py` | Upload limits, hashing, verification, preview, deletion; layout revisions |

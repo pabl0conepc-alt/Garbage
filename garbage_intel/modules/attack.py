@@ -28,6 +28,8 @@ INDEX_URL = "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/mas
 HOSTS = ("raw.githubusercontent.com",)
 MAX_BUNDLE_BYTES = 96 * 1024 * 1024
 _TECHNIQUE_ID = re.compile(r"^T\d{4}(?:\.\d{3})?$")
+_GROUP_ID = re.compile(r"^G\d{4}$")
+_SOFTWARE_ID = re.compile(r"^S\d{4}$")
 
 # Static file findings -> techniques they are consistent with.
 FINDING_TECHNIQUES: dict[str, tuple[tuple[str, str], ...]] = {
@@ -140,7 +142,8 @@ def parse_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
             continue
         source = by_stix.get(item.get("source_ref", ""))
         target = by_stix.get(item.get("target_ref", ""))
-        if source and target and _TECHNIQUE_ID.match(target):
+        # Relations to techniques, plus which software a group uses (actor profiles).
+        if source and target and (_TECHNIQUE_ID.match(target) or (_GROUP_ID.match(source) and _SOFTWARE_ID.match(target))):
             relations.append({"source_id": source, "target_id": target, "kind": item["relationship_type"]})
     if not techniques or not tactics:
         raise AttackError("the bundle has no techniques or tactics")
