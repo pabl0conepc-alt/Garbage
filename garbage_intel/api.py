@@ -2381,13 +2381,19 @@ def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer
     return server
 
 
-def serve(database: str | Path, port: int = 8000) -> None:
-    server = create_server(database, port)
+def prepare_runtime(database: str | Path) -> None:
+    """What a running workstation needs besides the HTTP server: interrupted
+    runs closed, approved plugins loaded and the monitor scheduler started."""
     recover_interrupted_runs(str(database))
     loaded = plugins.load_approved(str(database))
     if loaded:
         print(f"Plugins loaded: {', '.join(loaded)}")
     monitoring.SCHEDULER.start(str(database))
+
+
+def serve(database: str | Path, port: int = 8000) -> None:
+    server = create_server(database, port)
+    prepare_runtime(database)
     print(f"GARBAGE local interface: http://127.0.0.1:{server.server_port}/")
     try:
         server.serve_forever()

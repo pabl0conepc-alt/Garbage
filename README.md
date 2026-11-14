@@ -76,6 +76,20 @@ python3 -m garbage_intel serve --port 8765
 Select a different database with `--database PATH` or `GARBAGE_DATABASE`.
 Evidence bytes are stored next to the database by default.
 
+### In its own window
+
+```sh
+python3 -m garbage_intel app
+```
+
+`app` serves the same interface on a free loopback port and opens it in a
+window of its own, not a browser tab; closing the window stops it. It uses
+[pywebview](https://pywebview.flowrl.com/) when installed (`pip install
+pywebview`; a native window on the system's web engine), otherwise a
+Chrome, Chromium, Edge, Brave or Vivaldi window in app mode with its own
+profile next to the database, otherwise the default browser. Force one with
+`--engine webview|browser|none`.
+
 ### Zipapp
 
 ```sh
