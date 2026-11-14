@@ -20,7 +20,7 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | Cases | Objective, lifecycle, archive, duplicate, observations, timeline; whole-case package (`garbage-case` v1, SHA-256) with preview and import |
 | Evidence | Upload, SHA-256 integrity, verification, download, preview; hash-chained chain of custody (recorded, verified, accessed, annotated, exported, imported, deleted) and notes |
 | Sources and entities | Source registry with access time and verification; canonical entities with aliases, confidence and relationships; entity resolution (exact, probable, weak candidates, analyst-approved merge) |
-| Multi-source search | One artifact (domain, IP, CIDR, URL, email, hash, ASN, CVE) fanned out to 31 connectors (28 network, 5 with a local key) with live per-source status, cache, rate limits and async runs |
+| Multi-source search | One artifact (domain, IP, CIDR, URL, email, hash, ASN, CVE, CNPJ, address or coordinates) fanned out to 35 connectors with live per-source status, cache, rate limits and async runs; CPF and phone numbers are checked offline only (validity, region, line type), never looked up |
 | Transforms and pivot | Connectors as typed transforms from an entity, with parameters, logs, measured duration and enrichment history; plugins become transforms |
 | Monitoring | Saved queries on a local schedule, differences between runs (what appeared, what disappeared) and notifications |
 | Graph and board | Relationship graph with eight layouts, multi-select, pin/hide, undo/redo, minimap, matrix and timeline views, path finding, PNG/SVG/GraphML/JSON export and GraphML/JSON import; investigation board with layers and autosave |

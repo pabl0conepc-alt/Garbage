@@ -88,8 +88,6 @@ def geo_points(database: str, *, investigation_id: str | None = None) -> dict[st
         )
     seen: set[str] = set()
     for row in networks:
-        if row["query_value"] in seen:
-            continue  # newest observation per artifact
         try:
             data = json.loads(row["data_json"] or "{}")
         except ValueError:
@@ -97,16 +95,21 @@ def geo_points(database: str, *, investigation_id: str | None = None) -> dict[st
         coordinates = _coordinates(data.get("coordinates", ""))
         if coordinates is None:
             continue
-        seen.add(row["query_value"])
+        # Geocoded places (Nominatim) carry their own kind; IP locations do not.
+        kind = "place" if data.get("kind") == "place" else "network"
+        key = f"{kind}:{row['query_value']}" if kind == "network" else f"place:{data.get('coordinates', '')}"
+        if key in seen:
+            continue
+        seen.add(key)
         points.append(
             {
-                "id": f"network:{row['query_value']}",
-                "kind": "network",
+                "id": key,
+                "kind": kind,
                 "latitude": coordinates[0],
                 "longitude": coordinates[1],
-                "label": row["query_value"],
+                "label": row["query_value"] if kind == "network" else row["value"],
                 "place": row["value"],
-                "precision": "network-approximate",
+                "precision": data.get("precision") or "network-approximate",
                 "observed_at": row["fetched_at"],
                 "recorded_at": row["fetched_at"],
                 "source": row["connector_id"],
@@ -118,5 +121,5 @@ def geo_points(database: str, *, investigation_id: str | None = None) -> dict[st
         )
         if len(points) >= MAX_POINTS:
             break
-    counts = {"photo": sum(1 for item in points if item["kind"] == "photo"), "network": sum(1 for item in points if item["kind"] == "network")}
+    counts = {kind: sum(1 for item in points if item["kind"] == kind) for kind in ("photo", "network", "place")}
     return {"points": points, "counts": counts, "total": len(points)}

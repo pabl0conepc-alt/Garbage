@@ -387,6 +387,23 @@ proven relationship.
 Module: `intel-orchestrator`. One artifact is detected, then sent in parallel
 to every registered connector that accepts its type.
 
+Detected types: domain, IPv4, IPv6, CIDR, URL, email, MD5, SHA-1, SHA-256,
+ASN, CVE, and since this version CNPJ, CPF, phone number and location
+(coordinates or an address). Known types are tried first; then CPF/CNPJ by
+check digits, phone formats and decimal coordinates; any other text with
+letters and a space or comma is an address. A prefix forces the type:
+`cnpj:`, `cpf:`, `tel:`, `local:`.
+
+| Type | Sources | What comes back |
+| --- | --- | --- |
+| CNPJ | `br-documents` (offline), `brasilapi-cnpj`, `minhareceita-cnpj` (public Receita Federal data) | Check digits, head office or branch; legal and trade names, status, founding date, activities, legal nature, size, capital, address, company phone, tax regime, and partners as a count with roles only |
+| CPF | `br-documents` only | Valid or not, fiscal region of issue. Never who it belongs to |
+| Phone | `br-documents` only | E.164 form, country; for Brazil the DDD, its state and region, line type. Never who it belongs to |
+| Location | `nominatim` (OpenStreetMap) | Places with coordinates, city, state, country, postal code; they appear on the GEOINT map as `place` points with `geocoded` precision |
+
+CPF and phone are personal types: `register_connector` refuses a network
+connector that accepts them and plugin manifests cannot list them.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/intel/connectors` | Registered connectors, availability and health |

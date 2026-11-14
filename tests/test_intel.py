@@ -266,7 +266,7 @@ class OrchestratorTests(RuntimeTestCase):
             )
         with self.assertRaises(ValueError):
             register_connector(
-                Connector("bad-type", "x", "x", ("phone",), lambda context: [])
+                Connector("bad-type", "x", "x", ("fax",), lambda context: [])
             )
 
 
