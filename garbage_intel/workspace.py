@@ -1061,11 +1061,11 @@ def global_search(database: str, query: str, limit: int | None = None) -> dict[s
         "investigations",
         "Investigations",
         """SELECT COUNT(*) FROM investigations
-           WHERE name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'""",
+           WHERE name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR objective LIKE ? ESCAPE '\\'""",
         """SELECT id, name, status, created_at FROM investigations
-           WHERE name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'
+           WHERE name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR objective LIKE ? ESCAPE '\\'
            ORDER BY updated_at DESC, name""",
-        [pattern, pattern],
+        [pattern, pattern, pattern],
         lambda row: {
             "id": row["id"],
             "title": row["name"],
