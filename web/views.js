@@ -787,188 +787,56 @@
   async function renderOverview(root) {
     const data = await api("/api/overview");
     const totals = data.totals;
-    const actions = [
-      button("Atualizar", () => G.refreshView()),
-    ];
+    const newCase = () => G.newInvestigation().catch((error) => toast(error.message, "error"));
     root.append(
       pageHeader({
-        eyebrow: "VISÃO GERAL",
-        title: "Situação do workspace",
-        description:
-          "Casos, entidades compartilhadas, evidências com hash e indicadores extraídos neste workspace local.",
-        actions,
+        title: "Visão geral",
+        actions: [button("Nova investigação", newCase, { variant: "button-primary" })],
       }),
       el(
         "div",
-        { class: "quick-actions" },
-        button("Registrar entidade", () => G.entityDialog()),
-        button("Registrar fonte", () => G.sourceDialog()),
-        button("Abrir quadro", () => go("board")),
-        button("Analisar indicadores", () => go("indicators")),
-        button("Ver evidências", () => go("evidence")),
-      ),
-      el(
-        "div",
-        { class: "metric-grid" },
-        metric({
-          label: "INVESTIGAÇÕES ABERTAS",
-          value: totals.open.toLocaleString("pt-BR"),
-          foot: `${totals.investigations} no total · ${totals.closed} fechadas`,
-          icon: "⌕",
-          tone: "blue",
-        }),
-        metric({
-          label: "ENTIDADES COMPARTILHADAS",
-          value: totals.entities.toLocaleString("pt-BR"),
-          foot: `${totals.relationships.toLocaleString("pt-BR")} relacionamentos`,
-          icon: "⬡",
-          tone: "violet",
-        }),
-        metric({
-          label: "REGISTROS DE EVIDÊNCIA",
-          value: totals.evidence.toLocaleString("pt-BR"),
-          foot: "SHA-256 preservado",
-          icon: "▣",
-          tone: "green",
-        }),
-        metric({
-          label: "INDICADORES ÚNICOS",
-          value: totals.unique_indicators.toLocaleString("pt-BR"),
-          foot: `${totals.indicator_origins.toLocaleString("pt-BR")} ocorrências em observações`,
-          icon: "⌁",
-          tone: "amber",
-        }),
-        metric({
-          label: "OBSERVAÇÕES",
-          value: totals.observations.toLocaleString("pt-BR"),
-          foot: "Proveniência mantida",
-          icon: "▤",
-          tone: "blue",
-        }),
-        metric({
-          label: "CORRELAÇÕES EXATAS",
-          value: totals.correlations.toLocaleString("pt-BR"),
-          foot: "Valores compartilhados entre observações",
-          icon: "⟷",
-          tone: "violet",
-        }),
+        { class: "metric-grid overview-metrics" },
+        metric({ label: "Casos abertos", value: totals.open.toLocaleString("pt-BR") }),
+        metric({ label: "Entidades", value: totals.entities.toLocaleString("pt-BR") }),
+        metric({ label: "Indicadores", value: totals.unique_indicators.toLocaleString("pt-BR") }),
       ),
     );
 
-    if (totals.investigations === 0) {
-      root.append(
-        panel(
-          { eyebrow: "COMECE AQUI", title: "Monte o primeiro caso" },
-          el(
-            "div",
-            { class: "onboarding" },
-            el("p", {}, "Uma investigação integrada avança por registros compartilhados:"),
-            el(
-              "ol",
-              { class: "step-list" },
-              el("li", {}, "Crie uma investigação e defina seu escopo."),
-              el("li", {}, "Registre entidades e vincule-as ao caso."),
-              el("li", {}, "Registre observações, fontes e evidências com hash."),
-              el("li", {}, "Registre relacionamentos e organize o quadro de investigação."),
-              el("li", {}, "Exporte um relatório a partir dos registros reais."),
-            ),
-            button("Criar a primeira investigação", () => G.newInvestigation(), {
-              variant: "button-primary",
-            }),
-          ),
-        ),
-      );
-    }
-
-    const recentRows = data.recent_investigations || [];
+    const openRows = (data.recent_investigations || []).filter((row) => row.status === "open");
     root.append(
-      el(
-        "div",
-        { class: "dashboard-grid" },
-        panel(
-          {
-            eyebrow: "ATIVIDADE DOS CASOS",
-            title: "Atividade recente",
-            caption: "Mais recentes primeiro",
-            actions: [button("Abrir linha do tempo", () => go("activity"))],
-          },
-          renderActivityFeed(data.recent_activity || [], {
-            emptyMessage:
-              "A atividade aparece aqui depois que casos, entidades e evidências são registrados.",
-          }),
-        ),
-        panel(
-          {
-            eyebrow: "CASOS",
-            title: "Investigações recentes",
-            actions: [button("Todos os casos", () => go("investigations"))],
-          },
-          table({
-            columns: [
-              {
-                label: "CASO",
-                render: (row) =>
+      panel(
+        {
+          title: "Casos abertos",
+          actions: [button("Todos os casos", () => go("investigations"))],
+        },
+        openRows.length
+          ? el(
+              "ul",
+              { class: "case-list" },
+              ...openRows.map((row) =>
+                el(
+                  "li",
+                  {},
                   el(
-                    "div",
-                    { class: "cell-stack" },
-                    el("strong", {}, row.name),
-                    el("span", { class: "mono" }, shortId(row.id)),
+                    "a",
+                    { class: "case-link", href: `#/investigations/${row.id}` },
+                    el("span", { class: "case-link-name" }, row.name),
+                    el(
+                      "span",
+                      { class: "case-link-meta" },
+                      `${row.entity_count.toLocaleString("pt-BR")} entidades`,
+                    ),
+                    G.icon("arrow", { size: 16, className: "case-link-arrow" }),
                   ),
-              },
-              { label: "STATUS", render: (row) => statusBadge(row.status) },
-              {
-                label: "OBS.",
-                className: "numeric-col",
-                render: (row) => String(row.observation_count),
-              },
-              {
-                label: "ENT.",
-                className: "numeric-col",
-                render: (row) => String(row.entity_count),
-              },
-              {
-                label: "EVID.",
-                className: "numeric-col",
-                render: (row) => String(row.evidence_count),
-              },
-              {
-                label: "",
-                render: (row) => button("Abrir", () => go("investigations", row.id)),
-              },
-            ],
-            rows: recentRows,
-            emptyMessage: "Nenhuma investigação ainda.",
-            onRowClick: (row) => go("investigations", row.id),
-          }),
-        ),
-      ),
-      el(
-        "div",
-        { class: "dashboard-grid" },
-        panel(
-          {
-            eyebrow: "ARTEFATOS OBSERVADOS",
-            title: "Distribuição de indicadores",
-            caption: `${totals.unique_indicators} únicos`,
-          },
-          indicatorMix(data.indicator_mix || {}, totals.unique_indicators),
-        ),
-        panel(
-          {
-            eyebrow: "PROVENIÊNCIA DAS EVIDÊNCIAS",
-            title: "Base de coleta",
-            caption: `${totals.observations} observações`,
-          },
-          collectionBasis(data.collection_basis || {}, totals.observations),
-        ),
-        panel(
-          {
-            eyebrow: "SISTEMA",
-            title: "Status dos módulos",
-            actions: [button("Gerenciar módulos", () => go("modules"))],
-          },
-          moduleSummary(data.modules || {}),
-        ),
+                ),
+              ),
+            )
+          : emptyState({
+              icon: "investigations",
+              title: "Nenhum caso aberto",
+              description: "Crie uma investigação para começar.",
+              action: button("Nova investigação", newCase, { variant: "button-primary" }),
+            }),
       ),
     );
   }
@@ -1181,16 +1049,14 @@
 
     root.append(
       pageHeader({
-        eyebrow: "GESTÃO DE CASOS",
         title: "Investigações",
-        description:
-          "Todos os casos compartilham o mesmo registro de entidades, armazenamento de evidências e relacionamentos.",
-        actions: [button("Importar caso", () => importCaseDialog(), { title: "Importar um pacote de caso exportado por um GARBAGE" })],
+        actions: [
+          button("Importar caso", () => importCaseDialog(), { title: "Importar um pacote de caso exportado por um GARBAGE" }),
+          button("Nova investigação", () => G.newInvestigation().catch((error) => toast(error.message, "error")), { variant: "button-primary" }),
+        ],
       }),
       panel(
         {
-          eyebrow: "CASOS",
-          title: "Índice de casos",
           actions: [countLabel],
           className: "table-panel",
         },

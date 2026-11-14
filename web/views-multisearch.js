@@ -390,21 +390,203 @@
   /* View                                                             */
   /* ---------------------------------------------------------------- */
 
+  /* ---------------------------------------------------------------- */
+  /* Sources and API keys (shown in Configurações)                    */
+  /* ---------------------------------------------------------------- */
+
+  async function renderIntelConnectors(host) {
+    host.replaceChildren(loadingBlock("Carregando fontes…"));
+    let connectorData;
+    try {
+      connectorData = await api("/api/intel/connectors");
+    } catch (error) {
+      host.replaceChildren(G.inlineError(error.message));
+      return;
+    }
+    const refresh = () => renderIntelConnectors(host);
+    const actions = !connectorData.network_allowed
+      ? [button("Ativar rede", () => enableNetwork(refresh), { variant: "button-primary" })]
+      : !connectorData.target_contact_allowed
+        ? [button("Permitir contato com o alvo", () => enableTargetContact(refresh))]
+        : [];
+    host.replaceChildren(
+      panel(
+        {
+          title: "Fontes",
+          caption: connectorData.network_allowed ? "Rede ativada" : "Rede desativada",
+          actions,
+        },
+        table({
+          columns: [
+            {
+              label: "FONTE",
+              render: (row) =>
+                el(
+                  "strong",
+                  {
+                    tabindex: "0",
+                    "data-tooltip": [
+                      connectorDescription(row.connector_id, row.description),
+                      `${row.rate_per_minute}/min`,
+                      row.ttl_seconds ? `cache ${Math.round(row.ttl_seconds / 3600) || 1} h` : "sem cache",
+                    ].filter(Boolean).join(" · "),
+                  },
+                  connectorName(row.connector_id, row.name),
+                ),
+            },
+            { label: "ACEITA", render: (row) => row.accepts.map((type) => TYPE_LABELS[type] || type).join(", ") },
+            {
+              label: "ACESSO",
+              render: (row) =>
+                el(
+                  "div",
+                  { class: "connector-cell" },
+                  el("span", {}, row.contacts_target ? "Contata o alvo" : row.network ? "Rede" : "Local"),
+                  row.key_id
+                    ? el(
+                        "a",
+                        { class: "table-link", href: "#/settings/chaves" },
+                        row.key_configured ? "Chave salva" : row.requires_key ? "Precisa de chave" : "Chave opcional",
+                      )
+                    : null,
+                ),
+            },
+            { label: "ESTADO", render: (row) => statusBadgeFor(row.availability) },
+            {
+              label: "ÚLTIMA EXECUÇÃO",
+              render: (row) =>
+                row.status
+                  ? el(
+                      "div",
+                      { class: "connector-cell" },
+                      statusBadgeFor(row.status.last_status),
+                      el("span", {}, `${G.relativeTime(row.status.last_run_at)} · ${row.status.success_count} / ${row.status.error_count}`),
+                      row.status.last_error
+                        ? el("span", { class: "source-row-error" }, G.translateError(row.status.last_error))
+                        : null,
+                    )
+                  : el("span", { class: "muted" }, "Nunca"),
+            },
+          ],
+          rows: connectorData.items,
+        }),
+      ),
+    );
+    G.hydrateIcons(host);
+  }
+
+  async function renderIntelKeys(host) {
+    host.replaceChildren(loadingBlock("Carregando chaves…"));
+    let keys;
+    let connectorData;
+    try {
+      [keys, connectorData] = await Promise.all([api("/api/intel/keys"), api("/api/intel/connectors")]);
+    } catch (error) {
+      host.replaceChildren(G.inlineError(error.message));
+      return;
+    }
+    const refresh = () => renderIntelKeys(host);
+    const usedBy = {};
+    for (const item of connectorData.items) {
+      if (item.key_id) (usedBy[item.key_id] ||= []).push(connectorName(item.connector_id, item.name));
+    }
+    const row = (provider) => {
+      const input = el("input", {
+        class: "input key-input",
+        type: "password",
+        autocomplete: "off",
+        spellcheck: "false",
+        placeholder: provider.configured ? `Substituir (${provider.hint})` : "Cole a chave",
+        "aria-label": `Chave de API de ${provider.name}`,
+      });
+      const save = async () => {
+        if (!input.value.trim()) return;
+        try {
+          await api(`/api/intel/keys/${provider.provider_id}`, { method: "PUT", body: JSON.stringify({ key: input.value }) });
+          input.value = "";
+          toast(`Chave de ${provider.name} salva neste computador.`);
+          refresh();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") save();
+      });
+      const note = [PROVIDER_NOTE[provider.provider_id] || provider.note, `Usada por: ${(usedBy[provider.provider_id] || []).join(", ")}`]
+        .filter(Boolean)
+        .join(" · ");
+      return el(
+        "div",
+        { class: "key-row" },
+        el(
+          "div",
+          { class: "key-info" },
+          el("strong", { tabindex: "0", "data-tooltip": note }, provider.name),
+        ),
+        el(
+          "div",
+          { class: "key-state" },
+          provider.configured ? badge(`Salva ${provider.hint}`, "success") : badge("Não configurada", "neutral"),
+          el("a", { class: "table-link", href: provider.signup_url, target: "_blank", rel: "noopener noreferrer" }, "Obter chave"),
+        ),
+        el(
+          "div",
+          { class: "key-actions" },
+          input,
+          button("Salvar", save, { variant: "button-primary" }),
+          provider.configured
+            ? button("Remover", async () => {
+                const confirmed = await G.confirm({
+                  title: "Remover chave",
+                  message: `A chave de ${provider.name} será apagada deste computador. As fontes que dependem dela deixam de rodar.`,
+                  confirmLabel: "Remover",
+                  danger: true,
+                });
+                if (!confirmed) return;
+                try {
+                  await api(`/api/intel/keys/${provider.provider_id}`, { method: "DELETE" });
+                  toast(`Chave de ${provider.name} removida.`);
+                  refresh();
+                } catch (error) {
+                  toast(error.message, "error");
+                }
+              })
+            : null,
+        ),
+      );
+    };
+    host.replaceChildren(
+      panel(
+        {
+          title: "Chaves de API",
+          caption: `${keys.items.filter((item) => item.configured).length} de ${keys.total} salvas`,
+        },
+        el("p", { class: "panel-note" }, "Ficam só neste computador e vão apenas ao provedor de cada uma."),
+        el("div", { class: "key-list" }, ...keys.items.map(row)),
+      ),
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Search screen                                                    */
+  /* ---------------------------------------------------------------- */
+
   async function renderMultiSearch(root, params = []) {
-    let [connectorData, runs] = await Promise.all([
-      api("/api/intel/connectors"),
-      api("/api/intel/runs?limit=15"),
-    ]);
+    // The source and key screens moved to Configurações.
+    const moved = { conectores: "conectores", chaves: "chaves" }[params[0]];
+    if (moved) {
+      location.hash = `#/settings/${moved}`;
+      return;
+    }
+    const connectorData = await api("/api/intel/connectors");
     await G.loadInvestigations?.();
     const investigations = (state.investigations || []).filter((item) => item.status === "open");
     const connectorsById = Object.fromEntries(connectorData.items.map((item) => [item.connector_id, item]));
     let detected = null;
     let currentRun = null;
     let pollToken = 0;
-    let activeTab = { conectores: "connectors", chaves: "keys" }[params[0]] || "search";
-    const keysHost = el("div");
     let detectTimer = null;
-    const selected = new Set(connectorData.items.map((item) => item.connector_id));
 
     const input = el("input", {
       class: "input query-input",
@@ -412,71 +594,30 @@
       id: "multisearch-input",
       autocomplete: "off",
       spellcheck: "false",
-      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN ou CVE",
       "aria-label": "Artefato para consultar",
       maxlength: "2000",
     });
     const detectedNode = el("span", { class: "query-detected", "aria-live": "polite" });
     const caseSelect = el(
       "select",
-      { class: "input compact-select", "aria-label": "Associar a uma investigação" },
+      { class: "input compact-select query-case", "aria-label": "Associar a uma investigação" },
       el("option", { value: "" }, "Sem investigação"),
       ...investigations.map((item) => el("option", { value: item.id }, item.name)),
     );
     const cacheToggle = el("input", { type: "checkbox", checked: true, id: "multisearch-cache" });
     const runButton = el(
       "button",
-      { class: "button button-primary", type: "submit" },
+      { class: "button button-primary query-run", type: "submit" },
       el("span", { "data-icon": "search", "aria-hidden": "true" }),
       "Consultar",
     );
-    const connectorChips = el("div", { class: "connector-chips", role: "group", "aria-label": "Fontes a consultar" });
     const resultArea = el("div", { class: "multisearch-results", "aria-live": "polite" });
-    const tabHost = el("div");
-    const tabStrip = el("div");
-
-    function chipsFor(type) {
-      connectorChips.replaceChildren();
-      for (const connector of connectorData.items) {
-        const applies = !type || connector.accepts.includes(type);
-        const blocked =
-          (connector.network && !connectorData.network_allowed) ||
-          (connector.contacts_target && !connectorData.target_contact_allowed);
-        const checkbox = el("input", {
-          type: "checkbox",
-          "aria-label": connectorName(connector.connector_id, connector.name),
-          checked: selected.has(connector.connector_id) && applies,
-          disabled: !applies,
-          onChange: (event) => {
-            if (event.target.checked) selected.add(connector.connector_id);
-            else selected.delete(connector.connector_id);
-          },
-        });
-        connectorChips.append(
-          el(
-            "label",
-            {
-              class: `connector-chip${applies ? "" : " is-unavailable"}${blocked ? " is-blocked" : ""}`,
-              "data-tooltip": connectorDescription(connector.connector_id, connector.description),
-            },
-            checkbox,
-            el("span", {}, connectorName(connector.connector_id, connector.name)),
-            connector.contacts_target
-              ? el("span", { class: "chip-flag is-target" }, blocked ? "alvo off" : "alvo")
-              : connector.network
-                ? el("span", { class: "chip-flag" }, blocked ? "rede off" : "rede")
-                : null,
-          ),
-        );
-      }
-    }
 
     async function detect() {
       const value = input.value.trim();
       if (!value) {
         detected = null;
         detectedNode.replaceChildren();
-        chipsFor(null);
         return;
       }
       try {
@@ -487,11 +628,9 @@
             detected.value !== value ? el("code", {}, detected.value) : null,
           ].filter(Boolean),
         );
-        chipsFor(detected.type);
       } catch (error) {
         detected = null;
         detectedNode.replaceChildren(el("span", { class: "query-invalid" }, error.message));
-        chipsFor(null);
       }
     }
 
@@ -507,7 +646,6 @@
           el(
             "div",
             {},
-            el("p", { class: "eyebrow" }, `CONSULTA ${shortId(run.id).toUpperCase()}`),
             el(
               "h2",
               {},
@@ -576,7 +714,7 @@
               `${keyless.length} fonte(s) ficaram de fora por falta de chave: ` +
                 keyless.map((item) => connectorName(item.connector_id, item.connector_id)).join(", ") + ".",
             ),
-            el("a", { class: "button button-secondary button-small", href: "#/multisearch/chaves" }, "Configurar chaves"),
+            el("a", { class: "button button-secondary button-small", href: "#/settings/chaves" }, "Configurar chaves"),
           ),
         );
       }
@@ -635,24 +773,24 @@
         input.focus();
         return;
       }
-      const chosen = [...selected].filter(
-        (id) => !detected || connectorsById[id]?.accepts.includes(detected.type),
-      );
-      if (!chosen.length) {
-        toast("Selecione pelo menos uma fonte compatível com este artefato.", "warning");
+      if (!detected || detected.value === undefined) await detect();
+      // Every compatible source runs; there is no per-source choice.
+      const compatible = connectorData.items
+        .filter((item) => !detected || item.accepts.includes(detected.type))
+        .map((item) => item.connector_id);
+      if (detected && !compatible.length) {
+        toast("Nenhuma fonte aceita este tipo de artefato.", "warning");
         return;
       }
       runButton.disabled = true;
-      resultArea.replaceChildren(
-        loadingBlock(`Consultando ${chosen.length} fonte(s)… fontes de rede podem levar alguns segundos.`),
-      );
+      resultArea.replaceChildren(loadingBlock(`Consultando ${compatible.length || ""} fonte(s)…`));
       const token = ++pollToken;
       try {
         let run = await api("/api/intel/runs", {
           method: "POST",
           body: JSON.stringify({
             value,
-            connectors: chosen,
+            ...(detected ? { connectors: compatible } : {}),
             investigation_id: caseSelect.value || null,
             use_cache: cacheToggle.checked,
             async: true,
@@ -695,264 +833,43 @@
       "form",
       {
         class: "query-bar",
+        role: "search",
         onSubmit: (event) => {
           event.preventDefault();
           submit();
         },
       },
-      el("div", { class: "query-field" }, input, detectedNode),
+      el("div", { class: "query-field" }, el("span", { class: "query-icon", "aria-hidden": "true" }, G.icon("search", { size: 18 })), input, detectedNode),
       caseSelect,
-      el("label", { class: "inline-check", for: "multisearch-cache" }, cacheToggle, "Usar cache"),
+      el(
+        "label",
+        { class: "query-cache", for: "multisearch-cache", "data-tooltip": "Reutilizar respostas recentes das fontes" },
+        cacheToggle,
+        el("span", {}, "Cache"),
+      ),
       runButton,
     );
 
-    function connectorsTab() {
-      return panel(
-        {
-          eyebrow: "CONECTORES",
-          title: "Status das fontes",
-          caption: connectorData.network_allowed ? "Rede ativada" : "Rede desativada",
-          actions: connectorData.network_allowed
-            ? []
-            : [button("Ativar rede", () => enableNetwork(() => G.refreshView()), { variant: "button-primary" })],
-        },
-        table({
-          columns: [
-            {
-              label: "FONTE",
-              render: (row) => el(
-                "div",
-                { class: "connector-cell" },
-                el("strong", {}, connectorName(row.connector_id, row.name)),
-                el("span", {}, connectorDescription(row.connector_id, row.description)),
-              ),
-            },
-            { label: "ACEITA", render: (row) => row.accepts.map((type) => TYPE_LABELS[type] || type).join(", ") },
-            {
-              label: "ACESSO",
-              render: (row) =>
-                el(
-                  "div",
-                  { class: "connector-cell" },
-                  el("span", {}, row.contacts_target ? "Contata o alvo" : row.network ? "Rede (passivo)" : "Local"),
-                  row.key_id
-                    ? el(
-                        "a",
-                        { class: "table-link", href: "#/multisearch/chaves" },
-                        row.key_configured ? "Chave salva" : row.requires_key ? "Precisa de chave" : "Chave opcional",
-                      )
-                    : null,
-                ),
-            },
-            { label: "DISPONIBILIDADE", render: (row) => statusBadgeFor(row.availability) },
-            {
-              label: "ÚLTIMA EXECUÇÃO",
-              render: (row) =>
-                row.status
-                  ? el(
-                      "div",
-                      { class: "connector-cell" },
-                      statusBadgeFor(row.status.last_status),
-                      el(
-                        "span",
-                        {},
-                        `${G.relativeTime(row.status.last_run_at)} · ${G.formatNumber(row.status.last_latency_ms)} ms`,
-                      ),
-                      row.status.last_error
-                        ? el("span", { class: "source-row-error" }, G.translateError(row.status.last_error))
-                        : null,
-                    )
-                  : el("span", { class: "muted" }, "Nunca executado"),
-            },
-            {
-              label: "SUCESSOS / ERROS",
-              cellClass: "numeric-col",
-              render: (row) => (row.status ? `${row.status.success_count} / ${row.status.error_count}` : "—"),
-            },
-            {
-              label: "LIMITE · CACHE",
-              render: (row) =>
-                `${row.rate_per_minute}/min · ${row.ttl_seconds ? `${Math.round(row.ttl_seconds / 3600) || 1} h` : "sem cache"}`,
-            },
-          ],
-          rows: connectorData.items,
-        }),
-      );
-    }
-
-    async function keysTab() {
-      keysHost.replaceChildren(loadingBlock("Carregando chaves…"));
-      let keys;
-      try {
-        keys = await api("/api/intel/keys");
-      } catch (error) {
-        keysHost.replaceChildren(G.inlineError(error.message));
-        return;
-      }
-      const usedBy = {};
-      for (const item of connectorData.items) {
-        if (item.key_id) (usedBy[item.key_id] ||= []).push(connectorName(item.connector_id, item.name));
-      }
-      const row = (provider) => {
-        const input = el("input", {
-          class: "input key-input",
-          type: "password",
-          autocomplete: "off",
-          spellcheck: "false",
-          placeholder: provider.configured ? `Substituir a chave salva (${provider.hint})` : "Cole a chave aqui",
-          "aria-label": `Chave de API de ${provider.name}`,
-        });
-        const save = async () => {
-          if (!input.value.trim()) return;
-          try {
-            await api(`/api/intel/keys/${provider.provider_id}`, { method: "PUT", body: JSON.stringify({ key: input.value }) });
-            input.value = "";
-            toast(`Chave de ${provider.name} salva neste computador.`);
-            connectorData = await api("/api/intel/connectors");
-            keysTab();
-          } catch (error) {
-            toast(error.message, "error");
-          }
-        };
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") save();
-        });
-        return el(
-          "div",
-          { class: "key-row" },
-          el(
-            "div",
-            { class: "key-info" },
-            el("strong", {}, provider.name),
-            el("span", {}, PROVIDER_NOTE[provider.provider_id] || provider.note),
-            el("span", { class: "muted" }, `Usada por: ${(usedBy[provider.provider_id] || []).join(", ")}`),
-          ),
-          el(
-            "div",
-            { class: "key-state" },
-            provider.configured ? badge(`Salva ${provider.hint}`, "success") : badge("Não configurada", "neutral"),
-            el("a", { class: "table-link", href: provider.signup_url, target: "_blank", rel: "noopener noreferrer" }, "Obter chave"),
-          ),
-          el(
-            "div",
-            { class: "key-actions" },
-            input,
-            button("Salvar", save, { variant: "button-primary" }),
-            provider.configured
-              ? button("Remover", async () => {
-                  const confirmed = await G.confirm({
-                    title: "Remover chave",
-                    message: `A chave de ${provider.name} será apagada deste computador. As fontes que dependem dela deixam de rodar.`,
-                    confirmLabel: "Remover",
-                    danger: true,
-                  });
-                  if (!confirmed) return;
-                  try {
-                    await api(`/api/intel/keys/${provider.provider_id}`, { method: "DELETE" });
-                    toast(`Chave de ${provider.name} removida.`);
-                    connectorData = await api("/api/intel/connectors");
-                    keysTab();
-                  } catch (error) {
-                    toast(error.message, "error");
-                  }
-                })
-              : null,
-          ),
-        );
-      };
-      keysHost.replaceChildren(
-        panel(
-          {
-            eyebrow: "CHAVES DE API",
-            title: "Suas contas nos provedores",
-            caption: `${keys.items.filter((item) => item.configured).length} de ${keys.total} salvas`,
-          },
-          el(
-            "p",
-            { class: "panel-note" },
-            "As chaves ficam só no banco local deste workspace. A interface nunca recebe a chave de volta, apenas os 4 últimos caracteres. " +
-              "Cada chave vai apenas para o provedor dela, no cabeçalho que ele documenta, e é removida das mensagens de erro.",
-          ),
-          el("div", { class: "key-list" }, ...keys.items.map(row)),
-        ),
-      );
-    }
-
-    function renderTab() {
-      tabStrip.replaceChildren(
-        G.tabs({
-          items: [
-            { key: "search", label: "Pesquisa" },
-            { key: "connectors", label: "Conectores", count: connectorData.total },
-            { key: "keys", label: "Chaves de API" },
-          ],
-          active: activeTab,
-          onSelect: (key) => {
-            activeTab = key;
-            renderTab();
-          },
-        }),
-      );
-      if (activeTab === "keys") keysTab();
-      tabHost.replaceChildren(
-        activeTab === "keys"
-          ? keysHost
-          : activeTab === "connectors"
-          ? connectorsTab()
-          : el(
-              "div",
-              {},
-              el(
-                "section",
-                { class: "query-panel" },
-                form,
-                connectorChips,
-              ),
-              resultArea,
-              panel({ eyebrow: "HISTÓRICO", title: "Consultas recentes" }, historyHost),
-            ),
-      );
-      G.hydrateIcons(tabHost);
-    }
-
     root.append(
       ...[
-      pageHeader({
-        eyebrow: "INTELIGÊNCIA MULTIFONTE",
-        title: "Pesquisa multifonte",
-        description:
-          "Um artefato consultado em paralelo em todas as fontes compatíveis. Cada resultado guarda a fonte, o hash da resposta e o horário. Correlação não é atribuição.",
-      }),
-      connectorData.network_allowed
-        ? null
-        : el(
-            "div",
-            { class: "notice-bar", role: "note" },
-            el(
-              "span",
-              {},
-              "Conectores de rede desativados: só as fontes locais serão consultadas.",
+        pageHeader({
+          title: "Pesquisa multifonte",
+          description: "Um artefato, todas as fontes compatíveis.",
+        }),
+        connectorData.network_allowed
+          ? null
+          : el(
+              "div",
+              { class: "notice-bar", role: "note" },
+              el("span", {}, "Rede desativada: só fontes locais."),
+              button("Ativar rede", () => enableNetwork(() => G.refreshView())),
             ),
-            button("Ativar rede", () => enableNetwork(() => G.refreshView())),
-          ),
-      connectorData.network_allowed && !connectorData.target_contact_allowed
-        ? el(
-            "div",
-            { class: "notice-bar is-quiet", role: "note" },
-            el(
-              "span",
-              {},
-              "Fontes passivas ativas. Certificado TLS e Impressão digital web acessam o próprio alvo e estão desligados.",
-            ),
-            button("Permitir contato com o alvo", () => enableTargetContact(() => G.refreshView())),
-          )
-        : null,
-      tabStrip,
-      tabHost,
+        el("section", { class: "query-panel" }, form),
+        resultArea,
+        panel({ title: "Consultas recentes" }, historyHost),
       ].filter(Boolean),
     );
-    chipsFor(null);
-    renderTab();
+    G.hydrateIcons(root);
     renderHistory();
 
     const runId = params[0] && /^[0-9a-f-]{36}$/i.test(params[0]) ? params[0] : null;
@@ -977,6 +894,8 @@
   }
 
   G.views.multisearch = renderMultiSearch;
+  G.renderIntelConnectors = renderIntelConnectors;
+  G.renderIntelKeys = renderIntelKeys;
   G.connectorLabel = (id) => connectorName(id, id);
   G.resultTypeLabel = (type) => RESULT_LABELS[type] || type;
   G.sourceStatusLabel = (status) => (STATUS_TEXT[status] || [status])[0];

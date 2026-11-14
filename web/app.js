@@ -39,15 +39,13 @@ G.NAV = [
     label: "Workspace",
     items: [
       { view: "overview", label: "Visão geral", icon: "overview" },
-      { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations" },
-      { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log" },
     ],
   },
   {
     label: "Inteligência",
     items: [
       { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
-      { view: "monitors", label: "Monitoramento", icon: "bell", module: "monitoring" },
+      { view: "monitors", label: "Monitoramento", icon: "pulse", module: "monitoring" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
@@ -87,15 +85,23 @@ G.NAV = [
   {
     label: "Sistema",
     items: [
-      { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager" },
       { view: "settings", label: "Configurações", icon: "settings", module: "settings" },
     ],
   },
 ];
 
-G.VIEW_LABELS = Object.fromEntries(
-  G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
-);
+/* Views reached from Configurações (and the command palette) rather than
+   the dock. `home` is the dock entry highlighted while they are open. */
+G.EXTRA_VIEWS = [
+  { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations", group: "Configurações", home: "settings" },
+  { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log", group: "Configurações", home: "settings" },
+  { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager", group: "Configurações", home: "settings" },
+];
+
+G.VIEW_LABELS = Object.fromEntries([
+  ...G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
+  ...G.EXTRA_VIEWS.map((item) => [item.view, item.label]),
+]);
 G.VIEW_GROUPS = Object.fromEntries(
   G.NAV.flatMap((group) => group.items.map((item) => [item.view, group.label])),
 );
@@ -282,6 +288,9 @@ const ICON_PATHS = {
   clock: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 7.5V12l3 2",
   list: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01",
   dot: "M10.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0z",
+  info: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 11v5.2M12 7.9v.2",
+  arrow: "M9.5 6.5 15 12l-5.5 5.5",
+  pulse: "M3.5 12.5h3.6l2.2-5.5 4.2 10.5 2.4-5h4.6",
 };
 
 /* Legacy glyphs passed by views are mapped onto the icon set so every
@@ -1078,24 +1087,60 @@ function statusBadge(value) {
   return badge(statusLabel(value), STATUS_TONES[value] || "neutral");
 }
 
+let pageInfoCount = 0;
+
+/* Title first. A short line may sit under it; anything longer waits
+   behind a small info toggle. `eyebrow` is still accepted, not drawn. */
 function pageHeader({ eyebrow, title, description, actions = [] }) {
+  const text = typeof description === "string" ? description.trim() : description;
+  const short = typeof text === "string" && text.length <= 72;
+  let infoButton = null;
+  let descriptionNode = null;
+  if (text && short) {
+    descriptionNode = el("p", { class: "page-description" }, text);
+  } else if (text) {
+    const id = `page-info-${++pageInfoCount}`;
+    descriptionNode = el("p", { class: "page-description", id, hidden: true }, text);
+    infoButton = el(
+      "button",
+      {
+        class: "icon-button page-info",
+        type: "button",
+        "aria-label": "Sobre esta tela",
+        "aria-expanded": "false",
+        "aria-controls": id,
+        onClick: () => {
+          descriptionNode.hidden = !descriptionNode.hidden;
+          infoButton.setAttribute("aria-expanded", String(!descriptionNode.hidden));
+        },
+      },
+      icon("info", { size: 16 }),
+    );
+  }
   return el(
     "div",
     { class: "page-heading" },
     el(
       "div",
       { class: "page-heading-copy" },
-      eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
-      el("h1", {}, title),
-      description ? el("p", { class: "page-description" }, description) : null,
+      el("div", { class: "page-title-row" }, el("h1", {}, title), infoButton),
+      descriptionNode,
     ),
     actions.length ? el("div", { class: "page-actions" }, actions) : null,
   );
 }
 
+function sentenceCase(text) {
+  const lower = String(text).toLocaleLowerCase("pt-BR");
+  return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
+}
+
 function panel({ eyebrow, title, caption, actions = [], className = "" }, ...children) {
+  if (!title && eyebrow) title = sentenceCase(eyebrow);
+  eyebrow = null;
+  if (typeof caption === "string" && caption.length > 48) caption = null;
   const heading =
-    title || eyebrow || actions.length
+    title || actions.length
       ? el(
           "div",
           { class: "panel-heading" },
@@ -1121,17 +1166,12 @@ function panel({ eyebrow, title, caption, actions = [], className = "" }, ...chi
   );
 }
 
-function metric({ label, value, foot }) {
+function metric({ label, value }) {
   return el(
     "article",
     { class: "metric-card" },
-    el(
-      "div",
-      { class: "metric-top" },
-      el("span", {}, label),
-    ),
     el("div", { class: "metric-value" }, value),
-    foot ? el("div", { class: "metric-foot" }, foot) : null,
+    el("div", { class: "metric-top" }, el("span", {}, sentenceCase(label))),
   );
 }
 
@@ -1554,8 +1594,12 @@ function renderShellState() {
 }
 
 function markActiveNav(view) {
+  const extra = G.EXTRA_VIEWS.find((item) => item.view === view);
+  // An open case belongs to the main flow; the case index to Configurações.
+  const params = G.state.currentParams || [];
+  const home = view === "investigations" && params.length ? "overview" : extra?.home || view;
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const active = link.dataset.view === view;
+    const active = link.dataset.view === home;
     link.classList.toggle("is-active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -1564,9 +1608,8 @@ function markActiveNav(view) {
 
 function setBreadcrumb(view) {
   const label = G.VIEW_LABELS[view] || titleCase(view);
-  document.querySelector("#page-breadcrumb").textContent = label;
-  const group = document.querySelector("#breadcrumb-group");
-  if (group) group.textContent = G.VIEW_GROUPS[view] || "Workspace";
+  const crumb = document.querySelector("#page-breadcrumb");
+  if (crumb) crumb.textContent = label;
   document.title = `${label} · GARBAGE`;
 }
 
@@ -1788,7 +1831,11 @@ function commandActions() {
 }
 
 function commandNavItems() {
-  return G.NAV.flatMap((group) =>
+  const groups = [
+    ...G.NAV,
+    { label: "Configurações", items: G.EXTRA_VIEWS },
+  ];
+  return groups.flatMap((group) =>
     group.items
       .filter((item) => moduleEnabled(item.module))
       .map((item) => ({
@@ -2130,24 +2177,35 @@ function closeDisplayMenu() {
 /* Keyboard shortcuts                                                */
 /* ------------------------------------------------------------------ */
 
+const SHORTCUT_ROWS = [
+  ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
+  ["/", "Focar a pesquisa"],
+  ["N", "Nova investigação"],
+  ["T", "Triar texto colado"],
+  ["M", "Pesquisa multifonte"],
+  ["R", "Atualizar tela atual"],
+  ["?", "Este guia de atalhos"],
+  ["Esc", "Fechar diálogo, menu ou painel"],
+  ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
+  ["Grafo · Shift + arrastar", "Selecionar uma área"],
+  ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
+  ["Grafo · P", "Fixar ou soltar a seleção"],
+  ["Grafo · H ou Delete", "Ocultar a seleção"],
+  ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
+];
+
+G.shortcutList = function shortcutList() {
+  return el(
+    "div",
+    { class: "shortcut-list" },
+    ...SHORTCUT_ROWS.map(([keys, label]) =>
+      el("div", { class: "shortcut-row" }, el("span", {}, label), el("kbd", {}, keys)),
+    ),
+  );
+};
+
 G.openShortcuts = function openShortcuts() {
   if (document.querySelector(".shortcuts-dialog")) return;
-  const rows = [
-    ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
-    ["/", "Focar a pesquisa"],
-    ["N", "Nova investigação"],
-    ["T", "Triar texto colado"],
-    ["M", "Pesquisa multifonte"],
-    ["R", "Atualizar tela atual"],
-    ["?", "Este guia de atalhos"],
-    ["Esc", "Fechar diálogo, menu ou painel"],
-    ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
-    ["Grafo · Shift + arrastar", "Selecionar uma área"],
-    ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
-    ["Grafo · P", "Fixar ou soltar a seleção"],
-    ["Grafo · H ou Delete", "Ocultar a seleção"],
-    ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
-  ];
   const dialog = el(
     "dialog",
     { class: "app-dialog shortcuts-dialog", "aria-label": "Atalhos de teclado" },
@@ -2160,13 +2218,7 @@ G.openShortcuts = function openShortcuts() {
         el(
           "div",
           {},
-          el("p", { class: "eyebrow" }, "TECLADO"),
-          el("h2", {}, "Navegue sem o mouse"),
-          el(
-            "p",
-            { class: "dialog-description" },
-            "Os atalhos são ignorados enquanto você digita em um campo.",
-          ),
+          el("h2", {}, "Atalhos de teclado"),
         ),
         el(
           "button",
@@ -2174,18 +2226,7 @@ G.openShortcuts = function openShortcuts() {
           icon("close"),
         ),
       ),
-      el(
-        "div",
-        { class: "shortcut-list" },
-        ...rows.map(([keys, label]) =>
-          el(
-            "div",
-            { class: "shortcut-row" },
-            el("span", {}, label),
-            el("kbd", {}, keys),
-          ),
-        ),
-      ),
+      G.shortcutList(),
       el(
         "div",
         { class: "dialog-actions" },
@@ -2219,10 +2260,13 @@ function bindShell() {
   document.querySelector("#nav-groups").addEventListener("click", (event) => {
     if (event.target.closest("a.nav-link")) setMobileNav(false);
   });
-  newInvestigationButton.addEventListener("click", () => {
+  newInvestigationButton?.addEventListener("click", () => {
     G.newInvestigation().catch((error) => toast(error.message, "error"));
   });
-  searchButton.addEventListener("click", openSearch);
+  searchButton?.addEventListener("click", () => {
+    setMobileNav(false);
+    openSearch();
+  });
   mobileNavToggle?.addEventListener("click", () => {
     setMobileNav(!document.body.classList.contains("nav-open"));
   });

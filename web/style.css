@@ -6618,3 +6618,494 @@ dialog:focus-visible,
   .panel,
   .metric-card { box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* ================================================================== */
+/* Respiro: menos caixas, menos palavras, mais espaço                 */
+/* Seções ficam no próprio fundo (título + conteúdo, separadas por    */
+/* espaço e no máximo uma linha fina). Vidro só no dock, nos menus,   */
+/* nos diálogos, na barra de pesquisa e num elemento por tela.        */
+/* ================================================================== */
+
+:root {
+  --rail-width: 50px;
+  --dock-gap: 12px;
+  --section-gap: 44px;
+}
+
+/* ---- Sem rótulos-sobrelinha em lugar nenhum ------------------------- */
+
+.eyebrow { display: none !important; }
+
+/* ---- Dock fino; o vidro vive num pseudo-elemento ---------------------- */
+
+.rail {
+  width: var(--rail-width);
+  padding: 8px 0;
+  border-radius: 22px;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Sem filtro no próprio dock: assim os menus abertos dentro dele também
+   desfocam a página. */
+.rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--glass-chrome);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  pointer-events: none;
+}
+
+.rail .sidebar-head { padding: 0 0 6px; margin: 0; }
+.rail .brand { width: 36px; height: 36px; border-radius: 12px; }
+.rail .brand-logo { width: 22px; }
+
+.rail .nav-section { gap: 2px; padding: 6px 0; }
+.rail .nav-section + .nav-section::before { width: 16px; }
+
+.rail .nav-link,
+.rail .rail-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.rail .nav-icon .icon,
+.rail .rail-button > .icon { width: 18px; height: 18px; }
+.rail .rail-local { width: 36px; height: 24px; border-radius: 11px; }
+.rail .nav-link.is-active::before { left: -7px; height: 14px; }
+
+.rail .rail-search {
+  margin-bottom: 4px;
+  border-color: var(--glass-line);
+  background: var(--glass-2);
+  color: var(--icon-primary);
+}
+.rail .rail-search:hover { background: var(--glass-3); }
+
+.rail .sidebar-bottom { gap: 2px; padding-top: 6px; }
+.rail .display-wrap { position: relative; }
+.rail .display-toggle[aria-expanded="true"],
+.rail .notify-toggle[aria-expanded="true"] {
+  border-color: var(--glass-line-strong);
+  background: var(--glass-4);
+  color: var(--icon-primary);
+}
+
+/* Menus do dock abrem à direita, alinhados pela base. */
+.rail .display-menu {
+  top: auto;
+  right: auto;
+  bottom: -6px;
+  left: calc(100% + 14px);
+}
+
+.rail .notify-count {
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-width: 2px;
+  font-size: 9px;
+  line-height: 11px;
+}
+
+.app-shell { grid-template-columns: calc(var(--rail-width) + var(--dock-gap) * 2) minmax(0, 1fr); }
+
+/* ---- Sem barra superior ----------------------------------------------- */
+
+.mobile-nav-toggle { display: none; }
+
+.view-root { padding: 44px 40px 72px; max-width: 1440px; }
+.view-root[data-view="board"],
+.view-root[data-view="graph"] { padding: 28px var(--dock-gap) 24px 8px; }
+
+/* ---- Cabeçalho da tela: título grande, uma linha no máximo ------------ */
+
+.page-heading { align-items: flex-end; margin-bottom: 36px; }
+.page-title-row { display: flex; align-items: center; gap: 12px; }
+.page-heading h1 { font-size: clamp(30px, 3vw, 44px); }
+.page-description { margin-top: 10px; color: var(--text-secondary); font-size: var(--text-base); }
+.page-description[hidden] { display: none; }
+.page-info { width: 30px; height: 30px; }
+.page-info .icon { width: 16px; height: 16px; }
+.page-info[aria-expanded="true"] { border-color: var(--glass-line-strong); background: var(--glass-4); color: var(--icon-primary); }
+
+/* ---- Seções sem caixa -------------------------------------------------- */
+
+.panel,
+.panel .panel,
+.view-root:not([data-view="graph"]):not([data-view="board"]) > .panel:not(.table-panel) {
+  margin-bottom: var(--section-gap);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.panel .panel { margin-bottom: 24px; }
+
+.panel-heading {
+  align-items: center;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--glass-line-faint);
+}
+.panel-heading h2 {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-regular);
+  letter-spacing: -0.02em;
+}
+.panel .panel .panel-heading h2 { font-size: var(--text-lg); }
+.panel-caption { font-size: var(--text-sm); }
+.panel-body { padding: 18px 0 0; }
+.table-panel .panel-body { padding: 8px 0 0; }
+.table-panel .toolbar { padding: 0 0 12px; }
+.table-panel > .panel-body > .empty-state { margin: 0; }
+
+.dashboard-grid { gap: 32px 48px; }
+.dashboard-grid .panel { margin-bottom: 0; }
+
+/* Tabelas como listas de linhas, sem moldura. */
+.table-scroll { border-radius: 0; }
+.data-table th:first-child,
+.data-table td:first-child { padding-left: 2px; }
+.data-table th:last-child,
+.data-table td:last-child { padding-right: 2px; }
+.data-table th { border-bottom-color: var(--glass-line-faint); }
+.data-table td { padding-top: 13px; padding-bottom: 13px; }
+
+/* ---- Números soltos, sem cartões ---------------------------------------- */
+
+.metric-grid,
+.metric-grid.compact-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 56px;
+  margin-bottom: var(--section-gap);
+}
+.metric-card,
+.metric-card:first-child {
+  min-width: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.metric-card:hover { background: transparent; transform: none; }
+.metric-value {
+  margin: 0 0 6px;
+  font-size: clamp(34px, 3.4vw, 48px);
+  font-weight: var(--weight-light);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.metric-top {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.metric-foot { display: none; }
+
+.stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 44px;
+  margin-bottom: var(--section-gap);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.stat-cell { padding: 0; box-shadow: none; flex-direction: column-reverse; gap: 4px; }
+.stat-cell span {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.stat-cell strong { font-size: 32px; }
+
+/* ---- Outros blocos que eram caixas ---------------------------------- */
+
+.coverage-grid { gap: 0 36px; }
+.coverage-item,
+.coverage-item.coverage-attention,
+.coverage-item.coverage-info,
+.coverage-item.coverage-ok {
+  padding: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--glass-line-faint);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.case-objective {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+}
+
+.notice,
+.notice-bar,
+.notice-bar.is-quiet {
+  padding: 2px 0 2px 14px;
+  border: 0;
+  border-left: 2px solid rgba(216, 199, 164, 0.5);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+.notice-bar.is-quiet { border-left-color: var(--glass-line-strong); }
+
+.result-group,
+.multisearch-sources,
+.graph-inspector,
+.monitor-run,
+.export-card,
+.pivot-list,
+.file-finding,
+.yara-match,
+.attack-suggestion {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.result-group-head,
+.side-heading { padding-left: 0; padding-right: 0; }
+.source-row { padding-left: 0; padding-right: 0; }
+.multisearch-sources { border-right: 1px solid var(--glass-line-faint); padding-right: 20px; }
+.graph-inspector { border-left: 1px solid var(--glass-line-faint); padding-left: 16px; }
+.monitor-run,
+.file-finding,
+.yara-match,
+.attack-suggestion { padding-left: 0; padding-right: 0; border-top: 1px solid var(--glass-line-faint); }
+
+.board-toolbar {
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--glass-line-faint);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.graph-stage,
+.board-stage { box-shadow: none; border-color: var(--glass-line-faint); }
+
+.empty-state,
+.error-state { padding: 56px 20px; }
+
+/* ---- Pesquisa multifonte: a barra é o elemento de vidro da tela --------- */
+
+.query-panel {
+  margin-bottom: var(--section-gap);
+  padding: 10px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: var(--glass-2);
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  backdrop-filter: var(--glass-blur-soft);
+  box-shadow: var(--glass-edge-strong), var(--shadow-deep);
+}
+
+.query-bar {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+}
+.query-input.input,
+.query-input.input:hover,
+.query-input.input:focus {
+  height: 48px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  font-size: var(--text-lg);
+}
+.query-input.input:focus-visible { outline: 2px solid var(--state-focus); outline-offset: 0; }
+.query-detected { right: 14px; }
+.query-bar .query-case {
+  width: 168px;
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+  font-size: var(--text-sm);
+}
+.query-cache {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 13px 0 11px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.query-cache input { margin: 0; }
+.query-cache:focus-within { outline: 2px solid var(--state-focus); outline-offset: 2px; }
+.query-cache input:focus-visible { outline: none; }
+.query-bar .query-run { height: 44px; min-height: 44px; padding: 0 20px; }
+
+/* ---- Visão geral: lista calma de casos abertos ---------------------------- */
+
+.case-list { margin: 0; padding: 0; list-style: none; }
+.case-list li + li { border-top: 1px solid var(--glass-line-faint); }
+.case-link {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 -12px;
+  padding: 16px 12px;
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background var(--transition);
+}
+.case-link:hover { background: var(--state-hover); color: var(--text-primary); }
+.case-link-name { flex: 1; min-width: 0; font-size: var(--text-lg); overflow-wrap: anywhere; }
+.case-link-meta { color: var(--text-muted); font-size: var(--text-sm); white-space: nowrap; }
+.case-link-arrow { color: var(--icon-secondary); }
+
+/* ---- Configurações: telas embutidas com título mais discreto ---------- */
+
+.settings-body { min-width: 0; }
+.settings-embed .page-heading { margin-bottom: 20px; }
+.settings-embed .page-heading h1 { font-size: var(--text-2xl); }
+
+/* ---- Celular: dock vira gaveta, botão flutuante abre ------------------ */
+
+@media (max-width: 760px) {
+  .mobile-nav-toggle {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 30;
+    display: grid;
+    width: 42px;
+    height: 42px;
+    background: var(--glass-chrome-strong);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-edge), var(--shadow-soft);
+  }
+
+  .rail {
+    width: min(86vw, 300px);
+    padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+    background: transparent;
+  }
+  .rail::before { background: var(--glass-chrome-strong); }
+  .rail .brand { width: auto; }
+  .rail .nav-link,
+  .rail .rail-button,
+  .rail .rail-local { width: 100%; height: 40px; }
+  .rail .rail-local { height: 32px; }
+  .rail .display-wrap { width: 100%; }
+  .rail .display-menu {
+    position: fixed;
+    top: auto;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    width: auto;
+  }
+  .rail .notify-count { top: 8px; right: auto; left: 34px; }
+
+  .view-root { padding: 72px 18px 56px; }
+  .view-root[data-view="board"],
+  .view-root[data-view="graph"] { padding: 68px 10px 20px; }
+  .page-heading { margin-bottom: 26px; }
+  .page-heading h1 { font-size: 30px; }
+  .metric-grid,
+  .metric-grid.compact-metrics { gap: 18px 32px; }
+  .metric-value { font-size: 34px; }
+
+  .query-panel { padding: 8px; border-radius: 26px; }
+  .query-bar { grid-template-columns: minmax(0, 1fr) auto; }
+  .query-bar .query-field { grid-column: 1 / -1; }
+  .query-bar .query-case { width: 100%; }
+  .query-bar .query-run { grid-column: 1 / -1; }
+  .multisearch-sources { border-right: 0; padding-right: 0; }
+  .graph-inspector { border-left: 0; padding-left: 0; }
+}
+
+[data-theme="contrast"] .rail::before { -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-theme="contrast"] .query-panel { border-color: var(--border); -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-theme="contrast"] .panel-heading,
+[data-theme="contrast"] .coverage-item,
+[data-theme="contrast"] .case-list li + li { border-color: var(--border-subtle); }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .rail::before { background: #151517; }
+  .query-panel { background: #161619; }
+  .panel,
+  .metric-card { background: transparent; }
+}
+
+@media print {
+  .mobile-nav-toggle { display: none !important; }
+}
+
+/* Barra de pesquisa: ícone dentro do campo, uma linha em telas largas. */
+.query-field { position: relative; }
+.query-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  display: grid;
+  color: var(--icon-secondary);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.query-input.input,
+.query-input.input:hover,
+.query-input.input:focus { padding-left: 46px; }
+.query-bar .compact-select,
+.query-bar .query-case { grid-column: auto; }
+
+@media (max-width: 1080px) {
+  .query-bar { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+}
+
+@media (max-width: 760px) {
+  .query-bar { grid-template-columns: minmax(0, 1fr) auto; }
+  .query-field { flex-direction: row; align-items: center; }
+  .query-detected { position: absolute; right: 12px; margin: 0; }
+  .query-bar .query-case { grid-column: 1; }
+}
+
+/* Configurações: só o rótulo; a explicação curta continua no leitor de tela. */
+.settings-fields .field-hint,
+.settings-fields .switch-row small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.settings-fields { gap: 22px; }
