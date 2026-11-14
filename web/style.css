@@ -43,9 +43,9 @@
   --glass-blur-soft: blur(12px) saturate(130%);
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 32px -16px rgba(0, 0, 0, 0.6);
   --shadow-deep: 0 2px 6px rgba(0, 0, 0, 0.35), 0 28px 64px -24px rgba(0, 0, 0, 0.8);
-  --light-1: rgba(255, 255, 255, 0.11);
-  --light-2: rgba(255, 255, 255, 0.075);
-  --light-3: rgba(255, 255, 255, 0.06);
+  --light-1: rgba(255, 255, 255, 0.12);
+  --light-2: rgba(255, 255, 255, 0.09);
+  --light-3: rgba(255, 255, 255, 0.075);
   --texture-dot: rgba(255, 255, 255, 0.05);
 
   /* Estados interativos */
@@ -4810,10 +4810,10 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(42vmax 34vmax at 8% -6%, var(--light-1), rgba(255, 255, 255, 0) 70%),
-    radial-gradient(38vmax 40vmax at 104% 18%, var(--light-2), rgba(255, 255, 255, 0) 70%),
-    radial-gradient(46vmax 30vmax at 46% 112%, var(--light-3), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(26vmax 22vmax at 62% 38%, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0) 70%);
+    radial-gradient(48vmax 36vmax at 22% -10%, var(--light-1), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(40vmax 46vmax at 104% 34%, var(--light-2), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(52vmax 34vmax at 34% 112%, var(--light-3), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(30vmax 26vmax at 66% 44%, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 70%);
 }
 
 /* Textura de pontos muito discreta, desvanecendo para as bordas. */
@@ -5484,10 +5484,10 @@ input[type="radio"] { accent-color: var(--accent); }
   letter-spacing: 0.05em;
   line-height: 1.5;
 }
-.badge-success { color: var(--success); border-color: rgba(169, 195, 177, 0.34); background: var(--success-soft); }
-.badge-info { color: var(--info); border-color: rgba(180, 188, 198, 0.32); background: var(--info-soft); }
-.badge-warning { color: var(--warning); border-color: rgba(216, 199, 164, 0.34); background: var(--warning-soft); }
-.badge-danger { color: var(--danger); border-color: rgba(215, 154, 154, 0.36); background: var(--danger-soft); }
+.badge-success { color: var(--success); border-color: rgba(169, 195, 177, 0.34); background: rgba(169, 195, 177, 0.06); }
+.badge-info { color: var(--info); border-color: rgba(180, 188, 198, 0.32); background: rgba(180, 188, 198, 0.06); }
+.badge-warning { color: var(--warning); border-color: rgba(216, 199, 164, 0.34); background: rgba(216, 199, 164, 0.06); }
+.badge-danger { color: var(--danger); border-color: rgba(215, 154, 154, 0.36); background: rgba(215, 154, 154, 0.07); }
 .badge-neutral { color: var(--text-secondary); border-color: var(--glass-line-strong); }
 
 .tab-count,
@@ -5759,6 +5759,7 @@ pre.code-block {
 .data-table tbody tr:hover { background: var(--state-hover); }
 .data-table tbody tr.is-clickable:focus-visible { outline: 2px solid var(--state-focus); outline-offset: -2px; }
 .data-table td.numeric-col { font-family: var(--font-sans); font-size: var(--text-md); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.data-table th.numeric-col { font-family: var(--font-sans); font-size: var(--text-2xs); color: var(--text-muted); }
 .cell-stack strong { font-size: var(--text-md); font-weight: var(--weight-medium); }
 .cell-stack > span { color: var(--text-muted); font-size: var(--text-xs); }
 .table-link { color: var(--text-primary); font-weight: var(--weight-medium); }
@@ -6123,6 +6124,28 @@ dialog:focus-visible,
 /* ---- Componentes de tela -------------------------------------------- */
 
 .cell-stack > .badge { align-self: flex-start; }
+
+/* Rótulos e contagens em sans; mono fica para hashes, código e valores. */
+.timeline-heading time,
+.bar-row-heading,
+.module-summary-row,
+.graph-relation-heading,
+.relation-direction,
+.relation-type,
+.triage-metric span,
+.legend-item,
+.record-meta,
+.board-node-type,
+.sidebar-shortcut span:first-child { font-family: var(--font-sans); }
+
+.bar-total strong,
+.triage-metric strong,
+.coverage-count {
+  font-family: var(--font-display);
+  font-weight: var(--weight-regular);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
 
 .inline-field { flex-direction: row; gap: 10px; }
 .inline-field > span { color: var(--text-secondary); font-size: var(--text-sm); white-space: nowrap; }
