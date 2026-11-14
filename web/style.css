@@ -4758,7 +4758,7 @@ dialog:focus-visible,
 
 .connector-chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .connector-chip input { margin: 0; accent-color: var(--accent); }
-.connector-chip.is-unavailable { opacity: 0.45; cursor: not-allowed; }
+.connector-chip.is-unavailable { opacity: 0.6; cursor: not-allowed; }
 .connector-chip.is-blocked .chip-flag { color: var(--warning); }
 
 .chip-flag {
@@ -5606,3 +5606,13 @@ dialog:focus-visible,
 .monitor-diff li { overflow-wrap: anywhere; }
 .monitor-sign { display: inline-block; width: 16px; font-weight: 700; }
 .monitor-diff.is-removed code { text-decoration: line-through; opacity: 0.75; }
+
+/* Graph cut to the most connected entities */
+.graph-truncated {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2;
+  max-width: min(560px, calc(100% - 32px)); margin: 0; padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text-secondary);
+  font-size: 12px; line-height: 1.45; text-align: center; pointer-events: none;
+}
+.graph-truncated[hidden] { display: none; }

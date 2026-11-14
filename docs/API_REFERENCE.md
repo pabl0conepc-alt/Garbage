@@ -100,7 +100,7 @@ static SVG laid out per connected component.
 | GET | `/api/relationships/types` | Supported types |
 | PATCH | `/api/relationships/{id}` | Update relationship |
 | DELETE | `/api/relationships/{id}` | Delete relationship |
-| GET | `/api/graph?investigation_id=` | Graph payload with nodes, edges and structural metrics |
+| GET | `/api/graph?investigation_id=` | Graph payload with nodes, edges and structural metrics. Up to 5,000 nodes and 15,000 edges; past that the most connected entities are kept and `truncated` gives `nodes_total`, `edges_total`, `nodes_shown`, `edges_shown` (otherwise `null`) |
 
 Entity fields include `entity_type`, `name`, `identifier`, `description`,
 `source_reference`, `collection_basis`, `confidence` and

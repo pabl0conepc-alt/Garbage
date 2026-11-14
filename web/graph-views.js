@@ -41,7 +41,7 @@
     const showLabels = cell >= 10;
     const gutter = showLabels ? 150 : 8;
     const size = gutter + count * cell + 8;
-    const root = svg("svg", { width: size, height: size, class: "matrix-svg", role: "img", "aria-label": "Matriz de adjacência" });
+    const root = svg("svg", { width: size, height: size, class: "matrix-svg", role: "group", "aria-label": "Matriz de adjacência" });
 
     let start = 0;
     for (let position = 1; position <= count; position += 1) {
@@ -108,7 +108,15 @@
         mark.addEventListener("focus", readout);
         mark.addEventListener("pointerleave", leave);
         mark.addEventListener("blur", leave);
+        mark.setAttribute("role", "button");
+        mark.setAttribute("aria-label", `${source.name} → ${target.name}: ${relationshipLabel(edge.relationship_type)}, ${VERIFICATION_LABEL[edge.verification_status] || edge.verification_status}`);
         mark.addEventListener("click", () => onSelect?.(source.id));
+        mark.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelect?.(source.id);
+          }
+        });
         root.append(mark);
       }
     }
@@ -145,7 +153,7 @@
       }
       const plotW = width - pad.left - pad.right;
       const x = (time) => pad.left + ((time - min) / (max - min)) * plotW;
-      const root = svg("svg", { width, height, class: "timeline-svg", role: "img", "aria-label": "Linha do tempo do grafo" });
+      const root = svg("svg", { width, height, class: "timeline-svg", role: "group", "aria-label": "Linha do tempo do grafo" });
       lanes.forEach((lane, position) => {
         const y = pad.top + position * laneHeight + laneHeight / 2;
         root.append(svg("line", { x1: pad.left, x2: width - pad.right, y1: y, y2: y, class: "chart-grid" }));
@@ -179,7 +187,7 @@
         };
       };
       const dot = (cx, cy, fill, title, rows, select) => {
-        const group = svg("g", { class: "timeline-dot", tabindex: "0" });
+        const group = svg("g", { class: "timeline-dot", tabindex: "0", role: select ? "button" : "img", "aria-label": [title, ...rows.map((row) => [row.label, row.value].filter(Boolean).join(": "))].join(", ") });
         group.append(svg("circle", { cx, cy, r: 12, class: "timeline-hit" }));
         const mark = svg("circle", { cx, cy, r: 4.5, class: "timeline-mark" });
         mark.style.fill = fill;

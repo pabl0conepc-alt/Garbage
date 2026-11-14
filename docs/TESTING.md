@@ -15,76 +15,70 @@ and evidence directories. It does not need network access.
 
 ## 2. Current result
 
-At the time of this change:
+On 2026-11-14 (branch `feature/refinement`):
 
-- **115 tests pass** with the optional native build; without it, 9 native parity tests are skipped and the remaining suite passes.
-- `compileall` completes without errors.
-- `node --check` passes for every classic browser script.
-- A jsdom route smoke test (temporary harness outside the repository) rendered
-  every route against a seeded database with **0 failure records and 0 console
-  errors**, including boards and graphs.
-- A separate jsdom tool smoke exercised text triage, typed inspector output,
-  case coverage and the case-scoped indicator tab with no application errors.
-  The cloud browser preview returned a private-preview 403 before reaching the
-  app, so this increment was not visually screenshotted.
+- **295 tests pass** with the optional native build; without it the native
+  parity tests skip and the rest pass. A full run takes about four minutes.
+- `node --check` passes for every browser script.
+- `tools/a11y_audit.js`, run in a real browser on all 21 navigation screens
+  and the detail screens (case, entity, graph, board, query run, monitor), in
+  the dark and contrast themes, reports no issues.
 
 Native tests build C, C++ and Rust helpers and compare entropy, ELF/PE
-hardening, graph metrics, edit distance and lookalike results with the Python
-fallback. They skip cleanly when `native/build` is absent.
-
-The baseline before this work was 47–48 tests. New coverage includes entities,
-relationships, boards, evidence verification, image inspection, workspace
-search/activity/settings, module gating, file intelligence, indicator precision,
-text triage, offline value inspection and case coverage.
+hardening, graph metrics, edit distance, lookalikes and typosquatting with the
+Python fallback. They skip cleanly when `native/build` is absent.
 
 ## 3. What the tests cover
 
 | Area | Files | Highlights |
 | --- | --- | --- |
+| End to end | `test_e2e.py` | A real server driven over HTTP through a whole case: entities and relationship, evidence upload, verification, download, notes and custody, search, a monitor detecting a change, report in four formats with sections, package and import into a second workspace, archive |
+| Interface contract | `test_e2e.py` | Every script in `index.html` is served and exists; every navigation entry has a renderer, an icon and a known module; every icon used is defined; every `/api/...` path in the web code matches a backend route |
 | Core records | `test_store.py`, `test_api.py` | Cases, observations, timeline, reports, exports, HTTP validation |
-| Workspace | `test_workspace.py` | Search, activity, settings, module state gates |
-| Entities and graph | `test_entities.py` | Aliases, confidence, relationships, cycle handling, graph payload |
-| Sources | `test_entities.py`, API coverage | CRUD, case and entity links, provenance |
-| Evidence | `test_evidence.py` | Upload limits, hashing, verification, download/preview, deletion |
-| Boards | `test_boards.py` | Layout persistence, revisions, element/connection validation |
-| Indicators | `test_indicators.py`, `test_indicator_tools.py` | Refanging, IPv4/IPv6/CIDR validation, IPv4-mapped and scoped IPv6, bracketed IPv6 URLs, filename and embedded-host suppression, triage counts, inspection, correlation strength |
-| Imaging | `test_imaging.py` | PNG/JPEG/GIF/WebP dimensions, malformed input |
-| File intelligence | `test_file_intel.py` | PDF, OOXML/ZIP traversal, GZIP bomb bound, ELF/PE/Mach-O, limits, API persistence and module gate; hardening is covered by native tests |
-| Native parity | `test_native.py` | C entropy and ELF/PE hardening, C++ graph metrics, Rust distance/skeleton and lookalikes against Python fallbacks; malformed inputs |
-| CISA KEV | `test_cisa_kev.py` | Bounded parsing, cache, failure handling |
+| Cases and custody | `test_cases.py` | Objective, archive, duplicate, package digest and import, hash-chained custody, report sections and methodology |
+| Workspace and search | `test_workspace.py`, `test_search.py` | FTS5 ranking, snippets, accents, prefix, LIKE fallback, settings, activity, module gates |
+| Entities and graph | `test_entities.py`, `test_graph_io.py`, `test_foundation.py` | Relationships, graph payload and its cut by degree, GraphML/JSON import, transforms, entity resolution |
+| Multi-source intelligence | `test_intel*.py` | Connectors against recorded responses, gates, keys, cache, rate limits, async runs and recovery, target-contact switch |
+| Monitoring | `test_monitoring.py` | Validation, baseline/unchanged/changed, a failed source is not "removed", notifications, scheduler, overlapping runs |
+| CTI | `test_attack.py`, `test_feeds.py`, `test_cti_export.py`, `test_cisa_kev.py`, `test_typosquat.py` | ATT&CK, TAXII paging and retries, Sigma parsing, STIX/MISP/IOC export, KEV, typosquatting |
+| Plugins | `test_plugins.py` | Manifest validation, approval by SHA-256, process isolation, brokered network, refused personal types |
+| Files and media | `test_file_intel.py`, `test_imaging.py`, `test_geoint.py`, `test_yara.py`, `test_fuzzy_hash.py` | Parsers with malformed input, EXIF/GPS, perceptual hashes, map points, YARA, TLSH/ssdeep |
+| Evidence and boards | `test_evidence.py`, `test_boards.py` | Upload limits, hashing, verification, preview, deletion; layout revisions |
+| Native parity | `test_native.py` | C, C++ and Rust against Python fallbacks |
 
 ## 4. What is not verified
 
-- **No automated real-browser E2E or visual regression.** The UI is exercised
-  with jsdom, which verifies DOM rendering and route behavior but not CSS layout,
-  native file pickers or drag-and-drop. A manual cloud-browser inspection was
-  also performed through a temporary loopback preview proxy, covering desktop
-  and mobile layouts, command palette, display menu, shortcuts and drawer focus.
-  That inspection is not a repeatable automated suite.
-- **Native builds are verified on Ubuntu in CI**, not on macOS or Windows. Other platforms use the Python fallback unless built locally. Native parity covers entropy, ELF/PE hardening, graph metrics and domain similarity.
-- **No performance/load benchmark.**
-- **No authenticated or multi-user tests**, because authentication is not
-  implemented.
-- **No fuzzing.** Binary and archive parsers are bounded and covered by
-  fixtures, but not fuzzed.
-- **No PDF renderer test**, because PDF export is planned, not implemented.
+- **No automated real-browser suite.** `test_e2e.py` covers the HTTP side
+  and the static contract between interface and API. The interface itself was
+  checked by hand in a browser for each step, and the accessibility audit is a
+  script run in the browser, not part of `unittest`.
+- **Performance is measured, not benchmarked in CI.** On a 1,500-entity,
+  2,139-relationship case: graph payload 0.22 s, force layout 1.1 s
+  (8.6 s before Barnes-Hut), community layout 1.0 s (16.9 s), hover 26 ms
+  (530 ms before), whole view about 2.7 s.
+- **Native builds are verified on Linux**, not on macOS or Windows.
+- **No authenticated or multi-user tests**, because there is no
+  authentication.
+- **No fuzzing.** Parsers are bounded and covered by malformed fixtures.
+- **Live sources** are tested against recorded responses. Live runs were done
+  by hand (for example TAXII against MITRE, Sigma from SigmaHQ, GitHub on a
+  public organisation).
 
-Claims in the README and status document are limited to the checks above.
+## 5. Accessibility audit
 
-## 5. Temporary UI smoke harness
+`tools/a11y_audit.js` runs in the browser console of a running GARBAGE page
+(or through browser automation):
 
-The jsdom harness used during development lives in `.tmp/` and depends on a
-temporary installation in `/tmp/garbage-ui`. It is **not** a project dependency
-and is removed before commit. It seeds a temporary SQLite database, starts the
-loopback API, loads `web/index.html`, and visits each hash route.
+```js
+const report = await garbageA11yAudit();          // every navigation screen
+const one = await garbageA11yAudit(["#/graph"]);  // chosen routes
+garbageA11yAuditPage();                           // the current page only
+```
 
-To reproduce it, install `jsdom` outside the repository, seed a database with a
-case, entity, source, evidence, board and graph, then load the page and assert:
-
-- no `.error-state` node,
-- non-trivial rendered text,
-- expected board node/edge counts,
-- no uncaught console errors.
+It reports controls without an accessible name, fields without a label,
+images without alt text, duplicate ids, positive tabindex, skipped heading
+levels and text below WCAG AA contrast. Disabled controls are exempt from the
+contrast rule, as in WCAG. It only reads the page.
 
 ## 6. Adding tests
 

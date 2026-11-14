@@ -17,21 +17,30 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 
 | Area | Capability |
 | --- | --- |
-| Cases | Investigation lifecycle, observations, status timeline, report and JSON/CSV/Markdown/HTML export |
-| Sources | Source registry with references, categories, access time and verification state; links to cases and entities |
-| Entities | Canonical entity registry with aliases, confidence, verification and relationships |
-| Analysis | IPv4, IPv6, CIDR, domain, URL, email and hash extraction with refanging, canonical values, provenance, cross-source correlation and manual assessment |
-| Evidence | Upload, SHA-256 integrity record, verification, download and safe image preview |
-| File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; hashes, entropy, strings, metadata, archive listing, findings and history; optional C scanner for ELF/PE hardening markers (PIE, NX, RELRO, bind-now, canary, Fortify, ASLR, CFG) |
-| Board | Persisted investigation board with cards, notes, groups, connections, layers, autosave, conflict handling and SVG export |
-| Graph | Relationship graph with type filters, focus, search, pan/zoom, drag and layered export; optional C++ metrics for components, density, isolates, degrees and reciprocal links |
-| CTI | CISA KEV catalogue with explicit refresh, bounded download, provenance and offline cache |
-| System | Global search, settings, activity log, module registry with capability gating |
+| Cases | Objective, lifecycle, archive, duplicate, observations, timeline; whole-case package (`garbage-case` v1, SHA-256) with preview and import |
+| Evidence | Upload, SHA-256 integrity, verification, download, preview; hash-chained chain of custody (recorded, verified, accessed, annotated, exported, imported, deleted) and notes |
+| Sources and entities | Source registry with access time and verification; canonical entities with aliases, confidence and relationships; entity resolution (exact, probable, weak candidates, analyst-approved merge) |
+| Multi-source search | One artifact (domain, IP, CIDR, URL, email, hash, ASN, CVE) fanned out to 31 connectors (28 network, 5 with a local key) with live per-source status, cache, rate limits and async runs |
+| Transforms and pivot | Connectors as typed transforms from an entity, with parameters, logs, measured duration and enrichment history; plugins become transforms |
+| Monitoring | Saved queries on a local schedule, differences between runs (what appeared, what disappeared) and notifications |
+| Graph and board | Relationship graph with eight layouts, multi-select, pin/hide, undo/redo, minimap, matrix and timeline views, path finding, PNG/SVG/GraphML/JSON export and GraphML/JSON import; investigation board with layers and autosave |
+| Analysis | Indicator extraction with refanging and provenance, correlation, analytics dashboard, typosquatting candidates (Rust) |
+| File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; YARA rules; TLSH/ssdeep; EXIF with GPS; perceptual hashes (pHash/dHash) and similar images |
+| GEOINT | Local world map (Natural Earth) with EXIF positions and approximate network locations, always with origin and precision |
+| CTI | Offline MITRE ATT&CK with case techniques, Sigma rules from SigmaHQ, TAXII 2.1 client, CISA KEV, NVD/EPSS/OSV, STIX 2.1 / MISP / IOC export with TLP |
+| Plugins | Local folder, validated manifest, declared permissions, approval by code SHA-256, separate process with brokered network |
+| Reports | Chosen sections, generated methodology, graph picture, custody and techniques; HTML, Markdown, JSON, CSV and browser print to PDF |
+| System | FTS5 global search with ranking, settings, activity log, module registry with capability gating |
 
 The **module registry** is the source of truth. Modules without a tested backend
 are marked `planned` and cannot be enabled; the UI does not show navigation for
-them. Current planned modules are the NVD connector, external OSINT connectors
-and expanded media forensics.
+them. The only planned module left is expanded media forensics (OCR, video
+frames).
+
+People are out of scope by design: no person or username search, no breach
+or stealer-log data, no profile correlation. Person, username and profile
+entities can be recorded by hand but are never transform inputs and never
+leave in CTI exports.
 
 ## Quick start
 
@@ -233,11 +242,12 @@ python3 -m compileall -q garbage_intel tests
 for f in web/*.js; do node --check "$f"; done
 ```
 
-Current result: **115 tests pass** with the native build present; without it,
-the same suite passes with the nine native parity tests skipped. A temporary
-jsdom smoke test rendered every route against a seeded database with zero error
-states and zero console errors. There is no real-browser E2E test. See
-[TESTING.md](docs/TESTING.md) for what is and is not verified.
+Current result: **295 tests pass** with the native build present (native
+parity tests skip cleanly without it). They include an end-to-end run of a
+whole case over HTTP and a contract check between the web interface and the
+API routes. `tools/a11y_audit.js` audits every screen in a real browser for
+names, labels, contrast, ids and headings. See [TESTING.md](docs/TESTING.md)
+for what is and is not verified.
 
 Optional native helpers:
 
@@ -254,15 +264,21 @@ fallback. See [native/README.md](native/README.md).
 - Loopback only; no authentication, TLS or CSRF token. Do not expose it.
 - No encryption at rest. Protect the database and evidence directory.
 - Static analysis is not antivirus and does not prove a file is safe.
-- No website/domain/IP collectors, external OSINT connectors, automation,
-  plugin loader, FTS5 search or PDF export yet.
+- Network sources are off until enabled in Settings; sources that contact the
+  target itself have a second switch. Keys are stored locally and never
+  returned by the API.
+- Plugins run in a separate process with brokered network access. That is
+  containment, not a sandbox: approve only code you have read.
+- The custody log is hash-chained, which shows tampering inside the
+  database; it is not a digital signature or a trusted timestamp.
+- Monitors run only while `garbage serve` is running.
 - Native helpers are optional and loaded only from an explicit build directory
   or `GARBAGE_NATIVE_DIR`; they are never downloaded. Missing, mismatched or
   malformed libraries fall back to Python. Native code does not execute input,
   open files or use the network.
-- OpenArchive identity is ambiguous. The only verified reference is **OpenArchive
-  Save**, a mobile media-preservation app. GARBAGE does not claim feature parity
-  with it or with any unnamed project. Read
+- The reference product is **OpenArchive X** (openarchivex.net). GARBAGE
+  adopts its architecture for infrastructure and threats, and refuses its
+  people, breach and stealer-log features. See
   [OPENARCHIVE_FEATURE_MATRIX.md](docs/OPENARCHIVE_FEATURE_MATRIX.md).
 
 Report vulnerabilities privately; see [SECURITY.md](docs/SECURITY.md).
@@ -284,5 +300,7 @@ Report vulnerabilities privately; see [SECURITY.md](docs/SECURITY.md).
 ## Licence and provenance
 
 See the repository licence. GARBAGE is an independent implementation; no
-OpenArchive source code is included. OpenArchive Save is GPL-3.0; its name and
-links are used only for identification and comparison.
+OpenArchive (Save or X) source code is included. Names and links are used only
+for identification and comparison. Data that GARBAGE ships or downloads keeps
+its own terms: MITRE ATT&CK, SigmaHQ rules (Detection Rule License 1.1) and
+Natural Earth (public domain).

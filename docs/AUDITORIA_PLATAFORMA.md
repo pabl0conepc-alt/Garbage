@@ -86,4 +86,4 @@ Ordem de trabalho, cada item com testes, verificação no navegador e PR:
 5. **Plugins** (feito) — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.
 6. **Casos e evidências** (feito) — objetivo, arquivar, duplicar, exportar/importar caso; cadeia de custódia e anotações de evidência; relatórios com seleção de seções, grafo e metodologia.
 7. **Monitoramento** (feito) — consultas salvas com agenda local, diferença entre execuções e notificações.
-8. **Refinamento** — acessibilidade, testes de ponta a ponta, desempenho do grafo, documentação e matriz OpenArchive atualizadas.
+8. **Refinamento** (feito) — acessibilidade (auditoria em todas as telas, SVGs interativos expostos a leitores de tela, Esc no sino), testes de ponta a ponta (caso inteiro por HTTP e contrato entre interface e API), desempenho do grafo (Barnes-Hut, hover sem redesenhar, corte por grau com aviso, até 5.000 nós), objetivo do caso na pesquisa, documentação e matriz OpenArchive atualizadas.

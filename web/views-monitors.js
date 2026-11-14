@@ -318,6 +318,12 @@
         toggle.setAttribute("aria-expanded", "false");
       }
     });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || menu.hidden) return;
+      menu.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+      if (wrap.contains(document.activeElement)) toggle.focus();
+    });
     window.setTimeout(refreshBell, 1500);
     window.setInterval(refreshBell, 60_000);
   }
