@@ -966,7 +966,7 @@ function moduleDescription(moduleId, fallback) {
 }
 
 const SETTING_TEXT = {
-  "interface.theme": ["Tema da interface", "Paleta escura da estação ou variante de alto contraste."],
+  "interface.theme": ["Tema da interface", "Tema claro ou variante escura de alto contraste."],
   "interface.density": ["Densidade de informação", "Espaçamento confortável ou layout compacto para telas menores."],
   "interface.reduce_motion": ["Reduzir movimento", "Desativa transições de painéis e telas."],
   "board.autosave_delay_ms": ["Atraso do salvamento automático do quadro", "Milissegundos de inatividade antes de salvar o estado do quadro."],
@@ -979,7 +979,7 @@ const SETTING_TEXT = {
 };
 
 const VALUE_LABELS = {
-  dark: "Escuro", contrast: "Alto contraste", comfortable: "Confortável", compact: "Compacta",
+  dark: "Claro", contrast: "Alto contraste (escuro)", comfortable: "Confortável", compact: "Compacta",
   true: "Sim", false: "Não", force: "Força", circular: "Circular", grid: "Grade",
   unattributed: "Sem atribuição",
 };
@@ -1211,7 +1211,7 @@ function emptyState({ icon: glyph = "empty", title, description, action = null }
     "div",
     { class: "empty-state" },
     el("span", { class: "empty-icon" }, icon(glyph, { size: 20 })),
-    el("h3", {}, title),
+    el("h2", {}, title),
     description ? el("p", {}, description) : null,
     action || null,
   );
@@ -1222,7 +1222,7 @@ function errorState({ title = "Não foi possível carregar esta tela", message, 
     "div",
     { class: "error-state", role: "alert" },
     el("span", { class: "error-icon" }, icon("alert", { size: 20 })),
-    el("h3", {}, title),
+    el("h2", {}, title),
     el("p", {}, message || "A API local retornou um erro."),
     retry
       ? el("button", { class: "button button-secondary", type: "button", onClick: retry }, "Tentar novamente")
@@ -2152,8 +2152,8 @@ function renderDisplayMenu() {
       el("span", {}, "Salvo neste workspace"),
     ),
     displayGroup("TEMA", [
-      displayChoice("Escuro", "interface.theme", "dark", theme === "dark"),
-      displayChoice("Alto contraste", "interface.theme", "contrast", theme === "contrast"),
+      displayChoice("Claro", "interface.theme", "dark", theme === "dark"),
+      displayChoice("Alto contraste (escuro)", "interface.theme", "contrast", theme === "contrast"),
     ]),
     displayGroup("DENSIDADE", [
       displayChoice("Confortável", "interface.density", "comfortable", density === "comfortable"),
