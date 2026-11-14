@@ -52,7 +52,7 @@ from .evidence import (
 )
 from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
-from .modules import attack
+from .modules import actors, attack
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
@@ -157,6 +157,7 @@ _STATIC_FILES = {
     "world.json": "application/json; charset=utf-8",
     "views-geoint.js": "text/javascript; charset=utf-8",
     "views-feeds.js": "text/javascript; charset=utf-8",
+    "views-actors.js": "text/javascript; charset=utf-8",
     "views-monitors.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
@@ -1364,6 +1365,18 @@ class RequestHandler(BaseHTTPRequestHandler):
             detail["sigma"] = {"total": found["total"], "items": found["items"], "license": found["license"]}
         self._json(200, detail)
 
+    def api_attack_groups(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
+        self._json(200, actors.groups(self.database_path, query=_query_text(query, "q", ""), limit=_query_int(query, "limit", 200)))
+
+    def api_attack_group(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
+        self._json(200, actors.group(self.database_path, match.group(1)))
+
+    def api_case_actors(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
+        self._json(200, actors.case_overlap(self.database_path, match.group(1), limit=_query_int(query, "limit", 10)))
+
     def api_attack_search(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._module("attack-matrix")
         self._json(200, attack.search(self.database_path, _query_text(query, "q", "")))
@@ -2265,6 +2278,9 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "api_attack_technique",
         MAX_BODY_BYTES,
     ),
+    ("GET", re.compile(r"^/api/attack/groups$"), "api_attack_groups", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/attack/groups/(G\d{4})$"), "api_attack_group", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/actors$"), "api_case_actors", MAX_BODY_BYTES),
     (
         "GET",
         re.compile(rf"^/api/investigations/{_ID_PATTERN}/techniques$"),

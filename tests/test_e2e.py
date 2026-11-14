@@ -203,7 +203,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertEqual(used - icons, set(), "icons used but not defined")
 
     def test_every_api_path_called_by_the_interface_has_a_route(self):
-        samples = ("00000000-0000-4000-8000-000000000000", "example", "domain", "1", "T1059")
+        samples = ("00000000-0000-4000-8000-000000000000", "example", "domain", "1", "T1059", "G0016")
         patterns = [pattern for _, pattern, _, _ in ROUTES]
         calls = set()
         for name, source in self.scripts.items():

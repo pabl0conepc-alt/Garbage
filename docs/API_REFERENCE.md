@@ -289,6 +289,19 @@ when the set is loaded. Rules are SigmaHQ's under the Detection Rule License
 1.1; the interface credits them on every rule. GARBAGE does not convert or
 run them.
 
+## Threat actors
+
+Profiles come from the offline ATT&CK data (groups, their "uses" and the
+"mitigates" mappings). Group-to-software links are kept from this version on;
+an ATT&CK set downloaded earlier needs a refresh to show software
+(`software_known` is false until then).
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/attack/groups?q&limit` | Groups with aliases, `technique_count` and `software_count`, most techniques first; `q` matches ID, name or alias |
+| GET | `/api/attack/groups/{G0000}` | Profile: description, aliases, techniques by tactic with local Sigma rule counts, software, the 15 mitigations covering most of its techniques (directly or via the parent technique), Sigma coverage and the cases that link its techniques |
+| GET | `/api/investigations/{id}/actors?limit` | Groups ranked by the case's techniques they cover. Each technique weighs by rarity (`log((groups+1)/(users+1))+1`); a match only through the family (parent or sub-technique) counts half; `score` is the covered share of the case's weight. `weak` is true below 5 case techniques. Always returns `caveat`: overlap is not attribution |
+
 ## Typosquatting
 
 The `typosquat` connector (domain, network) generates candidates for the
