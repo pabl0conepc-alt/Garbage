@@ -59,3 +59,8 @@ GARBAGE_NATIVE_DIR="$PWD/native/build" python3 -m unittest tests.test_native -v
 The tests compare native results with the Python fallback and cover malformed
 or truncated inputs. A compiler is required only for the native tests; the
 regular test suite skips them when the libraries are absent.
+
+`gi_typosquat` (Rust) writes typosquatting candidates for one domain label as
+`kind<TAB>candidate` lines; `garbage_intel.modules.typosquat.python_variants`
+is the reference, and `tests/test_typosquat.py` checks both give the same set
+on 400 random labels.

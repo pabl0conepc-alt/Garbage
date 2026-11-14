@@ -53,6 +53,37 @@ Case membership:
 | POST/DELETE | `/api/investigations/{id}/entities[/{entityId}]` |
 | POST/DELETE | `/api/investigations/{id}/sources[/{sourceId}]` |
 
+### Case lifecycle and packages
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST, PATCH | `/api/investigations`, `/api/investigations/{id}` | Also accept `objective` (up to 2,000 characters) |
+| POST | `/api/investigations/{id}/archive` | `{archived: true|false}`; archived cases carry `archived_at` and leave the active lists; nothing is deleted |
+| POST | `/api/investigations/{id}/duplicate` | `{name?}`: new open case with the objective, entities, case relationships, sources and techniques; observations and evidence stay with the original |
+| GET | `/api/investigations/{id}/package?files=1` | Download a `garbage-case` v1 package: case, status history, observations, entities, relationships, sources, evidence with custody log, notes and (unless `files=0`) file contents up to 48 MiB, techniques and file analyses, plus a SHA-256 over the canonical content |
+| POST | `/api/cases/import` | `{package, commit?, name?}`: preview (default) or import into a new case. A changed package (digest mismatch) is refused; each evidence file is re-hashed and refused when it does not match; entities are reused by type and identifier |
+
+### Evidence custody and notes
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/evidence/{id}/custody` | Hash-chained events (`recorded`, `verified`, `accessed`, `annotated`, `exported`, `imported`, `imported-history`, `deleted`) with `intact`, `broken_at` and the head hash; still readable after the evidence is deleted |
+| GET, POST | `/api/evidence/{id}/notes` | List or add an analyst note (`{body}`), which also enters the custody log |
+
+Downloads and previews are logged as `accessed`. Evidence recorded before
+schema 12 starts its log with a backfilled `recorded` event.
+
+### Report sections
+
+`GET /api/investigations/{id}/export?format=html|json|markdown&sections=...`
+and `/reports/{id}?sections=...` take a comma list of `summary`,
+`methodology`, `entities`, `relationships`, `graph`, `evidence`, `custody`,
+`sources`, `observations`, `indicators`, `correlations`, `techniques`,
+`limitations`. Without it the original set is used. `methodology` is
+generated from the case records (sources queried with outcomes, transforms,
+file analyses, collection bases, verification states, imports); `graph` is a
+static SVG laid out per connected component.
+
 ## Entities and relationships
 
 | Method | Path | Purpose |
@@ -69,7 +100,7 @@ Case membership:
 | GET | `/api/relationships/types` | Supported types |
 | PATCH | `/api/relationships/{id}` | Update relationship |
 | DELETE | `/api/relationships/{id}` | Delete relationship |
-| GET | `/api/graph?investigation_id=` | Graph payload with nodes, edges and structural metrics |
+| GET | `/api/graph?investigation_id=` | Graph payload with nodes, edges and structural metrics. Up to 5,000 nodes and 15,000 edges; past that the most connected entities are kept and `truncated` gives `nodes_total`, `edges_total`, `nodes_shown`, `edges_shown` (otherwise `null`) |
 
 Entity fields include `entity_type`, `name`, `identifier`, `description`,
 `source_reference`, `collection_basis`, `confidence` and
@@ -213,6 +244,61 @@ image (as displayed, EXIF orientation applied) with the imagehash library's
 definitions; the server stores them for images and ignores them otherwise.
 `/similar` adds `phash_distance` and `dhash_distance` (bits out of 64) and
 keeps a candidate when pHash is within 10 bits.
+
+## Plugins
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/plugins` | Plugins directory, every folder with manifest or error, code SHA-256 and state (`invalid`, `disabled`, `enabled`, `changed`) |
+| POST | `/api/plugins/rescan` | Re-read the folder and load approved, unchanged plugins |
+| POST | `/api/plugins/{id}/enable` | `{sha256}`: approve exactly the listed code and permissions and load the plugin (`409` if it changed since listing) |
+| POST | `/api/plugins/{id}/disable` | Unload and withdraw approval |
+
+See `MODULE_DEVELOPMENT.md` section 8 for the manifest, the `run(ctx)`
+contract and the isolation model.
+
+## TAXII 2.1 feeds
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET, POST | `/api/taxii/servers` | List or add a server (`name`, `discovery_url` https, optional `username` and `password` for HTTP Basic; the password is never returned) |
+| DELETE | `/api/taxii/servers/{id}` | Remove the server and its stored objects |
+| GET | `/api/taxii/servers/{id}/discover` | Discovery document: title, `default` root and `api_roots` (absolute) |
+| GET | `/api/taxii/servers/{id}/collections?api_root=` | Collections of one root (the root must be on the server's host) |
+| POST | `/api/taxii/servers/{id}/pull` | `{api_root, collection_id, max_objects (1-20000), object_types?, added_after?}`: pages of 500 through `next`; returns counts by type and `status` `completed` or `partial` (an error after some pages) |
+| GET | `/api/taxii/objects?server_id&collection_id&type&q&limit&offset` | Stored objects and counts by type |
+| GET | `/api/taxii/object?server_id&collection_id&object_id` | One stored STIX object as received |
+| POST | `/api/taxii/objects/to-case` | `{investigation_id, server_id, collection_id, object_ids}`: equality comparisons of the selected indicators' STIX patterns (domain, IP, URL, email, file hashes) become one observation in the case |
+
+Requests go through the SSRF-safe fetcher, limited to the server's host, with
+`Accept: application/taxii+json;version=2.1`; 502, 503 and 504 are retried
+twice. MITRE's public server (`https://attack-taxii.mitre.org/taxii2/`) is
+offered as a one-click example.
+
+## Sigma rules
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/sigma` | Loaded release, rule count, counts by level and licence |
+| POST | `/api/sigma/refresh` | Download the latest SigmaHQ `sigma_core.zip` (hosts pinned to GitHub release assets) and replace the stored set |
+| GET | `/api/sigma/rules?technique&q&level&product&limit` | Search; `technique` matches sub-techniques too (`T1059` finds `T1059.001`) |
+| GET | `/api/sigma/rules/{id}` | One rule with its full YAML |
+
+`GET /api/attack/techniques/{id}` adds `sigma` (total and up to 15 rules)
+when the set is loaded. Rules are SigmaHQ's under the Detection Rule License
+1.1; the interface credits them on every rule. GARBAGE does not convert or
+run them.
+
+## Typosquatting
+
+The `typosquat` connector (domain, network) generates candidates for the
+registrable label (omission, repetition, transposition, QWERTY neighbour
+replacement and insertion, ASCII homoglyphs, hyphenation, vowel swap, bit
+flips, addition, subdomain dot) plus TLD swaps, one entry per spelling, and
+asks Cloudflare's DNS-over-HTTPS resolver for NS records of up to 160 of
+them (TLD swaps and homoglyphs first). NOERROR counts as existing, NXDOMAIN
+as not. The candidates themselves are never contacted. Generation runs in
+Rust (`gi_typosquat`) when built, with an identical Python reference.
 
 ## GEOINT
 
@@ -447,6 +533,27 @@ MX, the source itself) are reported under `skipped`.
   `/.well-known/security.txt`: contacts, policy, encryption key, expiry
   (and whether it has expired) and PGP signature. A non-text answer or one
   without `Contact:` is reported as not published.
+
+## Monitoring
+
+A monitor is a saved multi-source query that runs again on a local schedule
+while `garbage serve` is up (one thread, checked every 30 seconds). Each run
+goes through the same gates, keys and rate limits as a manual query, never
+uses the cache, and is compared with the previous successful run by
+(source, result type, value). The first run is the baseline. A source that
+failed is not counted as "everything gone". Changes and failed runs create
+notifications. Only one run of the same monitor happens at a time.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/monitors` | Monitors with `connectors`, `interval_minutes`, `next_run_at`, `last_run_at`, `last_status` (`baseline`, `unchanged`, `changed`, `error`), plus `unread_notifications` and `scheduler` (`running`, `last_tick`, `last_error`) |
+| POST | `/api/monitors` | `{name, value, connectors: [ids], interval_minutes (15-43200, default 1440), investigation_id?}`; the artifact type is detected and every source must accept it. The first run is due at once |
+| PATCH | `/api/monitors/{id}` | `name`, `enabled`, `interval_minutes`, `connectors` |
+| DELETE | `/api/monitors/{id}` | Removes the monitor, its runs and notifications; the underlying query runs stay |
+| POST | `/api/monitors/{id}/run` | Runs now (201) and returns the run with `added` and `removed`; 409 while the same monitor is already running |
+| GET | `/api/monitors/{id}/runs` | Last 30 runs, newest first, each with `trigger` (`manual` or `schedule`), counts, differences (up to 500 items each), per-source status and `intel_run_id` |
+| GET | `/api/notifications?unread=1&limit=` | Notifications, newest first, and the `unread` total |
+| POST | `/api/notifications/read` | `{ids: [ids] | "all"}` marks them read |
 
 ## Transforms
 

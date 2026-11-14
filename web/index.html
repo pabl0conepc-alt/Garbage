@@ -26,6 +26,8 @@
     <script src="/views-attack.js" defer></script>
     <script src="/views-transforms.js" defer></script>
     <script src="/views-geoint.js" defer></script>
+    <script src="/views-feeds.js" defer></script>
+    <script src="/views-monitors.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
@@ -72,6 +74,13 @@
             <span class="local-indicator" data-tooltip="O servidor escuta apenas em loopback (127.0.0.1). Nada sai desta máquina." tabindex="0">
               <span class="live-dot" aria-hidden="true"></span> Local
             </span>
+            <div class="display-wrap notify-wrap" id="notify-wrap" hidden>
+              <button class="icon-button notify-toggle" id="notify-toggle" type="button"
+                      aria-label="Notificações de monitoramento" aria-expanded="false" aria-haspopup="true"
+                      data-tooltip="Notificações de monitoramento" data-icon="bell"></button>
+              <span class="notify-count" id="notify-count" hidden></span>
+              <div class="display-menu notify-menu" id="notify-menu" hidden></div>
+            </div>
             <div class="display-wrap">
               <button class="icon-button display-toggle" id="display-toggle" type="button"
                       aria-label="Preferências de exibição" aria-expanded="false" aria-haspopup="true"
