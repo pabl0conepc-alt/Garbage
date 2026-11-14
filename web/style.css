@@ -5577,3 +5577,32 @@ dialog:focus-visible,
 .case-objective strong { color: var(--text); }
 .report-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 8px 16px; }
 .report-graph svg { width: 100%; height: auto; border-radius: 8px; }
+
+/* Monitoring */
+.notify-wrap { position: relative; }
+.notify-count {
+  position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: var(--text); color: var(--background); font-size: 10px; font-weight: 600;
+  line-height: 16px; text-align: center; pointer-events: none;
+}
+.notify-menu { width: min(360px, calc(100vw - 32px)); right: 0; padding: 8px; }
+.notify-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 8px; }
+.notify-list { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; }
+.notify-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border: 0;
+  border-radius: var(--radius-sm); background: none; color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+}
+.notify-item span { color: var(--text-secondary); overflow-wrap: anywhere; }
+.notify-item:hover, .notify-item:focus-visible { background: var(--state-hover); }
+.notify-item.is-unread strong::before { content: "● "; color: var(--text); }
+.monitor-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px 14px; }
+.monitor-sources { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.monitor-sources .run-meta { flex-basis: 100%; margin: 0; }
+.monitor-runs { display: flex; flex-direction: column; gap: 8px; }
+.monitor-run { padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius); }
+.monitor-run.status-changed { border-color: var(--text-muted); }
+.monitor-run-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; }
+.monitor-diff { margin: 8px 0 0; padding: 0; list-style: none; font-size: 12px; line-height: 1.7; }
+.monitor-diff li { overflow-wrap: anywhere; }
+.monitor-sign { display: inline-block; width: 16px; font-weight: 700; }
+.monitor-diff.is-removed code { text-decoration: line-through; opacity: 0.75; }

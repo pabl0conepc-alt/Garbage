@@ -534,6 +534,27 @@ MX, the source itself) are reported under `skipped`.
   (and whether it has expired) and PGP signature. A non-text answer or one
   without `Contact:` is reported as not published.
 
+## Monitoring
+
+A monitor is a saved multi-source query that runs again on a local schedule
+while `garbage serve` is up (one thread, checked every 30 seconds). Each run
+goes through the same gates, keys and rate limits as a manual query, never
+uses the cache, and is compared with the previous successful run by
+(source, result type, value). The first run is the baseline. A source that
+failed is not counted as "everything gone". Changes and failed runs create
+notifications. Only one run of the same monitor happens at a time.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/monitors` | Monitors with `connectors`, `interval_minutes`, `next_run_at`, `last_run_at`, `last_status` (`baseline`, `unchanged`, `changed`, `error`), plus `unread_notifications` and `scheduler` (`running`, `last_tick`, `last_error`) |
+| POST | `/api/monitors` | `{name, value, connectors: [ids], interval_minutes (15-43200, default 1440), investigation_id?}`; the artifact type is detected and every source must accept it. The first run is due at once |
+| PATCH | `/api/monitors/{id}` | `name`, `enabled`, `interval_minutes`, `connectors` |
+| DELETE | `/api/monitors/{id}` | Removes the monitor, its runs and notifications; the underlying query runs stay |
+| POST | `/api/monitors/{id}/run` | Runs now (201) and returns the run with `added` and `removed`; 409 while the same monitor is already running |
+| GET | `/api/monitors/{id}/runs` | Last 30 runs, newest first, each with `trigger` (`manual` or `schedule`), counts, differences (up to 500 items each), per-source status and `intel_run_id` |
+| GET | `/api/notifications?unread=1&limit=` | Notifications, newest first, and the `unread` total |
+| POST | `/api/notifications/read` | `{ids: [ids] | "all"}` marks them read |
+
 ## Transforms
 
 A transform is a connector run from an entity. It accepts the entity's

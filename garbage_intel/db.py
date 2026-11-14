@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -342,6 +342,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "Local plugins",
         "Analyst-written transforms with a manifest, declared permissions and approval by code digest, run in a separate process.",
         "System",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "monitoring",
+        "Monitoring",
+        "Saved multi-source queries re-run on a schedule while the server runs, with differences between runs and in-app notifications.",
+        "Intelligence",
         "1.0.0",
         "enabled",
     ),
@@ -1162,6 +1170,53 @@ def _migrate_cases(connection: sqlite3.Connection) -> None:
     backfill(connection)
 
 
+def _migrate_monitoring(connection: sqlite3.Connection) -> None:
+    """Version 13: monitors, their runs and notifications."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS monitors (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               query_type TEXT NOT NULL,
+               query_value TEXT NOT NULL,
+               connectors_json TEXT NOT NULL,
+               interval_minutes INTEGER NOT NULL,
+               investigation_id TEXT REFERENCES investigations(id) ON DELETE SET NULL,
+               enabled INTEGER NOT NULL DEFAULT 1,
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL,
+               next_run_at TEXT NOT NULL,
+               last_run_at TEXT NOT NULL DEFAULT '',
+               last_status TEXT NOT NULL DEFAULT ''
+           );
+           CREATE INDEX IF NOT EXISTS monitors_due ON monitors(enabled, next_run_at);
+           CREATE TABLE IF NOT EXISTS monitor_runs (
+               id TEXT PRIMARY KEY,
+               monitor_id TEXT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+               intel_run_id TEXT NOT NULL DEFAULT '',
+               trigger TEXT NOT NULL,
+               status TEXT NOT NULL,
+               added_count INTEGER NOT NULL DEFAULT 0,
+               removed_count INTEGER NOT NULL DEFAULT 0,
+               diff_json TEXT NOT NULL DEFAULT '{}',
+               error TEXT NOT NULL DEFAULT '',
+               started_at TEXT NOT NULL,
+               finished_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS monitor_runs_monitor ON monitor_runs(monitor_id, started_at);
+           CREATE TABLE IF NOT EXISTS notifications (
+               id TEXT PRIMARY KEY,
+               kind TEXT NOT NULL,
+               monitor_id TEXT REFERENCES monitors(id) ON DELETE CASCADE,
+               monitor_run_id TEXT NOT NULL DEFAULT '',
+               title TEXT NOT NULL,
+               body TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               read_at TEXT NOT NULL DEFAULT ''
+           );
+           CREATE INDEX IF NOT EXISTS notifications_unread ON notifications(read_at, created_at);"""
+    )
+
+
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
     """Version 2: additive investigation workspace columns."""
     _ensure_column(
@@ -1188,6 +1243,7 @@ MIGRATIONS = (
     (10, "TAXII feeds and Sigma rules", _migrate_cti_feeds),
     (11, "Local plugin approvals", _migrate_plugins),
     (12, "Case objective and archive, evidence custody and notes", _migrate_cases),
+    (13, "Monitors and notifications", _migrate_monitoring),
 )
 
 

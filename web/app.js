@@ -47,6 +47,7 @@ G.NAV = [
     label: "Inteligência",
     items: [
       { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
+      { view: "monitors", label: "Monitoramento", icon: "bell", module: "monitoring" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
@@ -249,6 +250,7 @@ const ICON_PATHS = {
   chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
   merge: "M6 4v4a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 4v4a6 6 0 0 1-6 6M12 14v6M4 6l2-2 2 2M16 6l2-2 2 2",
   transform: "M4 12h10M10 7l5 5-5 5M18 5v14",
+  bell: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0",
   feed: "M5 19a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16",
   globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z",
   matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
@@ -630,6 +632,11 @@ const ERROR_PATTERNS = [
   [/^this plugin declared no network access$/, () => "Este plugin não declarou acesso à rede"],
   [/^request limit of (\d+) reached$/, (m) => `Limite de ${m[1]} requisições atingido`],
   [/^the plugin is invalid: (.+)$/, (m) => `O plugin é inválido: ${m[1]}`],
+  [/^choose at least one source$/, () => "Escolha pelo menos uma fonte"],
+  [/^sources that do not accept (\S+): (.+)$/, (m) => `Fontes que não aceitam ${m[1]}: ${m[2]}`],
+  [/^interval must be between (\d+) and (\d+) minutes$/, (m) => `O intervalo deve ficar entre ${m[1]} e ${m[2]} minutos`],
+  [/^monitor not found: .+$/, () => "Monitor não encontrado"],
+  [/^monitor is already running$/, () => "Este monitor já está rodando; aguarde terminar"],
   [/^this is not a GARBAGE case package$/, () => "Este arquivo não é um pacote de caso do GARBAGE"],
   [/^the case package was modified after export \(SHA-256 does not match\)$/, () => "O pacote foi alterado depois de exportado (o SHA-256 não confere)"],
   [/^unsupported case package version: (.+)$/, (m) => `Versão de pacote não suportada: ${m[1]}`],
@@ -762,6 +769,8 @@ const ACTIVITY_PATTERNS = [
   [/^Plugin approved: (.+) \((\w+)\)$/, "Plugin aprovado: $1 ($2)"],
   [/^Plugin disabled: (.+)$/, "Plugin desativado: $1"],
   [/^Investigation archived: (.+)$/, "Investigação arquivada: $1"],
+  [/^Monitor created: (.+) \((\S+) (.+), every (\d+) min\)$/, "Monitor criado: $1 ($2 $3, a cada $4 min)"],
+  [/^Monitor deleted: (.+)$/, "Monitor excluído: $1"],
   [/^Investigation restored: (.+)$/, "Investigação desarquivada: $1"],
   [/^Investigation duplicated from (.+): (.+)$/, "Investigação duplicada de $1: $2"],
   [/^Case package exported: (.+)$/, "Pacote do caso exportado: $1"],
@@ -855,6 +864,7 @@ const TEXT_PT = {
   "TAXII feeds and Sigma rules": "Feeds TAXII e regras Sigma",
   "Local plugin approvals": "Aprovações de plugins locais",
   "Case objective and archive, evidence custody and notes": "Objetivo e arquivamento de casos, custódia e anotações de evidências",
+  "Monitors and notifications": "Monitores e notificações",
 };
 
 function translateText(value) {
@@ -924,6 +934,7 @@ const MODULE_TEXT = {
   analytics: ["Painel analítico", "Gráficos do workspace e do caso calculados a partir dos registros salvos."],
   "taxii-feeds": ["Feeds TAXII", "Cliente TAXII 2.1: descoberta, coleções e coleta paginada de objetos STIX, com indicadores registrados nos casos."],
   "sigma-rules": ["Regras Sigma", "Regras de detecção do SigmaHQ baixadas sob demanda e indexadas por técnica ATT&CK."],
+  monitoring: ["Monitoramento", "Consultas multifonte salvas que rodam de novo num intervalo enquanto o servidor está ligado, com a diferença entre execuções e notificações na interface."],
   plugins: ["Plugins locais", "Transformações escritas pelo analista, com manifesto, permissões declaradas e aprovação pelo hash do código, executadas em processo separado."],
   geoint: ["Mapa GEOINT", "Mapa local das posições GPS do EXIF de imagens analisadas e da localização aproximada de redes vinda das consultas."],
   "cti-export": ["Exportação CTI", "Pacotes STIX 2.1, eventos MISP e CSV de IOCs gerados a partir dos registros do caso."],
