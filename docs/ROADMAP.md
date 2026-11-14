@@ -1,6 +1,10 @@
 # Roadmap and phase status
 
 This roadmap separates **implemented and tested** work from **planned** work.
+The expansion plan after these phases (steps 1–8: foundation, visual
+investigation, search, specialised intelligence, plugins, cases, monitoring,
+refinement) is tracked in [AUDITORIA_PLATAFORMA.md](AUDITORIA_PLATAFORMA.md);
+the phase sections below are kept as the record of the first build.
 A phase is not complete because a page or button exists. The module registry
 marks unimplemented capabilities as `planned` and refuses to enable them.
 
@@ -12,13 +16,13 @@ marks unimplemented capabilities as `planned` and refuses to enable them.
 | 2 | Architecture and OpenArchive scope | Complete (documentation) |
 | 3 | Core data and API | Complete |
 | 4 | Entities, sources, relationships, search | Complete for the implemented scope |
-| 5 | Evidence and file/media intelligence | Partial: PDF, documents, archives, images, ELF/PE/Mach-O; no full media forensics |
-| 6 | CTI/OSINT | Partial: manual indicators, CISA KEV and the multi-source runtime (local connectors); no external OSINT collectors yet — see [PLANO_OSINT_CSINT.md](PLANO_OSINT_CSINT.md) |
-| 7 | Automation and plugin SDK | Not started (contract documented only) |
+| 5 | Evidence and file/media intelligence | Complete except OCR and video frames: documents, archives, images with EXIF/GPS and perceptual hashes, executables, YARA, custody |
+| 6 | CTI/OSINT | Complete for infrastructure and threats: 31 connectors, transforms, ATT&CK, Sigma, TAXII 2.1, STIX/MISP export; people are out of scope — see [PLANO_OSINT_CSINT.md](PLANO_OSINT_CSINT.md) |
+| 7 | Automation and plugin SDK | Complete: local plugins in a separate process, transforms, monitors on a schedule; no free-form flow runner by design |
 | 8 | Native C/C++/Rust engines | Optional helpers implemented with tested Python fallbacks; no benchmark |
 | 9 | Workstation UI | Complete for enabled modules; no UI for planned modules |
-| 10 | Testing and hardening | Partial: 115 Python tests (including optional native parity) plus jsdom route smoke; no browser E2E in this environment |
-| 11 | Documentation and release | Partial: docs and README updated; branch/PR prepared |
+| 10 | Testing and hardening | 295 tests including an HTTP end-to-end case run and an interface/API contract check; browser accessibility audit; no automated real-browser suite |
+| 11 | Documentation and release | Docs updated with each step; work lands as stacked pull requests |
 
 ## Phase 1 — audit
 
@@ -186,14 +190,12 @@ Pending:
 
 ## Recommended next increments
 
-1. FTS5 search with a migration that degrades to `LIKE` when FTS5 is absent,
-   plus ranking and tests.
-2. A C header-reader with a C ABI, optional `ctypes` loader and Python fallback,
-   measured against the existing parser.
-3. A website-intelligence collector with an allowlist, redirect cap, byte cap,
-   timeout, DNS/IP SSRF checks and recorded provenance. Add it as `planned`
-   until tests pass.
-4. PDF report output via a print stylesheet first; avoid a heavy dependency
-   unless justified.
-5. Automation runner limited to declarative, allowlisted steps; no shell
-   execution.
+1. OCR and video frames as optional engines (Tesseract, ffmpeg) behind the
+   `media-forensics` module, with the same bounded-input rules.
+2. Threat-actor profiles built from ATT&CK groups and TAXII objects.
+3. A real-browser test suite run in CI (the current end-to-end test stops at
+   HTTP).
+4. Native PDF output if a dependency-free writer proves good enough; until then
+   the browser's print.
+5. Notification delivery to a local command or file drop, never to a remote
+   service by default.

@@ -132,6 +132,30 @@ class EntityRegistryTests(unittest.TestCase):
             0,
         )
 
+    def test_large_graph_keeps_the_most_connected_entities(self):
+        from unittest.mock import patch
+
+        from garbage_intel import entities
+
+        hub = create_entity(self.database, entity_type="domain", name="zz-hub.example", identifier="zz-hub.example")
+        leaves = [
+            create_entity(self.database, entity_type="ipv4", name=f"a-{index}", identifier=f"192.0.2.{index + 1}")
+            for index in range(6)
+        ]
+        loners = [create_entity(self.database, entity_type="domain", name=f"aa-{index}.example", identifier=f"aa-{index}.example") for index in range(5)]
+        for leaf in leaves[:4]:
+            create_relationship(self.database, source_entity_id=hub["id"], target_entity_id=leaf["id"], relationship_type="hosted-on")
+        whole = graph_payload(self.database)
+        self.assertIsNone(whole["truncated"])
+        self.assertEqual((len(whole["nodes"]), len(whole["edges"])), (12, 4))
+        with patch.object(entities, "GRAPH_MAX_NODES", 5):
+            cut = graph_payload(self.database)
+        # An alphabetical cut would keep the "aa-" loners; degree keeps the hub and its leaves.
+        self.assertEqual({node["name"] for node in cut["nodes"]}, {"zz-hub.example", "a-0", "a-1", "a-2", "a-3"})
+        self.assertEqual(len(cut["edges"]), 4)
+        self.assertEqual(cut["truncated"], {"nodes_total": 12, "edges_total": 4, "nodes_shown": 5, "edges_shown": 4})
+        self.assertFalse({loner["id"] for loner in loners} & {node["id"] for node in cut["nodes"]})
+
     def test_relationship_engine_and_graph_projection(self):
         investigation = create_investigation(self.database, "Graph case")
         domain = create_entity(
