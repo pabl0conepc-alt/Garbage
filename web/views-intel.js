@@ -328,9 +328,14 @@
                 lastOutcome,
                 onRun: async (outcome) => {
                   lastOutcome = outcome;
+                  // The page scrolls inside the glass sheet on desktop and
+                  // as a document on phones: keep both positions.
+                  const scroller = document.querySelector("#view-root");
                   const top = window.scrollY;
+                  const inner = scroller ? scroller.scrollTop : 0;
                   await draw();
                   window.scrollTo(0, top);
+                  if (scroller) scroller.scrollTop = inner;
                 },
               })
             : null,

@@ -39,15 +39,13 @@ G.NAV = [
     label: "Workspace",
     items: [
       { view: "overview", label: "Visão geral", icon: "overview" },
-      { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations" },
-      { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log" },
     ],
   },
   {
     label: "Inteligência",
     items: [
       { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
-      { view: "monitors", label: "Monitoramento", icon: "bell", module: "monitoring" },
+      { view: "monitors", label: "Monitoramento", icon: "pulse", module: "monitoring" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
@@ -88,15 +86,23 @@ G.NAV = [
   {
     label: "Sistema",
     items: [
-      { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager" },
       { view: "settings", label: "Configurações", icon: "settings", module: "settings" },
     ],
   },
 ];
 
-G.VIEW_LABELS = Object.fromEntries(
-  G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
-);
+/* Views reached from Configurações (and the command palette) rather than
+   the dock. `home` is the dock entry highlighted while they are open. */
+G.EXTRA_VIEWS = [
+  { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations", group: "Configurações", home: "settings" },
+  { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log", group: "Configurações", home: "settings" },
+  { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager", group: "Configurações", home: "settings" },
+];
+
+G.VIEW_LABELS = Object.fromEntries([
+  ...G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
+  ...G.EXTRA_VIEWS.map((item) => [item.view, item.label]),
+]);
 G.VIEW_GROUPS = Object.fromEntries(
   G.NAV.flatMap((group) => group.items.map((item) => [item.view, group.label])),
 );
@@ -237,51 +243,55 @@ G.el = el;
 G.svgEl = svgEl;
 
 /* ------------------------------------------------------------------ */
-/* Icons: one stroke language, 24px grid, 1.6 stroke                  */
+/* Icons: one soft stroke language — 24px grid, 1.7 stroke, round     */
+/* caps and joins, rounded corners, consistent optical size.         */
 /* ------------------------------------------------------------------ */
 
 const ICON_PATHS = {
-  overview: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
-  investigations: "M3 7.5V18a1.5 1.5 0 0 0 1.5 1.5H11M3 7.5V6a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8A1.5 1.5 0 0 1 20 8v3M3 7.5h17M16.5 19.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18.7 18.7 21 21",
-  activity: "M12 7v5l3 2M12 21a9 9 0 1 0-9-9M3 12h3M3 16.5l2-1",
-  entities: "M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9zM12 3v9M12 12l7.8-4.5M12 12l-7.8-4.5",
-  indicators: "M12 3v4M12 17v4M3 12h4M17 12h4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
-  files: "M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h4.5",
-  board: "M3 4.5h18v15H3zM7 8.5h4v3H7zM14 13h4v3h-4zM11 10l3 4.5",
-  chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
-  merge: "M6 4v4a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 4v4a6 6 0 0 1-6 6M12 14v6M4 6l2-2 2 2M16 6l2-2 2 2",
-  transform: "M4 12h10M10 7l5 5-5 5M18 5v14",
-  bell: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0",
-  feed: "M5 19a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16",
-  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z",
-  matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
-  graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
-  evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
-  sources: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2",
-  kev: "M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6zM12 8v5M12 16.2v.3",
-  reports: "M7 3h10v5H7zM5 8h14a2 2 0 0 1 2 2v6h-4M7 16H3v-6a2 2 0 0 1 2-2M7 13h10v8H7z",
-  modules: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM16.75 13.5v6.5M13.5 16.75H20",
-  settings: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4",
-  search: "M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM16 16l5 5",
-  radar: "M12 12 19 5M12 21a9 9 0 1 1 6.4-15.4M12 17a5 5 0 1 1 3.5-8.5M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
-  plus: "M12 5v14M5 12h14",
-  close: "M6 6l12 12M18 6 6 18",
-  menu: "M4 7h16M4 12h16M4 17h16",
-  keyboard: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",
-  display: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18",
-  refresh: "M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4",
-  note: "M5 4h14v11l-5 5H5zM14 20v-5h5M8.5 9h7M8.5 12.5h4",
-  upload: "M12 16V4M7 9l5-5 5 5M4 16v3.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V16",
-  empty: "M4 8h16M6 8l1 12h10l1-12M9 8V5h6v3",
-  alert: "M12 3l9.5 17h-19zM12 10v4.5M12 17.5v.3",
-  hash: "M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16",
-  check: "M5 12.5l4.5 4.5L19 7.5",
-  circle: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z",
-  ban: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM6.4 6.4l11.2 11.2",
-  diamond: "M12 3.5 20.5 12 12 20.5 3.5 12z",
-  clock: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l2.5 2",
-  list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
-  dot: "M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
+  overview: "M5.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v3.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-3.6a2.2 2.2 0 0 1 2.2 -2.2zM15.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-.6a2.2 2.2 0 0 1 2.2 -2.2zM15.7 11.5h2.6a2.2 2.2 0 0 1 2.2 2.2v4.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-4.6a2.2 2.2 0 0 1 2.2 -2.2zM5.7 14.5h2.6a2.2 2.2 0 0 1 2.2 2.2v1.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-1.6a2.2 2.2 0 0 1 2.2 -2.2z",
+  investigations: "M20.5 10.5V9.4a2 2 0 0 0-2-2h-5.2a2 2 0 0 1-1.5-.7l-.9-1.1A2 2 0 0 0 9.4 5H5.5a2 2 0 0 0-2 2v10.5a2 2 0 0 0 2 2H11M13.3 15.8a3 3 0 1 0 6 0a3 3 0 1 0 -6 0zM18.5 18 20.5 20",
+  activity: "M3.5 12a8.5 8.5 0 1 0 2.5-6M6 2.9V6h3.1M12 7.8v4.4l3 1.9",
+  entities: "M12 3.2l7.3 4.1v8.4L12 20.8l-7.3-4.1V7.3zM4.9 7.5 12 11.6l7.1-4.1M12 11.6v9",
+  indicators: "M5.8 12a6.2 6.2 0 1 0 12.4 0a6.2 6.2 0 1 0 -12.4 0zM10.6 12a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0 -2.8 0zM12 2.8v2.8M12 18.4v2.8M2.8 12h2.8M18.4 12h2.8",
+  files: "M13.5 3.5H7a2.5 2.5 0 0 0-2.5 2.5v12A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5V9.5zM13.5 3.5V8a1.5 1.5 0 0 0 1.5 1.5h4.5M8.5 13.5h7M8.5 17h4",
+  board: "M6.7 4h10.6a3.2 3.2 0 0 1 3.2 3.2v9.6a3.2 3.2 0 0 1 -3.2 3.2h-10.6a3.2 3.2 0 0 1 -3.2 -3.2v-9.6a3.2 3.2 0 0 1 3.2 -3.2zM8.1 7.8h2.3a1.1 1.1 0 0 1 1.1 1.1v1.4a1.1 1.1 0 0 1 -1.1 1.1h-2.3a1.1 1.1 0 0 1 -1.1 -1.1v-1.4a1.1 1.1 0 0 1 1.1 -1.1zM13.6 12.6h2.3a1.1 1.1 0 0 1 1.1 1.1v1.4a1.1 1.1 0 0 1 -1.1 1.1h-2.3a1.1 1.1 0 0 1 -1.1 -1.1v-1.4a1.1 1.1 0 0 1 1.1 -1.1zM11.5 9.6h1.7a1 1 0 0 1 1 1v2",
+  chart: "M3.5 20h17M7 16.5v-4M12 16.5V6.5M17 16.5V10",
+  merge: "M4.7 5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0zM15.7 5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0zM6.5 6.8V8a4 4 0 0 0 4 4h3a4 4 0 0 0 4-4V6.8M12 12v8.3M9.6 18 12 20.4l2.4-2.4",
+  transform: "M4 12h11.5M11.5 7.5 16 12l-4.5 4.5M20 5v14",
+  bell: "M12 3.2v1.6M6.2 17v-6a5.8 5.8 0 0 1 11.6 0v6l1.4 1.8H4.8zM10 21a2.2 2.2 0 0 0 4 0",
+  feed: "M4.3 18.4a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0zM4.5 11.5a8 8 0 0 1 8 8M4.5 4.5a15 15 0 0 1 15 15",
+  globe: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM3.5 12h17M12 3.5c2.4 2.3 3.6 5.2 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.2-3.6-8.5S9.6 5.8 12 3.5z",
+  matrix: "M4.9 3.5h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM11.1 3.5h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM17.3 3.5h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM4.9 9.7h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM11.1 9.7h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM4.9 15.9h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4z",
+  graph: "M3.6 6a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0zM15.6 9a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0zM6.6 18a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0zM8.3 6.6l7.4 1.8M16.3 10.8l-5.6 5.4M6.6 8.3l1.8 7.4",
+  evidence: "M5.1 4h13.8a1.6 1.6 0 0 1 1.6 1.6v1.3a1.6 1.6 0 0 1 -1.6 1.6h-13.8a1.6 1.6 0 0 1 -1.6 -1.6v-1.3a1.6 1.6 0 0 1 1.6 -1.6zM5 8.5v9A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5v-9M10 12.5h4",
+  sources: "M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1",
+  kev: "M12 3.2c2.3 1.4 4.6 2.2 7 2.5v5.6c0 4.4-2.9 8-7 9.5-4.1-1.5-7-5.1-7-9.5V5.7c2.4-.3 4.7-1.1 7-2.5zM12 8.5v4M12 15.8v.2",
+  reports: "M9 4.6H7.5A2.5 2.5 0 0 0 5 7.1v11A2.5 2.5 0 0 0 7.5 20.6h9a2.5 2.5 0 0 0 2.5-2.5v-11a2.5 2.5 0 0 0-2.5-2.5H15M10.2 3h3.6a1.2 1.2 0 0 1 1.2 1.2v.8a1.2 1.2 0 0 1 -1.2 1.2h-3.6a1.2 1.2 0 0 1 -1.2 -1.2v-.8a1.2 1.2 0 0 1 1.2 -1.2zM9 16.5v-2M12 16.5v-5M15 16.5V13",
+  modules: "M5.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v2.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-2.6a2.2 2.2 0 0 1 2.2 -2.2zM15.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v2.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-2.6a2.2 2.2 0 0 1 2.2 -2.2zM5.7 13.5h2.6a2.2 2.2 0 0 1 2.2 2.2v2.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-2.6a2.2 2.2 0 0 1 2.2 -2.2zM17 14v6M14 17h6",
+  settings: "M4 7h9M17.4 7H20M4 17h2.6M11 17h9M13 7a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0zM6.6 17a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0z",
+  search: "M4.5 11a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0zM15.8 15.8 20 20",
+  radar: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM7.5 12a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0 -9 0zM12 12l5.2-5.2M11.1 12a.9 .9 0 1 0 1.8 0a.9 .9 0 1 0 -1.8 0z",
+  plus: "M12 5.5v13M5.5 12h13",
+  close: "M6.5 6.5l11 11M17.5 6.5l-11 11",
+  menu: "M4.5 7h15M4.5 12h15M4.5 17h15",
+  keyboard: "M6 6h12a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-6a3 3 0 0 1 3 -3zM7 10h.01M10.3 10h.01M13.7 10h.01M17 10h.01M8.5 14h7",
+  display: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 3.5v17M12 7a5 5 0 0 1 0 10",
+  refresh: "M19.5 11.5A7.5 7.5 0 0 0 6.4 7M4.5 12.5A7.5 7.5 0 0 0 17.6 17M6.4 3.5V7h3.5M17.6 20.5V17h-3.5",
+  note: "M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5V14l-5 5H7.5A2.5 2.5 0 0 1 5 16.5zM14 19v-3.5a1.5 1.5 0 0 1 1.5-1.5H19M8.5 8.5h7M8.5 12h4",
+  upload: "M12 15.5v-11M7.5 8.5 12 4l4.5 4.5M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3",
+  empty: "M3.5 13.5 6 6.1A2 2 0 0 1 7.9 4.7h8.2A2 2 0 0 1 18 6.1l2.5 7.4v4A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5zM3.5 13.5h4.3l1.2 2.4h6l1.2-2.4h4.3",
+  alert: "M10.3 4.6a2 2 0 0 1 3.4 0l7 12.2a2 2 0 0 1-1.7 3H5a2 2 0 0 1-1.7-3zM12 9.5v4M12 16.8v.2",
+  hash: "M9.5 4 7.5 20M16.5 4l-2 16M4.5 9H20M4 15h15.5",
+  check: "M5 12.5l4.5 4.5 9.5-10",
+  circle: "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0z",
+  ban: "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0zM6.4 6.4l11.2 11.2",
+  diamond: "M12 3.8 20.2 12 12 20.2 3.8 12z",
+  clock: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 7.5V12l3 2",
+  list: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01",
+  dot: "M10.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0z",
+  info: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 11v5.2M12 7.9v.2",
+  arrow: "M9.5 6.5 15 12l-5.5 5.5",
+  pulse: "M3.5 12.5h3.6l2.2-5.5 4.2 10.5 2.4-5h4.6",
 };
 
 /* Legacy glyphs passed by views are mapped onto the icon set so every
@@ -292,7 +302,7 @@ const GLYPH_ICONS = {
   "☰": "list", "⎙": "reports", "⊞": "modules", "⚙": "settings", "＋": "plus",
   "▣": "evidence", "↻": "refresh", "◐": "display", "◌": "circle", "◨": "display",
   "⌘": "keyboard", "◈": "diamond", "○": "circle", "⊘": "ban", "◇": "diamond",
-  "·": "dot", "!": "alert",
+  "·": "dot", "!": "alert", "◎": "indicators",
 };
 
 function icon(name, { size = 18, className = "" } = {}) {
@@ -306,7 +316,7 @@ function icon(name, { size = 18, className = "" } = {}) {
       height: size,
       fill: "none",
       stroke: "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "1.7",
       "stroke-linecap": "round",
       "stroke-linejoin": "round",
       "aria-hidden": "true",
@@ -959,7 +969,7 @@ function moduleDescription(moduleId, fallback) {
 }
 
 const SETTING_TEXT = {
-  "interface.theme": ["Tema da interface", "Paleta escura da estação ou variante de alto contraste."],
+  "interface.theme": ["Tema da interface", "Tema claro ou variante escura de alto contraste."],
   "interface.density": ["Densidade de informação", "Espaçamento confortável ou layout compacto para telas menores."],
   "interface.reduce_motion": ["Reduzir movimento", "Desativa transições de painéis e telas."],
   "board.autosave_delay_ms": ["Atraso do salvamento automático do quadro", "Milissegundos de inatividade antes de salvar o estado do quadro."],
@@ -972,7 +982,7 @@ const SETTING_TEXT = {
 };
 
 const VALUE_LABELS = {
-  dark: "Escuro", contrast: "Alto contraste", comfortable: "Confortável", compact: "Compacta",
+  dark: "Claro", contrast: "Alto contraste (escuro)", comfortable: "Confortável", compact: "Compacta",
   true: "Sim", false: "Não", force: "Força", circular: "Circular", grid: "Grade",
   unattributed: "Sem atribuição",
 };
@@ -1080,24 +1090,91 @@ function statusBadge(value) {
   return badge(statusLabel(value), STATUS_TONES[value] || "neutral");
 }
 
+let pageInfoCount = 0;
+
+/* Title first. A short line may sit under it; anything longer waits
+   behind a small info toggle. `eyebrow` is still accepted, not drawn. */
 function pageHeader({ eyebrow, title, description, actions = [] }) {
+  const text = typeof description === "string" ? description.trim() : description;
+  const short = typeof text === "string" && text.length <= 72;
+  let infoButton = null;
+  let descriptionNode = null;
+  if (text && short) {
+    descriptionNode = el("p", { class: "page-description" }, text);
+  } else if (text) {
+    const id = `page-info-${++pageInfoCount}`;
+    descriptionNode = el("p", { class: "page-description", id, hidden: true }, text);
+    infoButton = el(
+      "button",
+      {
+        class: "icon-button page-info",
+        type: "button",
+        "aria-label": "Sobre esta tela",
+        "aria-expanded": "false",
+        "aria-controls": id,
+        onClick: () => {
+          descriptionNode.hidden = !descriptionNode.hidden;
+          infoButton.setAttribute("aria-expanded", String(!descriptionNode.hidden));
+        },
+      },
+      icon("info", { size: 16 }),
+    );
+  }
   return el(
     "div",
     { class: "page-heading" },
     el(
       "div",
       { class: "page-heading-copy" },
-      eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
-      el("h1", {}, title),
-      description ? el("p", { class: "page-description" }, description) : null,
+      el("div", { class: "page-title-row" }, el("h1", {}, title), infoButton),
+      descriptionNode,
     ),
     actions.length ? el("div", { class: "page-actions" }, actions) : null,
   );
 }
 
+/* Secondary actions collapse into one "Mais" menu so each area keeps a
+   single clear primary action. */
+function moreMenu(items, label = "Mais") {
+  const list = el("div", { class: "more-menu-list" }, items.filter(Boolean));
+  const menu = el(
+    "details",
+    { class: "more-menu" },
+    el("summary", { class: "button button-secondary button-small" }, label),
+    list,
+  );
+  list.addEventListener("click", (event) => {
+    if (event.target.closest("button, a")) menu.open = false;
+  });
+  return menu;
+}
+
+document.addEventListener("click", (event) => {
+  document.querySelectorAll("details.more-menu[open]").forEach((menu) => {
+    if (!menu.contains(event.target)) menu.open = false;
+  });
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  document.querySelectorAll("details.more-menu[open]").forEach((menu) => {
+    menu.open = false;
+    menu.querySelector("summary")?.focus();
+  });
+});
+
+G.moreMenu = moreMenu;
+
+function sentenceCase(text) {
+  const lower = String(text).toLocaleLowerCase("pt-BR");
+  return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
+}
+
 function panel({ eyebrow, title, caption, actions = [], className = "" }, ...children) {
+  if (!title && eyebrow) title = sentenceCase(eyebrow);
+  eyebrow = null;
+  if (typeof caption === "string" && caption.length > 48) caption = null;
   const heading =
-    title || eyebrow || actions.length
+    title || actions.length
       ? el(
           "div",
           { class: "panel-heading" },
@@ -1123,17 +1200,12 @@ function panel({ eyebrow, title, caption, actions = [], className = "" }, ...chi
   );
 }
 
-function metric({ label, value, foot }) {
+function metric({ label, value }) {
   return el(
     "article",
     { class: "metric-card" },
-    el(
-      "div",
-      { class: "metric-top" },
-      el("span", {}, label),
-    ),
     el("div", { class: "metric-value" }, value),
-    foot ? el("div", { class: "metric-foot" }, foot) : null,
+    el("div", { class: "metric-top" }, el("span", {}, sentenceCase(label))),
   );
 }
 
@@ -1142,7 +1214,7 @@ function emptyState({ icon: glyph = "empty", title, description, action = null }
     "div",
     { class: "empty-state" },
     el("span", { class: "empty-icon" }, icon(glyph, { size: 20 })),
-    el("h3", {}, title),
+    el("h2", {}, title),
     description ? el("p", {}, description) : null,
     action || null,
   );
@@ -1153,7 +1225,7 @@ function errorState({ title = "Não foi possível carregar esta tela", message, 
     "div",
     { class: "error-state", role: "alert" },
     el("span", { class: "error-icon" }, icon("alert", { size: 20 })),
-    el("h3", {}, title),
+    el("h2", {}, title),
     el("p", {}, message || "A API local retornou um erro."),
     retry
       ? el("button", { class: "button button-secondary", type: "button", onClick: retry }, "Tentar novamente")
@@ -1178,6 +1250,8 @@ function dataTable({ columns, rows, emptyMessage = "Nenhum registro.", onRowClic
   );
   const tbody = el("tbody");
   if (!rows.length) {
+    // An empty list is one quiet line, without column headings.
+    table.classList.add("is-empty");
     tbody.append(
       el(
         "tr",
@@ -1404,7 +1478,7 @@ function formDialog({
             "aria-label": "Fechar diálogo",
             onClick: () => dialog.close("cancel"),
           },
-          "×",
+          icon("close"),
         ),
       ),
       ...fields.map(fieldNode),
@@ -1556,8 +1630,12 @@ function renderShellState() {
 }
 
 function markActiveNav(view) {
+  const extra = G.EXTRA_VIEWS.find((item) => item.view === view);
+  // An open case belongs to the main flow; the case index to Configurações.
+  const params = G.state.currentParams || [];
+  const home = view === "investigations" && params.length ? "overview" : extra?.home || view;
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const active = link.dataset.view === view;
+    const active = link.dataset.view === home;
     link.classList.toggle("is-active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -1566,9 +1644,8 @@ function markActiveNav(view) {
 
 function setBreadcrumb(view) {
   const label = G.VIEW_LABELS[view] || titleCase(view);
-  document.querySelector("#page-breadcrumb").textContent = label;
-  const group = document.querySelector("#breadcrumb-group");
-  if (group) group.textContent = G.VIEW_GROUPS[view] || "Workspace";
+  const crumb = document.querySelector("#page-breadcrumb");
+  if (crumb) crumb.textContent = label;
   document.title = `${label} · GARBAGE`;
 }
 
@@ -1621,6 +1698,7 @@ async function route() {
     window.requestAnimationFrame(() => viewRoot.classList.add("is-ready"));
   }
   window.scrollTo({ top: 0, behavior: "auto" });
+  viewRoot.scrollTop = 0;
 }
 
 G.go = go;
@@ -1790,7 +1868,11 @@ function commandActions() {
 }
 
 function commandNavItems() {
-  return G.NAV.flatMap((group) =>
+  const groups = [
+    ...G.NAV,
+    { label: "Configurações", items: G.EXTRA_VIEWS },
+  ];
+  return groups.flatMap((group) =>
     group.items
       .filter((item) => moduleEnabled(item.module))
       .map((item) => ({
@@ -2073,8 +2155,8 @@ function renderDisplayMenu() {
       el("span", {}, "Salvo neste workspace"),
     ),
     displayGroup("TEMA", [
-      displayChoice("Escuro", "interface.theme", "dark", theme === "dark"),
-      displayChoice("Alto contraste", "interface.theme", "contrast", theme === "contrast"),
+      displayChoice("Claro", "interface.theme", "dark", theme === "dark"),
+      displayChoice("Alto contraste (escuro)", "interface.theme", "contrast", theme === "contrast"),
     ]),
     displayGroup("DENSIDADE", [
       displayChoice("Confortável", "interface.density", "comfortable", density === "comfortable"),
@@ -2132,24 +2214,35 @@ function closeDisplayMenu() {
 /* Keyboard shortcuts                                                */
 /* ------------------------------------------------------------------ */
 
+const SHORTCUT_ROWS = [
+  ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
+  ["/", "Focar a pesquisa"],
+  ["N", "Nova investigação"],
+  ["T", "Triar texto colado"],
+  ["M", "Pesquisa multifonte"],
+  ["R", "Atualizar tela atual"],
+  ["?", "Este guia de atalhos"],
+  ["Esc", "Fechar diálogo, menu ou painel"],
+  ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
+  ["Grafo · Shift + arrastar", "Selecionar uma área"],
+  ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
+  ["Grafo · P", "Fixar ou soltar a seleção"],
+  ["Grafo · H ou Delete", "Ocultar a seleção"],
+  ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
+];
+
+G.shortcutList = function shortcutList() {
+  return el(
+    "div",
+    { class: "shortcut-list" },
+    ...SHORTCUT_ROWS.map(([keys, label]) =>
+      el("div", { class: "shortcut-row" }, el("span", {}, label), el("kbd", {}, keys)),
+    ),
+  );
+};
+
 G.openShortcuts = function openShortcuts() {
   if (document.querySelector(".shortcuts-dialog")) return;
-  const rows = [
-    ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
-    ["/", "Focar a pesquisa"],
-    ["N", "Nova investigação"],
-    ["T", "Triar texto colado"],
-    ["M", "Pesquisa multifonte"],
-    ["R", "Atualizar tela atual"],
-    ["?", "Este guia de atalhos"],
-    ["Esc", "Fechar diálogo, menu ou painel"],
-    ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
-    ["Grafo · Shift + arrastar", "Selecionar uma área"],
-    ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
-    ["Grafo · P", "Fixar ou soltar a seleção"],
-    ["Grafo · H ou Delete", "Ocultar a seleção"],
-    ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
-  ];
   const dialog = el(
     "dialog",
     { class: "app-dialog shortcuts-dialog", "aria-label": "Atalhos de teclado" },
@@ -2162,32 +2255,15 @@ G.openShortcuts = function openShortcuts() {
         el(
           "div",
           {},
-          el("p", { class: "eyebrow" }, "TECLADO"),
-          el("h2", {}, "Navegue sem o mouse"),
-          el(
-            "p",
-            { class: "dialog-description" },
-            "Os atalhos são ignorados enquanto você digita em um campo.",
-          ),
+          el("h2", {}, "Atalhos de teclado"),
         ),
         el(
           "button",
           { class: "icon-button", type: "button", "aria-label": "Fechar", onClick: () => dialog.close() },
-          "×",
+          icon("close"),
         ),
       ),
-      el(
-        "div",
-        { class: "shortcut-list" },
-        ...rows.map(([keys, label]) =>
-          el(
-            "div",
-            { class: "shortcut-row" },
-            el("span", {}, label),
-            el("kbd", {}, keys),
-          ),
-        ),
-      ),
+      G.shortcutList(),
       el(
         "div",
         { class: "dialog-actions" },
@@ -2221,10 +2297,13 @@ function bindShell() {
   document.querySelector("#nav-groups").addEventListener("click", (event) => {
     if (event.target.closest("a.nav-link")) setMobileNav(false);
   });
-  newInvestigationButton.addEventListener("click", () => {
+  newInvestigationButton?.addEventListener("click", () => {
     G.newInvestigation().catch((error) => toast(error.message, "error"));
   });
-  searchButton.addEventListener("click", openSearch);
+  searchButton?.addEventListener("click", () => {
+    setMobileNav(false);
+    openSearch();
+  });
   mobileNavToggle?.addEventListener("click", () => {
     setMobileNav(!document.body.classList.contains("nav-open"));
   });
