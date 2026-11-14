@@ -30,7 +30,7 @@
     let data = { points: [], counts: { photo: 0, network: 0 } };
     let visibleKinds = new Set(["photo", "network"]);
 
-    const svg = svgEl("svg", { class: "geo-map", role: "img", "aria-label": "Mapa com as posições registradas", preserveAspectRatio: "xMidYMid meet" });
+    const svg = svgEl("svg", { class: "geo-map", role: "group", "aria-label": "Mapa com as posições registradas", preserveAspectRatio: "xMidYMid meet" });
     const base = svgEl("g", { class: "geo-base" });
     const markers = svgEl("g", { class: "geo-markers" });
     svg.append(base, markers);

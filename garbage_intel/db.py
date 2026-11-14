@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -1037,25 +1037,43 @@ def _migrate_search_index(connection: sqlite3.Connection) -> None:
            )"""
     )
     for kind, table, title, body in SEARCH_SOURCES:
-        new_title, new_body = title.format(r="NEW."), body.format(r="NEW.")
-        connection.executescript(
-            f"""CREATE TRIGGER IF NOT EXISTS search_{table}_insert AFTER INSERT ON {table} BEGIN
-                    INSERT INTO search_index (kind, ref_id, title, body)
-                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
-                END;
-                CREATE TRIGGER IF NOT EXISTS search_{table}_update AFTER UPDATE ON {table} BEGIN
-                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
-                    INSERT INTO search_index (kind, ref_id, title, body)
-                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
-                END;
-                CREATE TRIGGER IF NOT EXISTS search_{table}_delete AFTER DELETE ON {table} BEGIN
-                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
-                END;"""
-        )
-        connection.execute(
-            f"""INSERT INTO search_index (kind, ref_id, title, body)
-                SELECT '{kind}', id, {title.format(r="")}, {body.format(r="")} FROM {table}"""
-        )
+        _index_source(connection, kind, table, title, body)
+
+
+def _index_source(connection: sqlite3.Connection, kind: str, table: str, title: str, body: str) -> None:
+    """(Re)create the triggers that keep one table in the search index and
+    reindex its rows."""
+    new_title, new_body = title.format(r="NEW."), body.format(r="NEW.")
+    connection.executescript(
+        f"""DROP TRIGGER IF EXISTS search_{table}_insert;
+            DROP TRIGGER IF EXISTS search_{table}_update;
+            DROP TRIGGER IF EXISTS search_{table}_delete;
+            CREATE TRIGGER search_{table}_insert AFTER INSERT ON {table} BEGIN
+                INSERT INTO search_index (kind, ref_id, title, body)
+                VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+            END;
+            CREATE TRIGGER search_{table}_update AFTER UPDATE ON {table} BEGIN
+                DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+                INSERT INTO search_index (kind, ref_id, title, body)
+                VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+            END;
+            CREATE TRIGGER search_{table}_delete AFTER DELETE ON {table} BEGIN
+                DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+            END;"""
+    )
+    connection.execute("DELETE FROM search_index WHERE kind = ?", (kind,))
+    connection.execute(
+        f"""INSERT INTO search_index (kind, ref_id, title, body)
+            SELECT '{kind}', id, {title.format(r="")}, {body.format(r="")} FROM {table}"""
+    )
+
+
+def _migrate_search_objective(connection: sqlite3.Connection) -> None:
+    """Version 14: the case objective (version 12) joins the case's searchable
+    text. Without FTS5 there is no index and the LIKE search covers it."""
+    exists = connection.execute("SELECT 1 FROM sqlite_master WHERE name = 'search_index'").fetchone()
+    if exists:
+        _index_source(connection, "investigations", "investigations", "{r}name", "{r}description || ' ' || {r}objective")
 
 
 def _migrate_cti_feeds(connection: sqlite3.Connection) -> None:
@@ -1244,6 +1262,7 @@ MIGRATIONS = (
     (11, "Local plugin approvals", _migrate_plugins),
     (12, "Case objective and archive, evidence custody and notes", _migrate_cases),
     (13, "Monitors and notifications", _migrate_monitoring),
+    (14, "Search index covers case objectives", _migrate_search_objective),
 )
 
 

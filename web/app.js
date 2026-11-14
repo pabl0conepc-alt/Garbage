@@ -865,6 +865,7 @@ const TEXT_PT = {
   "Local plugin approvals": "Aprovações de plugins locais",
   "Case objective and archive, evidence custody and notes": "Objetivo e arquivamento de casos, custódia e anotações de evidências",
   "Monitors and notifications": "Monitores e notificações",
+  "Search index covers case objectives": "Pesquisa passa a cobrir o objetivo do caso",
 };
 
 function translateText(value) {

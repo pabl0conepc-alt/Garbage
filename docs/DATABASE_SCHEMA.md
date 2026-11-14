@@ -240,6 +240,7 @@ Applied migration ledger used to make startup idempotent.
 | 11 | Local plugin approvals | `plugin_registry` (enabled flag, approved code SHA-256 and manifest, time) |
 | 12 | Case objective and archive, evidence custody and notes | `investigations.objective`, `investigations.archived_at`; `evidence_events` (hash-chained, kept after deletion) and `evidence_notes`; logs started for existing evidence |
 | 13 | Monitors and notifications | `monitors`, `monitor_runs`, `notifications` |
+| 14 | Search index covers case objectives | Investigation triggers recreated with `objective` in the indexed text and case rows reindexed; nothing to do without FTS5 |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.
