@@ -153,11 +153,11 @@
     root.append(
       el(
         "div",
-        { class: "actor-facts" },
-        el("div", {}, el("span", { class: "eyebrow" }, "TÉCNICAS"), el("strong", {}, String(data.technique_count))),
-        el("div", {}, el("span", { class: "eyebrow" }, "SOFTWARE"), el("strong", {}, data.software_known ? String(data.software.length) : "—")),
-        el("div", {}, el("span", { class: "eyebrow" }, "COM REGRA SIGMA"), el("strong", {}, `${data.detection.techniques_with_rules}/${data.detection.techniques}`), el("span", { class: "muted" }, ` ${coverage}%`)),
-        el("div", {}, el("span", { class: "eyebrow" }, "CASOS COM TÉCNICAS EM COMUM"), el("strong", {}, String(data.cases.length))),
+        { class: "metric-grid" },
+        G.metric({ label: "Técnicas", value: String(data.technique_count) }),
+        G.metric({ label: "Software", value: data.software_known ? String(data.software.length) : "—" }),
+        G.metric({ label: `Com regra Sigma (${coverage}%)`, value: `${data.detection.techniques_with_rules}/${data.detection.techniques}` }),
+        G.metric({ label: "Casos com técnicas em comum", value: String(data.cases.length) }),
       ),
       panel(
         { eyebrow: "PERFIL", title: data.name, caption: data.aliases.length ? `Também chamado: ${data.aliases.join(", ")}` : "" },
