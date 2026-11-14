@@ -1130,6 +1130,37 @@ function pageHeader({ eyebrow, title, description, actions = [] }) {
   );
 }
 
+/* Secondary actions collapse into one "Mais" menu so each area keeps a
+   single clear primary action. */
+function moreMenu(items, label = "Mais") {
+  const list = el("div", { class: "more-menu-list" }, items.filter(Boolean));
+  const menu = el(
+    "details",
+    { class: "more-menu" },
+    el("summary", { class: "button button-secondary button-small" }, label),
+    list,
+  );
+  list.addEventListener("click", (event) => {
+    if (event.target.closest("button, a")) menu.open = false;
+  });
+  return menu;
+}
+
+document.addEventListener("click", (event) => {
+  document.querySelectorAll("details.more-menu[open]").forEach((menu) => {
+    if (!menu.contains(event.target)) menu.open = false;
+  });
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  document.querySelectorAll("details.more-menu[open]").forEach((menu) => {
+    menu.open = false;
+    menu.querySelector("summary")?.focus();
+  });
+});
+
+G.moreMenu = moreMenu;
+
 function sentenceCase(text) {
   const lower = String(text).toLocaleLowerCase("pt-BR");
   return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
@@ -1216,6 +1247,8 @@ function dataTable({ columns, rows, emptyMessage = "Nenhum registro.", onRowClic
   );
   const tbody = el("tbody");
   if (!rows.length) {
+    // An empty list is one quiet line, without column headings.
+    table.classList.add("is-empty");
     tbody.append(
       el(
         "tr",
@@ -1662,6 +1695,7 @@ async function route() {
     window.requestAnimationFrame(() => viewRoot.classList.add("is-ready"));
   }
   window.scrollTo({ top: 0, behavior: "auto" });
+  viewRoot.scrollTop = 0;
 }
 
 G.go = go;

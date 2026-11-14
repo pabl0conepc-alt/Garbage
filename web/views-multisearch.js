@@ -808,8 +808,12 @@
     }
 
     const historyHost = el("div");
+    const historyPanel = panel({ title: "Consultas recentes" }, historyHost);
+    historyPanel.hidden = true;
     async function renderHistory() {
       const data = await api("/api/intel/runs?limit=15").catch(() => ({ items: [] }));
+      // Nothing to list yet: the search bar stands alone.
+      historyPanel.hidden = !data.items.length;
       historyHost.replaceChildren(
         table({
           columns: [
@@ -866,7 +870,7 @@
             ),
         el("section", { class: "query-panel" }, form),
         resultArea,
-        panel({ title: "Consultas recentes" }, historyHost),
+        historyPanel,
       ].filter(Boolean),
     );
     G.hydrateIcons(root);

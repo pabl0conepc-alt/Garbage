@@ -7109,3 +7109,260 @@ dialog:focus-visible,
   white-space: nowrap;
 }
 .settings-fields { gap: 22px; }
+
+/* Mais blocos que viram linhas: registros, cartões de resultado. */
+.record-list { gap: 0; }
+.record-item,
+.export-card,
+.raw-details,
+.triage-metric,
+.tool-result,
+.inspector-match,
+.resolution-card,
+.file-result > .empty-state {
+  padding-left: 0;
+  padding-right: 0;
+  border: 0;
+  border-top: 1px solid var(--glass-line-faint);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.record-item { padding-top: 16px; padding-bottom: 16px; }
+.record-heading strong { font-size: var(--text-base); font-weight: var(--weight-medium); }
+.record-content { font-size: var(--text-md); }
+
+/* Menu "Mais": um popover de vidro. */
+.more-menu { position: relative; display: inline-block; }
+.more-menu > summary { list-style: none; cursor: pointer; }
+.more-menu > summary::-webkit-details-marker { display: none; }
+.more-menu > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.more-menu[open] > summary { border-color: var(--glass-line-strong); background: var(--glass-4); }
+.more-menu-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--glass-chrome-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge-strong), var(--shadow-deep);
+}
+.more-menu-list > .button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--text-md);
+}
+.more-menu-list > .button:hover:not(:disabled) { border-color: transparent; background: var(--glass-3); }
+.more-menu-list > .button-danger { color: var(--danger); }
+[data-theme="contrast"] .more-menu-list { border-color: var(--border); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Menus abertos no cabeçalho ficam acima do conteúdo seguinte. */
+.page-heading { position: relative; z-index: 6; }
+/* Sem preenchimento final: a animação de entrada não deve virar raiz de
+   backdrop e impedir o desfoque dos menus abertos no cabeçalho. */
+.view-root.is-ready > .page-heading,
+.view-root.is-ready > .metric-grid { animation-fill-mode: backwards; }
+
+/* ================================================================== */
+/* Uma única folha de vidro                                           */
+/* O conteúdo inteiro fica numa grande folha de vidro fosco que flutua */
+/* sobre a luz ambiente. A folha não se move: a página rola dentro    */
+/* dela, então o desfoque é calculado sobre um fundo parado (barato), */
+/* e nada dentro dela ganha outra caixa.                              */
+/* ================================================================== */
+
+:root {
+  --sheet-fill: rgba(255, 255, 255, 0.035);
+  --sheet-radius: 30px;
+}
+
+@media (min-width: 761px) {
+  .app-shell { height: 100vh; overflow: hidden; }
+
+  .main-shell {
+    position: relative;
+    height: calc(100vh - var(--dock-gap) * 2);
+    margin: var(--dock-gap) var(--dock-gap) var(--dock-gap) 0;
+    overflow: hidden;
+    border: 1px solid var(--glass-line);
+    border-radius: var(--sheet-radius);
+    background: var(--sheet-fill);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    backdrop-filter: blur(28px) saturate(140%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.09),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.015),
+      0 30px 80px -30px rgba(0, 0, 0, 0.85),
+      0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  .view-root {
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .view-root > * { max-width: 1320px; margin-left: auto; margin-right: auto; }
+  .view-root[data-view="board"] > *,
+  .view-root[data-view="graph"] > * { max-width: none; }
+
+  .view-root[data-view="board"],
+  .view-root[data-view="graph"] { padding: 28px 20px 20px; }
+
+  /* Rótulos fixos (topo da folha) agora contam a partir da folha. */
+  .multisearch-sources,
+  .indicator-detail .panel,
+  .attack-side { top: 20px; }
+
+  .toast { right: 20px; bottom: 20px; }
+}
+
+/* ---- Tabelas: linhas direto no vidro ------------------------------- */
+
+.data-table tbody tr.is-clickable:hover,
+.data-table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+.data-table.is-empty thead { display: none; }
+.data-table.is-empty .table-empty {
+  padding: 22px 2px;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+/* ---- Interruptores pequenos de vidro -------------------------------- */
+
+.switch-row input[type="checkbox"],
+.query-cache input[type="checkbox"],
+.check-field input[type="checkbox"],
+.inline-check input[type="checkbox"] {
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.switch-row input[type="checkbox"]::after,
+.query-cache input[type="checkbox"]::after,
+.check-field input[type="checkbox"]::after,
+.inline-check input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  transition: transform 160ms var(--ease-out), background var(--transition);
+}
+.switch-row input[type="checkbox"]:checked,
+.query-cache input[type="checkbox"]:checked,
+.check-field input[type="checkbox"]:checked,
+.inline-check input[type="checkbox"]:checked {
+  border-color: transparent;
+  background: var(--accent);
+}
+.switch-row input[type="checkbox"]:checked::after,
+.query-cache input[type="checkbox"]:checked::after,
+.check-field input[type="checkbox"]:checked::after,
+.inline-check input[type="checkbox"]:checked::after {
+  background: var(--accent-contrast);
+  transform: translateX(12px);
+}
+.switch-row input[type="checkbox"]:focus-visible,
+.check-field input[type="checkbox"]:focus-visible,
+.inline-check input[type="checkbox"]:focus-visible { outline: 2px solid var(--state-focus); outline-offset: 2px; }
+
+/* ---- Visão geral vazia -------------------------------------------------- */
+
+.view-root[data-view="overview"] .empty-state { align-items: flex-start; padding: 28px 0; text-align: left; }
+
+/* ---- Alto contraste: folha sólida ------------------------------------- */
+
+[data-theme="contrast"] .main-shell {
+  border-color: var(--border);
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+[data-theme="contrast"] .switch-row input[type="checkbox"],
+[data-theme="contrast"] .query-cache input[type="checkbox"],
+[data-theme="contrast"] .check-field input[type="checkbox"],
+[data-theme="contrast"] .inline-check input[type="checkbox"] { border-color: var(--border); }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .main-shell { background: #111113; }
+}
+
+@media (max-width: 760px) {
+  .main-shell {
+    min-height: 100vh;
+    background: transparent;
+  }
+}
+
+@media print {
+  .app-shell,
+  .main-shell,
+  .view-root { height: auto; overflow: visible; }
+  .main-shell { margin: 0; border: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* Brilho do vidro: luz suave no alto da folha, num pseudo-elemento para
+   não pintar atrás do texto com imagem de fundo. */
+@media (min-width: 761px) {
+  .main-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background:
+      radial-gradient(70% 40% at 18% 0%, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 70%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 28%);
+    pointer-events: none;
+  }
+}
+
+/* Luz ambiente um pouco mais presente, para o vidro ter o que desfocar. */
+:root {
+  --light-1: rgba(255, 255, 255, 0.13);
+  --light-2: rgba(255, 255, 255, 0.10);
+  --light-3: rgba(255, 255, 255, 0.08);
+}
+[data-theme="contrast"] .main-shell::before { display: none; }
+.view-root[data-view="overview"] .panel-empty,
+.panel-empty { padding: 18px 0; color: var(--text-muted); font-size: var(--text-md); }

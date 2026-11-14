@@ -807,7 +807,7 @@
       panel(
         {
           title: "Casos abertos",
-          actions: [button("Todos os casos", () => go("investigations"))],
+          actions: totals.investigations ? [button("Todos os casos", () => go("investigations"))] : [],
         },
         openRows.length
           ? el(
@@ -831,12 +831,7 @@
                 ),
               ),
             )
-          : emptyState({
-              icon: "investigations",
-              title: "Nenhum caso aberto",
-              description: "Crie uma investigação para começar.",
-              action: button("Nova investigação", newCase, { variant: "button-primary" }),
-            }),
+          : el("p", { class: "panel-empty" }, "Nenhum caso aberto."),
       ),
     );
   }
@@ -1128,11 +1123,12 @@
       G.setLoading(false);
       const investigation = report.investigation;
       const header = pageHeader({
-        eyebrow: "CASO",
         title: investigation.name,
-        description: investigation.description || "Nenhuma descrição registrada.",
+        description: investigation.description || "",
         actions: [
-          button("‹ Todos os casos", () => go("investigations")),
+          button("Quadro", () => go("board", investigation.id)),
+          button("Grafo", () => go("graph", investigation.id)),
+          G.moreMenu([
           button("Editar caso", () => G.investigationEditDialog(investigation)),
           button(
             investigation.status === "open" ? "Fechar caso" : "Reabrir caso",
@@ -1155,8 +1151,6 @@
               }
             },
           ),
-          button("Quadro", () => go("board", investigation.id)),
-          button("Grafo", () => go("graph", investigation.id)),
           button(investigation.archived_at ? "Desarquivar" : "Arquivar", async () => {
             try {
               await api(`/api/investigations/${investigation.id}/archive`, {
@@ -1200,9 +1194,11 @@
             },
             "Imprimir relatório",
           ),
+          button("Todos os casos", () => go("investigations")),
           button("Excluir", () => G.deleteInvestigation(investigation), {
             variant: "button-danger",
           }),
+          ]),
         ],
       });
       const meta = el(
@@ -1737,11 +1733,6 @@
         caption: `${summary.attention || 0} pendentes · ${summary.ok || 0} cobertos`,
         actions: [button("Atualizar", onRefresh)],
       },
-      el(
-        "p",
-        { class: "panel-note" },
-        "A cobertura verifica fatos presentes no caso. Ela não mede qualidade analítica, risco ou culpa, e a ausência de pendências não prova que o caso está completo.",
-      ),
       el(
         "div",
         { class: "coverage-grid" },
