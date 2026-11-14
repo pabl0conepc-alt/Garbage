@@ -337,11 +337,18 @@
     );
   }
 
-  async function renderSettings(root) {
+  const SETTINGS_TABS = {
+    preferencias: "prefs", casos: "cases", "linha-do-tempo": "activity", conectores: "connectors",
+    chaves: "keys", modulos: "modules", atalhos: "shortcuts", sistema: "system",
+  };
+
+  async function renderSettings(root, params = []) {
     const [settings, system] = await Promise.all([
       api("/api/settings"),
       api("/api/system").catch(() => null),
     ]);
+    const intelEnabled = !G.moduleEnabled || G.moduleEnabled("intel-orchestrator");
+    let active = SETTINGS_TABS[params[0]] || "prefs";
     const controls = new Map();
     const fields = settings.schema.map((entry) => {
       const control = settingsControl(entry, settings.values[entry.key]);
@@ -376,48 +383,38 @@
       }
     }
 
-    const runtimeEntries = system?.runtime ? Object.entries(system.runtime) : [];
-    root.append(
-      pageHeader({
-        eyebrow: "CONFIGURAÇÃO DO WORKSPACE",
-        title: "Configurações",
-        description:
-          "As preferências de interface são salvas no SQLite. Os padrões de relatório e pesquisa afetam as saídas reais.",
-        actions: [button("Salvar configurações", save, { variant: "button-primary" })],
-      }),
-      el(
-        "div",
-        { class: "settings-layout" },
-        panel(
-          { eyebrow: "INTERFACE E PADRÕES", title: "Preferências" },
-          el("div", { class: "settings-fields" }, ...fields),
-          el(
-            "div",
-            { class: "toolbar-end" },
-            button("Salvar configurações", save, { variant: "button-primary" }),
-          ),
-        ),
+    function preferences() {
+      return panel(
+        { title: "Preferências" },
+        el("div", { class: "settings-fields" }, ...fields),
         el(
           "div",
-          { class: "settings-side" },
+          { class: "toolbar-end" },
+          button("Salvar", save, { variant: "button-primary" }),
+        ),
+      );
+    }
+
+    function systemSection() {
+      const runtimeEntries = system?.runtime ? Object.entries(system.runtime) : [];
+      return el(
+        "div",
+        {},
+        el(
+          "div",
+          { class: "settings-layout" },
           panel(
-            { eyebrow: "EXECUÇÃO", title: "Diagnóstico do sistema" },
+            { title: "Diagnóstico" },
             system
               ? G.kvList([
                   ["Versão do aplicativo", system.version],
                   ["Versão do esquema", String(system.schema_version)],
-                  [
-                    "Banco de dados",
-                    `${system.database.name} · ${formatBytes(system.database.size_bytes)}`,
-                  ],
-                  [
-                    "Armazenamento",
-                    system.database.file_backed ? "SQLite em arquivo" : "Em memória",
-                  ],
+                  ["Banco de dados", `${system.database.name} · ${formatBytes(system.database.size_bytes)}`],
+                  ["Armazenamento", system.database.file_backed ? "SQLite em arquivo" : "Em memória"],
                   [
                     "Python",
                     system.runtime?.python?.version
-                      ? `${system.runtime.python.version} (mínimo ${system.runtime.python.minimum || "—"}${system.runtime.python.supported === false ? ", não suportado" : ""})`
+                      ? `${system.runtime.python.version}${system.runtime.python.supported === false ? " (não suportado)" : ""}`
                       : "—",
                   ],
                   [
@@ -426,102 +423,130 @@
                       ? [system.runtime.platform.system, system.runtime.platform.distribution].filter(Boolean).join(" · ")
                       : "—",
                   ],
-                  [
-                    "SQLite",
-                    system.runtime?.sqlite_version
-                      ? String(system.runtime.sqlite_version)
-                      : "—",
-                  ],
-                  [
-                    "FTS5",
-                    system.runtime?.fts5 === undefined ? "—" : system.runtime.fts5 ? "Disponível" : "Indisponível",
-                  ],
+                  ["SQLite", system.runtime?.sqlite_version ? String(system.runtime.sqlite_version) : "—"],
+                  ["FTS5", system.runtime?.fts5 === undefined ? "—" : system.runtime.fts5 ? "Disponível" : "Indisponível"],
                 ])
-              : el("p", { class: "panel-empty" }, "O diagnóstico do sistema está indisponível."),
+              : el("p", { class: "panel-empty" }, "Diagnóstico indisponível."),
           ),
-          panel(
-            { eyebrow: "MOTOR NATIVO", title: "Aceleradores opcionais" },
-            system?.native
-              ? G.kvList([
-                  [
-                    "Análise de arquivos em C",
-                    system.native.engines.c_file_intelligence
-                      ? "Carregado"
-                      : "Alternativa em Python",
-                  ],
-                  [
-                    "Métricas de grafo em C++",
-                    system.native.engines.cpp_graph_metrics
-                      ? "Carregado"
-                      : "Alternativa em Python",
-                  ],
-                  [
-                    "Similaridade em Rust",
-                    system.native.engines.rust_similarity
-                      ? "Carregado"
-                      : "Alternativa em Python",
-                  ],
-                  ["Diretório de build", system.native.directory],
-                ])
-              : el("p", { class: "panel-empty" }, "O status nativo está indisponível."),
-          ),
-          panel(
-            { eyebrow: "CONTAGENS", title: "Registros armazenados" },
-            system
-              ? G.kvList(
-                  Object.entries(system.counts).map(([key, value]) => [
-                    titleCase(key),
-                    String(value),
-                  ]),
-                )
-              : el("p", { class: "panel-empty" }, "Sem diagnósticos."),
-          ),
-          panel(
-            { eyebrow: "EXTENSÕES", title: "Integrações" },
-            system && system.integrations.length
-              ? el(
-                  "ul",
-                  { class: "plain-list" },
-                  ...system.integrations.map((integration) =>
-                    el(
-                      "li",
-                      {},
-                      el("strong", {}, integration.module_id),
-                      ` · ${G.translateText(integration.mode)}`,
+          el(
+            "div",
+            { class: "settings-side" },
+            panel(
+              { title: "Aceleradores nativos" },
+              system?.native
+                ? G.kvList([
+                    ["Arquivos (C)", system.native.engines.c_file_intelligence ? "Carregado" : "Python"],
+                    ["Grafo (C++)", system.native.engines.cpp_graph_metrics ? "Carregado" : "Python"],
+                    ["Similaridade (Rust)", system.native.engines.rust_similarity ? "Carregado" : "Python"],
+                    ["Diretório de build", system.native.directory],
+                  ])
+                : el("p", { class: "panel-empty" }, "Status nativo indisponível."),
+            ),
+            panel(
+              { title: "Registros" },
+              system
+                ? G.kvList(Object.entries(system.counts).map(([key, value]) => [titleCase(key), String(value)]))
+                : el("p", { class: "panel-empty" }, "Sem diagnósticos."),
+            ),
+            panel(
+              { title: "Integrações" },
+              system && system.integrations.length
+                ? el(
+                    "ul",
+                    { class: "plain-list" },
+                    ...system.integrations.map((integration) =>
+                      el("li", {}, el("strong", {}, integration.module_id), ` · ${G.translateText(integration.mode)}`),
                     ),
-                  ),
-                )
-              : el("p", { class: "panel-empty" }, "Nenhuma integração registrada."),
+                  )
+                : el("p", { class: "panel-empty" }, "Nenhuma integração."),
+            ),
           ),
-          runtimeEntries.length
-            ? panel(
-                { eyebrow: "DETALHES DO DIAGNÓSTICO", title: "Campos de execução" },
-                el(
-                  "pre",
-                  { class: "code-block" },
-                  runtimeEntries
-                    .map(([key, value]) => `${key}: ${String(value)}`)
-                    .join("\n"),
-                ),
-              )
-            : null,
         ),
-      ),
-      system
-        ? panel(
-            { eyebrow: "MIGRAÇÕES", title: "Histórico do esquema", caption: `${system.migrations.length} aplicadas` },
-            table({
-              columns: [
-                { label: "VERSÃO", className: "numeric-col", render: (row) => String(row.version) },
-                { label: "DESCRIÇÃO", render: (row) => G.translateText(row.description) },
-                { label: "APLICADA EM", render: (row) => formatDate(row.applied_at, { time: true }) },
-              ],
-              rows: system.migrations,
-              emptyMessage: "Nenhuma migração registrada.",
-            }),
-          )
-        : null,
-    );
+        runtimeEntries.length
+          ? panel(
+              { title: "Campos de execução" },
+              el("pre", { class: "code-block" }, runtimeEntries.map(([key, value]) => `${key}: ${String(value)}`).join("\n")),
+            )
+          : null,
+        system
+          ? panel(
+              { title: "Migrações", caption: `${system.migrations.length} aplicadas` },
+              table({
+                columns: [
+                  { label: "VERSÃO", className: "numeric-col", render: (row) => String(row.version) },
+                  { label: "DESCRIÇÃO", render: (row) => G.translateText(row.description) },
+                  { label: "APLICADA EM", render: (row) => formatDate(row.applied_at, { time: true }) },
+                ],
+                rows: system.migrations,
+                emptyMessage: "Nenhuma migração registrada.",
+              }),
+            )
+          : null,
+      );
+    }
+
+    const tabStrip = el("div");
+    const body = el("div", { class: "settings-body" });
+    const slug = Object.fromEntries(Object.entries(SETTINGS_TABS).map(([name, key]) => [key, name]));
+    const enabled = (module) => !G.moduleEnabled || G.moduleEnabled(module);
+    const available = [
+      { key: "prefs", label: "Preferências" },
+      enabled("investigations") ? { key: "cases", label: "Casos" } : null,
+      enabled("activity-log") ? { key: "activity", label: "Linha do tempo" } : null,
+      intelEnabled ? { key: "connectors", label: "Conectores" } : null,
+      intelEnabled ? { key: "keys", label: "Chaves de API" } : null,
+      enabled("module-manager") ? { key: "modules", label: "Módulos" } : null,
+      { key: "shortcuts", label: "Atalhos" },
+      { key: "system", label: "Sistema" },
+    ].filter(Boolean);
+    if (!available.some((item) => item.key === active)) active = "prefs";
+
+    // Full screens shown inside a tab keep their own actions; the embed
+    // class only quiets their heading.
+    async function embed(view) {
+      const host = el("div", { class: "settings-embed" });
+      body.replaceChildren(host);
+      try {
+        await G.views[view](host, []);
+        G.hydrateIcons(host);
+      } catch (error) {
+        host.replaceChildren(inlineError(error.message));
+      }
+    }
+
+    function draw() {
+      tabStrip.replaceChildren(
+        G.tabs({
+          items: available,
+          active,
+          onSelect: (key) => {
+            active = key;
+            history.replaceState(null, "", `#/settings/${slug[key]}`);
+            draw();
+          },
+        }),
+      );
+      if (active === "connectors" && G.renderIntelConnectors) {
+        G.renderIntelConnectors(body);
+      } else if (active === "keys" && G.renderIntelKeys) {
+        G.renderIntelKeys(body);
+      } else if (active === "cases") {
+        embed("investigations");
+      } else if (active === "activity") {
+        embed("activity");
+      } else if (active === "modules") {
+        embed("modules");
+      } else if (active === "shortcuts") {
+        body.replaceChildren(
+          panel({ title: "Atalhos de teclado" }, G.shortcutList()),
+        );
+      } else {
+        body.replaceChildren(active === "system" ? systemSection() : preferences());
+      }
+    }
+
+    root.append(pageHeader({ title: "Configurações" }), tabStrip, body);
+    draw();
   }
 
   /* ================================================================ */
@@ -551,7 +576,7 @@
                 icon: "☰",
                 title: "Atualize o catálogo público",
                 description:
-                  "O cache do KEV está vazio. O GARBAGE faz uma única solicitação HTTPS explícita à CISA e armazena um snapshot validado e com hash. Não há consultas em segundo plano.",
+                  "Uma única solicitação à CISA salva o catálogo neste computador.",
                 action: button(
                   "Atualizar CISA KEV",
                   () => refresh(root, true),

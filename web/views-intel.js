@@ -328,9 +328,14 @@
                 lastOutcome,
                 onRun: async (outcome) => {
                   lastOutcome = outcome;
+                  // The page scrolls inside the glass sheet on desktop and
+                  // as a document on phones: keep both positions.
+                  const scroller = document.querySelector("#view-root");
                   const top = window.scrollY;
+                  const inner = scroller ? scroller.scrollTop : 0;
                   await draw();
                   window.scrollTo(0, top);
+                  if (scroller) scroller.scrollTop = inner;
                 },
               })
             : null,
@@ -826,20 +831,13 @@
           icon: "⟷",
           tone: "violet",
         }),
-        G.metric({
-          label: "MOTOR",
-          value: data.indicator_engine ? "Disponível" : "Indisponível",
-          foot: "Extração por expressão regular",
-          icon: "◈",
-          tone: data.indicator_engine ? "green" : "amber",
-        }),
       ),
       panel(
-        { eyebrow: "FERRAMENTA", title: "Triagem de texto", caption: "Executado em memória · nada é armazenado" },
+        { title: "Triagem de texto" },
         el(
           "p",
           { class: "panel-note" },
-          "Cole texto de relatório para extrair valores de IPv4, IPv6, CIDR, domínio, URL, e-mail e hash. A notação neutralizada é restaurada antes da comparação; nenhuma consulta de DNS ou reputação é feita.",
+          "Cole um texto para extrair IPs, domínios, URLs, e-mails e hashes. Nada é consultado nem armazenado.",
         ),
         el(
           "div",
@@ -1322,14 +1320,9 @@
         eyebrow: "RELATÓRIOS",
         title: "Central de relatórios",
         description:
-          "Toda exportação é gerada a partir do caso atual. Inferências e base de coleta permanecem identificadas.",
+          "Toda exportação é gerada a partir do caso atual. Inferências e base de coleta permanecem identificadas. "
+          + "Relatórios descrevem observações com fonte, não fatos confirmados; revise as limitações antes de distribuir.",
       }),
-      el(
-        "div",
-        { class: "notice" },
-        "Relatórios descrevem observações com fonte, não fatos confirmados. " +
-          "Revise a seção de limitações antes de distribuir uma exportação.",
-      ),
       panel(
         { eyebrow: "RELATÓRIOS DE CASOS", title: "Gerar exportações", caption: `${rows.length} casos` },
         rows.length
@@ -1393,20 +1386,6 @@
                 variant: "button-primary",
               }),
             }),
-      ),
-      panel(
-        { eyebrow: "MÉTODO", title: "O que os relatórios incluem" },
-        el(
-          "ul",
-          { class: "plain-list" },
-          el("li", {}, "Escopo, status do caso e data de geração."),
-          el("li", {}, "Fontes com referências e datas de acesso."),
-          el("li", {}, "Observações identificadas pela base de coleta."),
-          el("li", {}, "Entidades, relacionamentos e seu status de verificação."),
-          el("li", {}, "Hashes, tamanhos e verificações de integridade das evidências."),
-          el("li", {}, "Indicadores extraídos e correlações por valor exato."),
-          el("li", {}, "Limitações analíticas e a distinção entre inferência e confirmação."),
-        ),
       ),
     );
   }
