@@ -7969,3 +7969,14 @@ dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 [data-theme="contrast"] .segmented-option.is-active,
 [data-theme="contrast"] .display-choice.is-active { color: var(--text-primary); }
+
+@media (max-width: 760px) {
+  .page-heading { align-items: flex-start; }
+  .page-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 760px) {
+  .panel-heading { align-items: flex-start; text-align: left; }
+  .panel-heading-side,
+  .panel-actions { justify-content: flex-start; }
+}
