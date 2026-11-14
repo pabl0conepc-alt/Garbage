@@ -47,6 +47,7 @@ G.NAV = [
     label: "Inteligência",
     items: [
       { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
+      { view: "monitors", label: "Monitoramento", icon: "bell", module: "monitoring" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
@@ -59,6 +60,7 @@ G.NAV = [
       { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
       { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
       { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
+      { view: "geoint", label: "Mapa GEOINT", icon: "globe", module: "geoint" },
     ],
   },
   {
@@ -73,6 +75,7 @@ G.NAV = [
     items: [
       { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
       { view: "attack", label: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
+      { view: "feeds", label: "Feeds CTI", icon: "feed", module: "taxii-feeds" },
     ],
   },
   {
@@ -247,6 +250,9 @@ const ICON_PATHS = {
   chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
   merge: "M6 4v4a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 4v4a6 6 0 0 1-6 6M12 14v6M4 6l2-2 2 2M16 6l2-2 2 2",
   transform: "M4 12h10M10 7l5 5-5 5M18 5v14",
+  bell: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0",
+  feed: "M5 19a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z",
   matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
   graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
   evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
@@ -612,6 +618,38 @@ const ERROR_PATTERNS = [
   [/^transforms that do not accept (\S+): (.+)$/, (m) => `Transformações que não aceitam ${m[1]}: ${m[2]}`],
   [/^max_new_entities must be between (\d+) and (\d+)$/, (m) => `O limite de novas entidades deve ficar entre ${m[1]} e ${m[2]}`],
   [/^an entity cannot be merged into itself$/, () => "Uma entidade não pode ser fundida nela mesma"],
+  [/^the discovery URL must be an https URL$/, () => "A URL de descoberta deve ser https"],
+  [/^give both username and password, or neither$/, () => "Informe usuário e senha, ou nenhum dos dois"],
+  [/^the TAXII server refused the credentials \(HTTP (\d+)\)$/, (m) => `O servidor TAXII recusou as credenciais (HTTP ${m[1]})`],
+  [/^the TAXII server answered HTTP 404$/, () => "O servidor TAXII respondeu HTTP 404"],
+  [/^the DNS resolver did not answer$/, () => "O resolvedor DNS não respondeu"],
+  [/^the plugin did not finish within (\d+) s$/, (m) => `O plugin não terminou em ${m[1]} s`],
+  [/^the plugin exited without a result$/, () => "O plugin terminou sem resultado"],
+  [/^the plugin broke the protocol$/, () => "O plugin quebrou o protocolo"],
+  [/^the plugin failed: (.+)$/, (m) => `O plugin falhou: ${m[1]}`],
+  [/^the plugin changed after approval; approve it again$/, () => "O plugin foi alterado depois da aprovação; aprove de novo"],
+  [/^the plugin changed since it was listed; review it again$/, () => "O plugin mudou desde a listagem; revise de novo"],
+  [/^this plugin declared no network access$/, () => "Este plugin não declarou acesso à rede"],
+  [/^request limit of (\d+) reached$/, (m) => `Limite de ${m[1]} requisições atingido`],
+  [/^the plugin is invalid: (.+)$/, (m) => `O plugin é inválido: ${m[1]}`],
+  [/^choose at least one source$/, () => "Escolha pelo menos uma fonte"],
+  [/^sources that do not accept (\S+): (.+)$/, (m) => `Fontes que não aceitam ${m[1]}: ${m[2]}`],
+  [/^interval must be between (\d+) and (\d+) minutes$/, (m) => `O intervalo deve ficar entre ${m[1]} e ${m[2]} minutos`],
+  [/^monitor not found: .+$/, () => "Monitor não encontrado"],
+  [/^monitor is already running$/, () => "Este monitor já está rodando; aguarde terminar"],
+  [/^this is not a GARBAGE case package$/, () => "Este arquivo não é um pacote de caso do GARBAGE"],
+  [/^the case package was modified after export \(SHA-256 does not match\)$/, () => "O pacote foi alterado depois de exportado (o SHA-256 não confere)"],
+  [/^unsupported case package version: (.+)$/, (m) => `Versão de pacote não suportada: ${m[1]}`],
+  [/^file content does not match its recorded SHA-256$/, () => "o conteúdo do arquivo não confere com o SHA-256 registrado"],
+  [/^not in the local ATT&CK data; load ATT&CK first$/, () => "fora dos dados locais do ATT&CK; carregue o ATT&CK primeiro"],
+  [/^endpoint missing or unknown type$/, () => "ponta ausente ou tipo desconhecido"],
+  [/^unknown entity type$/, () => "tipo de entidade desconhecido"],
+  [/^evidence files exceed 48 MiB; export without files$/, () => "Os arquivos de evidência passam de 48 MiB; exporte sem os arquivos"],
+  [/^unknown report sections: (.+)$/, (m) => `Seções de relatório desconhecidas: ${m[1]}`],
+  [/^plugin\.json is missing$/, () => "Falta o plugin.json"],
+  [/^give a registrable domain such as example\.com$/, () => "Informe um domínio registrável, como example.com"],
+  [/^the selected objects have no simple observable patterns$/, () => "Os objetos escolhidos não têm padrões simples de observáveis"],
+  [/^the Sigma package could not be downloaded(.*)$/, (m) => `Não foi possível baixar o pacote Sigma${m[1]}`],
   [/^two different entity ids are required$/, () => "São necessárias duas entidades diferentes"],
   [/^a person, username or profile can only be merged with the same kind of entity$/, () => "Pessoa, nome de usuário ou perfil só pode ser fundido com o mesmo tipo de entidade"],
   [/^no CISA KEV cache; run an explicit refresh first$/, () => "Sem cache do CISA KEV; faça uma atualização explícita primeiro"],
@@ -724,6 +762,20 @@ const ACTIVITY_PATTERNS = [
   [/^Transforms on (\S+) (.+): (\d+) run, (\d+) new entities$/, (m) => `Transformações em ${m[2]}: ${m[3]} executada(s), ${m[4]} entidade(s) nova(s)`],
   [/^Entity merged: (.+) into (.+)$/, "Entidade fundida: $1 em $2"],
   [/^Entity pair marked as distinct$/, "Par de entidades marcado como distinto"],
+  [/^TAXII server added: (.+)$/, "Servidor TAXII adicionado: $1"],
+  [/^TAXII server removed: (.+)$/, "Servidor TAXII removido: $1"],
+  [/^TAXII pull: (\d+) objects from (.+)$/, "Coleta TAXII: $1 objeto(s) de $2"],
+  [/^Sigma rules refreshed: (\S+), (\d+) rules$/, "Regras Sigma atualizadas: $1, $2 regras"],
+  [/^Plugin approved: (.+) \((\w+)\)$/, "Plugin aprovado: $1 ($2)"],
+  [/^Plugin disabled: (.+)$/, "Plugin desativado: $1"],
+  [/^Investigation archived: (.+)$/, "Investigação arquivada: $1"],
+  [/^Monitor created: (.+) \((\S+) (.+), every (\d+) min\)$/, "Monitor criado: $1 ($2 $3, a cada $4 min)"],
+  [/^Monitor deleted: (.+)$/, "Monitor excluído: $1"],
+  [/^Investigation restored: (.+)$/, "Investigação desarquivada: $1"],
+  [/^Investigation duplicated from (.+): (.+)$/, "Investigação duplicada de $1: $2"],
+  [/^Case package exported: (.+)$/, "Pacote do caso exportado: $1"],
+  [/^Case package imported: (.+) \((\w+)\)$/, "Pacote de caso importado: $1 ($2)"],
+  [/^Evidence note added: (.+)$/, "Anotação de evidência: $1"],
 ];
 
 const FORMAT_LABEL_PT = {
@@ -805,6 +857,15 @@ const TEXT_PT = {
   "the run was interrupted": "a consulta foi interrompida",
   "the run was interrupted by a restart": "a consulta foi interrompida por um reinício",
   "Full-text search index": "Índice de busca em texto completo",
+  "registered or delegated; not necessarily malicious": "registrado ou delegado; não necessariamente malicioso",
+  omission: "omissão", repetition: "repetição", transposition: "transposição", replacement: "tecla vizinha",
+  insertion: "inserção", homoglyph: "caractere parecido", hyphenation: "hífen", "vowel-swap": "troca de vogal",
+  bitsquatting: "bit trocado", addition: "acréscimo", subdomain: "subdomínio", "tld-swap": "outro TLD",
+  "TAXII feeds and Sigma rules": "Feeds TAXII e regras Sigma",
+  "Local plugin approvals": "Aprovações de plugins locais",
+  "Case objective and archive, evidence custody and notes": "Objetivo e arquivamento de casos, custódia e anotações de evidências",
+  "Monitors and notifications": "Monitores e notificações",
+  "Search index covers case objectives": "Pesquisa passa a cobrir o objetivo do caso",
 };
 
 function translateText(value) {
@@ -872,6 +933,11 @@ const MODULE_TEXT = {
   "attack-matrix": ["MITRE ATT&CK", "Matriz Enterprise ATT&CK offline, detalhe de técnicas e técnicas vinculadas aos casos."],
   "yara-rules": ["Regras YARA", "Conjuntos locais de regras YARA verificados, testados e aplicados às análises de arquivos."],
   analytics: ["Painel analítico", "Gráficos do workspace e do caso calculados a partir dos registros salvos."],
+  "taxii-feeds": ["Feeds TAXII", "Cliente TAXII 2.1: descoberta, coleções e coleta paginada de objetos STIX, com indicadores registrados nos casos."],
+  "sigma-rules": ["Regras Sigma", "Regras de detecção do SigmaHQ baixadas sob demanda e indexadas por técnica ATT&CK."],
+  monitoring: ["Monitoramento", "Consultas multifonte salvas que rodam de novo num intervalo enquanto o servidor está ligado, com a diferença entre execuções e notificações na interface."],
+  plugins: ["Plugins locais", "Transformações escritas pelo analista, com manifesto, permissões declaradas e aprovação pelo hash do código, executadas em processo separado."],
+  geoint: ["Mapa GEOINT", "Mapa local das posições GPS do EXIF de imagens analisadas e da localização aproximada de redes vinda das consultas."],
   "cti-export": ["Exportação CTI", "Pacotes STIX 2.1, eventos MISP e CSV de IOCs gerados a partir dos registros do caso."],
   "media-forensics": ["Perícia de mídia", "Análise de mídia mais profunda planejada; hoje existem apenas hash e metadados."],
 };
@@ -1521,7 +1587,8 @@ async function route() {
       /* cleanup is best effort */
     }
   }
-  const raw = location.hash.replace(/^#\/?/, "");
+  // "?key=value" after the path is read by the view itself (hashQuery).
+  const raw = location.hash.replace(/^#\/?/, "").split("?")[0];
   const segments = raw.split("/").filter(Boolean);
   const candidate = segments[0] || "overview";
   const view = G.views[candidate] ? candidate : "overview";
@@ -1586,7 +1653,15 @@ G.newInvestigation = async function newInvestigation() {
         label: "Descrição",
         type: "textarea",
         rows: 3,
-        placeholder: "Escopo, contexto ou objetivo do analista",
+        placeholder: "Escopo e contexto",
+      },
+      {
+        name: "objective",
+        label: "Objetivo",
+        type: "textarea",
+        rows: 2,
+        maxlength: 2000,
+        placeholder: "A pergunta que o caso precisa responder",
       },
     ],
     submitLabel: "Criar investigação",

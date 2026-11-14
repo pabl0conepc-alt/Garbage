@@ -32,17 +32,17 @@ Legenda: **existe**, **parcial** (falta parte do pedido), **falta**, **fora**
 | 8. SOCMINT | parcial / fora | Dentro do escopo: dados públicos de **organizações e comunidades** (repositórios e organizações do GitHub, metadados públicos de canais e servidores). Fora: perfis e histórico de pessoas |
 | 9. Identidade digital | fora | Ver seção 4 |
 | 10. Infraestrutura | existe (quase todo) | DNS, rDNS (IPinfo/Shodan), RDAP, ASN, geolocalização de rede, CT, TLS, cabeçalhos, tecnologias, portas (Shodan), histórico (Wayback). Falta: árvore de subdomínios dedicada e DNS passivo (só com provedor pago) |
-| 11. Mídia | parcial | Metadados, hashes e EXIF básico. Falta: hash perceptual e duplicatas visuais, OCR (dependeria do Tesseract, opcional), frames de vídeo (dependeria do ffmpeg, opcional) |
-| 12. GEOINT | falta | Mapa sem tiles externos (CSP) para coordenadas de EXIF de arquivos fornecidos pelo usuário e localização aproximada de **redes**, sempre com origem e precisão |
-| 13. CTI | parcial | Falta: Sigma, cliente TAXII 2.1, feeds periódicos, perfis de grupos (os dados do ATT&CK já estão no banco) |
+| 11. Mídia | parcial | EXIF completo com GPS (etapa 4a), pHash/dHash e imagens visualmente parecidas. Falta: OCR (dependeria do Tesseract, opcional), frames de vídeo (dependeria do ffmpeg, opcional) |
+| 12. GEOINT | existe (etapa 4a) | Mapa local (Natural Earth) com GPS do EXIF de imagens analisadas e localização aproximada de redes, sempre com origem e precisão |
+| 13. CTI | quase todo (etapa 4b) | Cliente TAXII 2.1 com coleta paginada e envio de indicadores ao caso; regras Sigma do SigmaHQ por técnica; typosquatting em Rust. A coleta periódica de fontes passa pelos monitores (etapa 7). Falta: perfis de grupos |
 | 14. Dark web | fora por ora | Exige Tor e fontes curadas; sem desenho seguro definido. Pode entrar depois como consulta a listas públicas de domínios onion em feeds de CTI |
-| 15. Casos | parcial | Falta: objetivo, arquivar, duplicar, exportar/importar o caso inteiro |
-| 16. Evidências | parcial | SHA-256 e reverificação existem. Falta: cadeia de custódia (eventos), anotações por evidência, exportação/importação |
-| 17. Monitoramento | falta | Previsto como fase 9 do plano |
-| 18. Plugins | falta | Há registro de conectores e de módulos, mas não um formato de plugin com manifesto, permissões e isolamento |
+| 15. Casos | existe (etapa 6) | Objetivo, arquivar, duplicar e pacote do caso inteiro com SHA-256, prévia e importação |
+| 16. Evidências | existe (etapa 6) | Cadeia de custódia encadeada por hash (registro, verificação, acesso, anotação, exportação, importação, exclusão) e anotações |
+| 17. Monitoramento | existe (etapa 7) | Consultas multifonte salvas com intervalo (15 min a 30 dias), agendador local enquanto o servidor está ligado, diferença por fonte, tipo e valor entre execuções (fonte que falhou não conta como remoção), histórico e notificações no sino. Falta: envio por e-mail ou webhook (ficou de fora por mandar dados para fora) |
+| 18. Plugins | existe (etapa 5) | Pasta local, manifesto validado, permissões declaradas (hosts, requisições, tempo, saída), aprovação pelo SHA-256 do código, execução em processo separado com rede intermediada; vira transformação |
 | 19. Normalização e resolução | existe (Fundação) | Candidatos exatos, prováveis e fracos com regra explicada; fusão aprovada pelo analista, com alias e registro de atividade; pares marcados como distintos não voltam. Pessoas ficam de fora |
 | 20. Pesquisa global | existe (etapa 3) | FTS5 com ranking BM25, trechos destacados, sem acento e com prefixo; grupo "mais relevantes"; recai para LIKE sem FTS5 |
-| 21. Relatórios | parcial | HTML, JSON, CSV, Markdown, STIX, MISP e impressão. Falta: escolher seções, incluir grafo e metodologia |
+| 21. Relatórios | existe (etapa 6) | Seções escolhidas, metodologia gerada dos registros, grafo SVG, custódia e técnicas. Falta: PDF nativo (a impressão do navegador gera PDF) |
 | 22. Arquitetura | existe | SQLite com migrações, cache, limites de taxa, erros estruturados. Execução assíncrona de consultas falta (fase 9) |
 | 23. Design | existe | Monocromático, dock flutuante, cantos arredondados; ajuste contínuo |
 | 24. Segurança | parcial | Anti-SSRF, CSP, validação, SQL parametrizado, chaves nunca devolvidas pela API, travas de rede. Sem autenticação (servidor só em loopback) e sem criptografia em repouso |
@@ -82,8 +82,8 @@ Ordem de trabalho, cada item com testes, verificação no navegador e PR:
 1. **Fundação** (feito) — formato de transform (entrada, saída, parâmetros, logs, tempo) sobre os conectores; registro de módulos corrigido e completo; resolução de entidades com níveis exata/provável/fraca.
 2. **Investigação visual** (feito) — seleção múltipla, fixar e ocultar, minimapa, desfazer/refazer, exportação PNG e JSON/GraphML (e importação), ícones por tipo, histórico de enriquecimento no painel do nó.
 3. **Pesquisa** (feito) — consultas assíncronas com progresso por fonte; FTS5 com ranking na busca global; conectores de organizações (GitHub, security.txt). Metadados de canais e servidores de chat ficaram de fora: as APIs públicas de convite expõem quem criou o convite.
-4. **Inteligência especializada** — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).
-5. **Plugins** — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.
-6. **Casos e evidências** — objetivo, arquivar, duplicar, exportar/importar caso; cadeia de custódia e anotações de evidência; relatórios com seleção de seções, grafo e metodologia.
-7. **Monitoramento** — consultas salvas com agenda local, diferença entre execuções e notificações.
-8. **Refinamento** — acessibilidade, testes de ponta a ponta, desempenho do grafo, documentação e matriz OpenArchive atualizadas.
+4. **Inteligência especializada** (feito) — hash perceptual e duplicatas de imagem; mapa GEOINT local; Sigma; cliente TAXII 2.1; typosquatting em Rust (pendente da fase 8 original).
+5. **Plugins** (feito) — manifesto, descoberta em pasta local, permissões declaradas, execução isolada em processo separado.
+6. **Casos e evidências** (feito) — objetivo, arquivar, duplicar, exportar/importar caso; cadeia de custódia e anotações de evidência; relatórios com seleção de seções, grafo e metodologia.
+7. **Monitoramento** (feito) — consultas salvas com agenda local, diferença entre execuções e notificações.
+8. **Refinamento** (feito) — acessibilidade (auditoria em todas as telas, SVGs interativos expostos a leitores de tela, Esc no sino), testes de ponta a ponta (caso inteiro por HTTP e contrato entre interface e API), desempenho do grafo (Barnes-Hut, hover sem redesenhar, corte por grau com aviso, até 5.000 nós), objetivo do caso na pesquisa, documentação e matriz OpenArchive atualizadas.

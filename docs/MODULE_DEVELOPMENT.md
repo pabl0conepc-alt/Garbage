@@ -2,9 +2,10 @@
 
 ## 1. Current module model
 
-GARBAGE modules are ordinary Python packages under `garbage_intel/modules/`,
-registered in `DEFAULT_MODULES` in `db.py`. There is **no dynamic plugin loader**
-and no execution of code from a user directory.
+Built-in modules are Python packages under `garbage_intel/modules/` (and a
+few top-level services), registered in `DEFAULT_MODULES` in `db.py`. Analyst
+code runs only as a **local plugin** (section 8): approved by digest and run
+in a separate process, never imported into the server.
 
 Registry row:
 
@@ -26,15 +27,8 @@ States:
 - `planned`: cannot be enabled. This is the required state for anything without
   a tested backend. It prevents a page or button from implying capability.
 
-Current states:
-
-| Module | State |
-| --- | --- |
-| investigations, activity-log, entities, relationships, investigation-board, relationship-graph | enabled |
-| evidence, image-intelligence, file-intelligence, source-manager | enabled |
-| indicator-engine, cisa-kev | enabled |
-| report-center, global-search, module-manager, settings | enabled |
-| nvd-connector, external-osint-connectors, media-forensics | planned |
+`GET /api/modules` is the authoritative list. Only `media-forensics` is still
+`planned` (OCR and video frames would need optional external tools).
 
 ## 2. Adding a Python module
 
@@ -160,3 +154,59 @@ An automation runner must be declarative and allowlisted. It may not execute
 shell commands, arbitrary Python, macros or downloaded scripts. Each step must
 name a registered operation, validate its inputs, record provenance, respect
 module state and stop on error. A dry-run mode is required before scheduling.
+
+## 8. Local plugins
+
+A plugin adds a transform without touching the server code. It lives in the
+plugins directory (`GARBAGE_PLUGINS_DIR`, or `plugins/` next to the
+database), one folder per plugin:
+
+```
+plugins/idn-inspect/
+  plugin.json
+  main.py
+```
+
+`plugin.json`:
+
+```json
+{
+  "id": "idn-inspect",
+  "name": "Inspetor de IDN",
+  "version": "1.0.0",
+  "description": "What it does, in one sentence.",
+  "entry": "main.py",
+  "accepts": ["domain", "url"],
+  "outputs": [{"result_type": "ascii-lookalike", "entity_type": "domain", "relationship_type": "related-to"}],
+  "permissions": {"network": [], "contacts_target": false, "max_requests": 10, "timeout_seconds": 10, "max_output_kb": 64}
+}
+```
+
+- `accepts` uses the multi-source artifact types. `outputs` lists the result
+  types that become entities when the plugin runs as a transform; person,
+  username and profile are refused.
+- `permissions.network` lists the only hosts `ctx.fetch` may reach (up to 10;
+  empty means no network). Limits: 50 requests, 60 s, 1 MiB of output.
+
+`main.py` exposes `run(ctx)`, which returns a list of findings
+`{"result_type", "value", "data"?, "source_url"?}`. `ctx.type` and
+`ctx.value` are the artifact; `ctx.fetch(url, headers=None)` performs a GET
+through the server and returns an object with `status`, `headers`, `url`,
+`body`, `text()` and `json()`.
+
+Lifecycle: the Module manager lists every folder with its state (invalid,
+not approved, active, changed). Approving records the SHA-256 of the
+manifest and all `.py` files; any later edit sets the plugin to *changed*
+and it stops running until approved again. An active plugin is the connector
+`plugin-<id>`, available in the multi-source search and as a transform,
+behind the same network and target-contact settings as built-in sources.
+
+Isolation: each run is a fresh `python -I` process with a minimal
+environment, the plugin folder as working directory, a time limit, an
+address-space and CPU cap on POSIX, stdout reserved for the protocol and
+`socket` replaced so the only network path is the brokered `ctx.fetch`
+(SSRF-safe, host-restricted, credentials headers stripped). This contains
+mistakes and runaway code; it is not a sandbox for hostile code, so approve
+only plugins you have read. `examples/plugins/idn-inspect` is a complete,
+offline example.
+

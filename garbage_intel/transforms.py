@@ -53,6 +53,7 @@ TRANSFORM_OUTPUTS: dict[str, tuple[str, ...]] = {
     "local-workspace": ("lookalike",),
     "github": ("website", "repository", "repo-homepage", "fork-of"),
     "security-txt": ("security-contact-email", "security-contact-url", "security-policy"),
+    "typosquat": ("typosquat",),
 }
 
 # Relationship recorded from the input entity to each new entity.
@@ -89,6 +90,7 @@ RELATIONSHIP_FOR_RESULT: dict[str, str] = {
     "security-contact-email": "associated-with",
     "security-contact-url": "associated-with",
     "security-policy": "references",
+    "typosquat": "related-to",
 }
 
 PARAMETERS = (
@@ -149,22 +151,40 @@ def _estimates(connection: Any) -> dict[str, dict[str, int]]:
     }
 
 
+def outputs_of(transform_id: str) -> list[dict[str, str]]:
+    """Result types a transform turns into entities, with entity and
+    relationship types: built-in declarations or a plugin's manifest."""
+    if transform_id.startswith("plugin-"):
+        from .plugins import outputs_for
+
+        return [
+            {
+                "result_type": item["result_type"],
+                "entity_type": item["entity_type"],
+                "relationship_type": item["relationship_type"],
+            }
+            for item in outputs_for(transform_id)
+            if item["entity_type"]
+        ]
+    return [
+        {
+            "result_type": result_type,
+            "entity_type": PROMOTABLE_TYPES.get(result_type, "other"),
+            "relationship_type": RELATIONSHIP_FOR_RESULT.get(result_type, "related-to"),
+        }
+        for result_type in TRANSFORM_OUTPUTS.get(transform_id, ())
+    ]
+
+
 def _describe(connector: Any, availability: dict[str, Any], estimate: dict[str, int] | None) -> dict[str, Any]:
-    outputs = TRANSFORM_OUTPUTS.get(connector.connector_id, ())
+    outputs = outputs_of(connector.connector_id)
     return {
         "transform_id": connector.connector_id,
         "name": connector.name,
         "description": connector.description,
         "kind": "pivot" if outputs else "enrichment",
         "inputs": list(connector.accepts),
-        "outputs": [
-            {
-                "result_type": result_type,
-                "entity_type": PROMOTABLE_TYPES.get(result_type, "other"),
-                "relationship_type": RELATIONSHIP_FOR_RESULT.get(result_type, "related-to"),
-            }
-            for result_type in outputs
-        ],
+        "outputs": outputs,
         "network": connector.network,
         "contacts_target": connector.contacts_target,
         "requires_key": connector.requires_key,
@@ -300,7 +320,7 @@ def run_transforms(
                 "error": source["error"],
             },
         ]
-        outputs = set(TRANSFORM_OUTPUTS.get(transform_id, ()))
+        outputs = {item["result_type"]: item for item in outputs_of(transform_id)}
         candidates = [
             result
             for result in by_connector.get(transform_id, [])
@@ -321,8 +341,8 @@ def run_transforms(
                     items=[
                         {
                             "result_id": result["id"],
-                            "entity_type": PROMOTABLE_TYPES.get(result["result_type"], "other"),
-                            "relationship_type": RELATIONSHIP_FOR_RESULT.get(result["result_type"], "related-to"),
+                            "entity_type": outputs[result["result_type"]]["entity_type"],
+                            "relationship_type": outputs[result["result_type"]]["relationship_type"],
                         }
                         for result in chosen
                     ],

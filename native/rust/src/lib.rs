@@ -1,5 +1,6 @@
 //! Optional Rust helpers: string similarity for domain lookalike analysis and
-//! the embedded signature scan (`signatures`).
+//! the embedded signature scan (`signatures`) and typosquatting candidates
+//! (`typosquat`).
 //!
 //! The exported functions are pure and allocation-bounded. They never resolve
 //! DNS, open files, touch the network or execute input.
@@ -7,6 +8,7 @@
 use core::slice;
 
 pub mod signatures;
+pub mod typosquat;
 
 const MAX_INPUT: usize = 253;
 const ABI_VERSION: u32 = 1;

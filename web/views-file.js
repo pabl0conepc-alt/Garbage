@@ -61,6 +61,10 @@
 
   /* New findings carry details inside the sentence; rebuild them by code. */
   const FINDING_PT = {
+    "exif-gps": (m) => {
+      const coords = m.match(/\(([-\d.]+), ([-\d.]+)\)/);
+      return `A imagem traz coordenadas GPS (${coords ? `${coords[1]}, ${coords[2]}` : "?"}) gravadas pelo dispositivo. Podem estar desatualizadas, imprecisas ou editadas: trate como pista, não como a origem do arquivo.`;
+    },
     "vba-macros": (m) => `Projeto de macros VBA com ${m.match(/with (\d+)/)?.[1] ?? "?"} módulo(s); o código foi descomprimido só para leitura e não foi executado.`,
     "vba-autoexec": (m) => `As macros rodam sozinhas ao abrir ou fechar o documento: ${m.match(/through: (.+)\.$/)?.[1] ?? ""}.`,
     "vba-suspicious-keywords": (m) => {
@@ -215,9 +219,41 @@
     );
   }
 
+  const ORIENTATION_PT = { 1: "normal", 3: "girada 180°", 6: "girada 90° (horário)", 8: "girada 90° (anti-horário)" };
+
   function engineSections(analysis) {
     const sections = [];
     const structure = analysis.structure || {};
+
+    const exif = analysis.metadata?.exif;
+    if (exif) {
+      const gps = exif.gps;
+      sections.push(
+        panel(
+          { eyebrow: "EXIF", title: "Metadados da câmera", caption: gps?.valid ? "com GPS" : "sem GPS" },
+          G.kvList([
+            ["Fabricante", exif.make || null],
+            ["Modelo", exif.model || null],
+            ["Lente", exif.lens_model || null],
+            ["Software", exif.software || null],
+            ["Capturada em", exif.captured_at ? `${exif.captured_at}${exif.offset_time ? ` (${exif.offset_time})` : ""}` : null],
+            ["Alterada em", exif.modified_at || null],
+            ["Orientação", exif.orientation ? ORIENTATION_PT[exif.orientation] || String(exif.orientation) : null],
+            ["Autor", exif.artist_present ? "campo preenchido (o nome não é exibido)" : null],
+            ["Número de série do corpo", exif.body_serial_present ? "presente (não exibido)" : null],
+            ["Latitude, longitude", gps?.valid ? el("code", {}, `${gps.latitude}, ${gps.longitude}`) : gps ? "inválidas" : null],
+            ["Altitude", gps?.altitude_m !== undefined ? `${gps.altitude_m} m` : null],
+            ["Hora do GPS (UTC)", gps?.gps_time_utc || null],
+            ["Erro horizontal", gps?.horizontal_error_m !== undefined ? `${gps.horizontal_error_m} m` : null],
+            ["Datum", gps?.datum || null],
+          ].filter(([, value]) => value !== null)),
+          gps?.valid && G.moduleEnabled("geoint")
+            ? el("a", { class: "button button-secondary button-small", href: `#/geoint/${analysis.investigation_id || ""}` }, "Ver no mapa")
+            : null,
+          el("p", { class: "tool-limit" }, "Valores gravados pelo dispositivo ou por quem editou o arquivo; podem faltar, estar errados ou ter sido alterados."),
+        ),
+      );
+    }
 
     const compound = structure.compound;
     if (compound) {
@@ -509,12 +545,17 @@
       analyzeButton.textContent = "Analisando…";
       try {
         const content_base64 = await fileToBase64(selectedFile);
+        // Visual hashes need the decoded pixels, which only the browser has.
+        const perceptual = /^image\/(png|jpeg|gif|webp|bmp)$/.test(selectedFile.type) && G.imageHash
+          ? await G.imageHash.compute(selectedFile)
+          : null;
         analysis = await api("/api/intelligence/files", {
           method: "POST",
           body: JSON.stringify({
             filename: selectedFile.name,
             content_base64,
             ...(caseSelect.value ? { investigation_id: caseSelect.value } : {}),
+            ...(perceptual ? { perceptual } : {}),
           }),
         });
         toast(`Analisado: ${analysis.file_name} · ${formatLabel(analysis)}.`);
@@ -577,7 +618,7 @@
 
     async function loadSimilar(current) {
       similarHost.replaceChildren();
-      if (!current?.analysis_id || !(current.hashes.tlsh || current.hashes.ssdeep)) return;
+      if (!current?.analysis_id || !(current.hashes.tlsh || current.hashes.ssdeep || current.perceptual)) return;
       try {
         const result = await api(`/api/intelligence/files/${current.analysis_id}/similar`);
         if (analysis !== current) return;
@@ -586,7 +627,7 @@
             {
               eyebrow: "SEMELHANÇA",
               title: result.items.length ? `Arquivos parecidos (${result.items.length})` : "Arquivos parecidos",
-              caption: `${result.compared} análise(s) comparada(s) · TLSH ≤ ${result.thresholds.tlsh_max_distance} ou ssdeep > 0`,
+              caption: `${result.compared} análise(s) comparada(s) · TLSH ≤ ${result.thresholds.tlsh_max_distance}, ssdeep > 0 ou pHash ≤ ${result.thresholds.phash_max_distance}`,
             },
             result.items.length
               ? table({
@@ -607,6 +648,11 @@
                       render: (row) => (row.ssdeep_score === null ? "—" : `${row.ssdeep_score}/100`),
                     },
                     {
+                      label: "VISUAL (pHash)",
+                      className: "numeric-col",
+                      render: (row) => (row.phash_distance === null ? "—" : `${row.phash_distance}/64 bits`),
+                    },
+                    {
                       label: "CASO",
                       render: (row) =>
                         row.investigation_id
@@ -622,7 +668,7 @@
             el(
               "p",
               { class: "tool-limit" },
-              "TLSH: quanto menor a distância, mais parecido (abaixo de 50 costuma indicar variante próxima). ssdeep: 0 a 100. Semelhança de bytes não indica mesma autoria nem mesmo propósito.",
+              "TLSH: quanto menor a distância, mais parecido (abaixo de 50 costuma indicar variante próxima). ssdeep: 0 a 100. pHash: bits diferentes entre as imagens, até 10 conta como visualmente parecida (redimensionada, recomprimida ou levemente editada). Semelhança não indica mesma autoria nem mesmo propósito.",
             ),
           ),
         );
@@ -654,7 +700,7 @@
       );
       const indicators = analysis.indicators || [];
       const structure = analysis.structure || {};
-      const metadataPairs = flattenMetadata(analysis.metadata || {});
+      const metadataPairs = flattenMetadata({ ...(analysis.metadata || {}), exif: undefined });
       const hashRows = G.kvList([
         ["SHA-256", el("code", { class: "hash" }, analysis.hashes.sha256)],
         ["SHA-1", el("code", { class: "hash" }, analysis.hashes.sha1)],
@@ -675,6 +721,8 @@
               ? el("span", { class: "muted-text" }, "Indisponível: arquivo grande sem o motor nativo")
               : null,
         ],
+        ["pHash (visual)", analysis.perceptual ? el("code", { class: "hash" }, analysis.perceptual.phash) : null],
+        ["dHash (visual)", analysis.perceptual ? el("code", { class: "hash" }, analysis.perceptual.dhash) : null],
         ["Assinatura (magic bytes)", el("code", {}, analysis.magic_hex)],
         ["Entropia", `${analysis.entropy} / 8`],
       ]);
