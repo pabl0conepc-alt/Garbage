@@ -38,7 +38,7 @@ Python fallback. They skip cleanly when `native/build` is absent.
 | Cases and custody | `test_cases.py` | Objective, archive, duplicate, package digest and import, hash-chained custody, report sections and methodology |
 | Workspace and search | `test_workspace.py`, `test_search.py` | FTS5 ranking, snippets, accents, prefix, LIKE fallback, settings, activity, module gates |
 | Entities and graph | `test_entities.py`, `test_graph_io.py`, `test_foundation.py` | Relationships, graph payload and its cut by degree, GraphML/JSON import, transforms, entity resolution |
-| Multi-source intelligence | `test_intel*.py` | Connectors against recorded responses, gates, keys, cache, rate limits, async runs and recovery, target-contact switch |
+| Multi-source intelligence | `test_intel*.py`, `test_br_search.py` | Connectors against recorded responses (including a CNPJ record with partner data removed), CNPJ/CPF/phone/address detection, gates, keys, cache, rate limits, async runs and recovery, target-contact switch |
 | Monitoring | `test_monitoring.py` | Validation, baseline/unchanged/changed, a failed source is not "removed", notifications, scheduler, overlapping runs |
 | CTI | `test_attack.py`, `test_actors.py`, `test_feeds.py`, `test_cti_export.py`, `test_cisa_kev.py`, `test_typosquat.py` | ATT&CK, actor profiles and case overlap ranking, TAXII paging and retries, Sigma parsing, STIX/MISP/IOC export, KEV, typosquatting |
 | Plugins | `test_plugins.py` | Manifest validation, approval by SHA-256, process isolation, brokered network, refused personal types |

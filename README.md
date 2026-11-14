@@ -20,7 +20,7 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | Cases | Objective, lifecycle, archive, duplicate, observations, timeline; whole-case package (`garbage-case` v1, SHA-256) with preview and import |
 | Evidence | Upload, SHA-256 integrity, verification, download, preview; hash-chained chain of custody (recorded, verified, accessed, annotated, exported, imported, deleted) and notes |
 | Sources and entities | Source registry with access time and verification; canonical entities with aliases, confidence and relationships; entity resolution (exact, probable, weak candidates, analyst-approved merge) |
-| Multi-source search | One artifact (domain, IP, CIDR, URL, email, hash, ASN, CVE) fanned out to 31 connectors (28 network, 5 with a local key) with live per-source status, cache, rate limits and async runs |
+| Multi-source search | One artifact (domain, IP, CIDR, URL, email, hash, ASN, CVE, CNPJ, address or coordinates) fanned out to 35 connectors with live per-source status, cache, rate limits and async runs; CPF and phone numbers are checked offline only (validity, region, line type), never looked up |
 | Transforms and pivot | Connectors as typed transforms from an entity, with parameters, logs, measured duration and enrichment history; plugins become transforms |
 | Monitoring | Saved queries on a local schedule, differences between runs (what appeared, what disappeared) and notifications |
 | Graph and board | Relationship graph with eight layouts, multi-select, pin/hide, undo/redo, minimap, matrix and timeline views, path finding, PNG/SVG/GraphML/JSON export and GraphML/JSON import; investigation board with layers and autosave |
@@ -75,6 +75,20 @@ python3 -m garbage_intel serve --port 8765
 
 Select a different database with `--database PATH` or `GARBAGE_DATABASE`.
 Evidence bytes are stored next to the database by default.
+
+### In its own window
+
+```sh
+python3 -m garbage_intel app
+```
+
+`app` serves the same interface on a free loopback port and opens it in a
+window of its own, not a browser tab; closing the window stops it. It uses
+[pywebview](https://pywebview.flowrl.com/) when installed (`pip install
+pywebview`; a native window on the system's web engine), otherwise a
+Chrome, Chromium, Edge, Brave or Vivaldi window in app mode with its own
+profile next to the database, otherwise the default browser. Force one with
+`--engine webview|browser|none`.
 
 ### Zipapp
 

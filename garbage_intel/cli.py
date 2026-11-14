@@ -158,6 +158,16 @@ def build_parser() -> argparse.ArgumentParser:
         "serve", help="run the local development API and web interface"
     )
     server.add_argument("--port", type=int, default=8000)
+    app = commands.add_parser(
+        "app", help="open the workstation in its own window instead of a browser tab"
+    )
+    app.add_argument(
+        "--engine",
+        choices=("auto", "webview", "browser", "none"),
+        default="auto",
+        help="webview (pywebview), browser (Chromium-based app mode), none, or auto (default)",
+    )
+    app.add_argument("--port", type=int, default=0, help="loopback port (default: a free one)")
 
     forensics = commands.add_parser(
         "forensics", help="analyze one explicitly provided local file"
@@ -259,6 +269,17 @@ def main(argv: list[str] | None = None) -> int:
             if not 0 <= args.port <= 65535:
                 raise ValueError("port must be between 0 and 65535")
             serve(args.database, args.port)
+            return 0
+        elif args.command == "app":
+            from .desktop import DesktopError, run as run_desktop
+
+            if not 0 <= args.port <= 65535:
+                raise ValueError("port must be between 0 and 65535")
+            try:
+                run_desktop(args.database, engine=args.engine, port=args.port)
+            except DesktopError as exc:
+                print(f"garbage app: {exc}", file=sys.stderr)
+                return 2
             return 0
         elif args.command == "forensics":
             analysis = hash_file(args.path)
