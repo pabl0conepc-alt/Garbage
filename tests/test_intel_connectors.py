@@ -305,6 +305,7 @@ class RegistrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             database = str(Path(directory) / "intel.sqlite3")
             initialize(database)
+            update_settings(database, {"intel.allow_network": "false"})
             intel.RATE_LIMITER.reset()
             web = FakeWeb([])
             with patch.object(ic, "FETCH", web):

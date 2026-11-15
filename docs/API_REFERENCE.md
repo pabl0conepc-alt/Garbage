@@ -426,7 +426,8 @@ Each source reports one status: `ok`, `empty`, `error`, `rate-limited`,
 `elapsed_ms` and `fetched_at`.
 
 Connectors that contact external services run only when the setting
-`intel.allow_network` is `true` (default `false`). Outbound requests use
+`intel.allow_network` is `true` (the default for a new workspace since the
+dossier release; earlier workspaces keep their value). Outbound requests use
 `garbage_intel/net.py`:
 
 - HTTPS only by default, ports 80/443 only, no credentials in URLs.

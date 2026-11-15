@@ -387,7 +387,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "search.result_limit": "6",
     "report.include_limitations": "true",
     "report.include_raw_observations": "true",
-    "intel.allow_network": "false",
+    "intel.allow_network": "true",
     "intel.allow_target_contact": "false",
     "intel.max_workers": "4",
 }
@@ -445,7 +445,7 @@ SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
     {
         "key": "intel.allow_network",
         "label": "Allow intelligence connectors to use the network",
-        "description": "When false, connectors that contact external services are skipped; local connectors still run.",
+        "description": "On by default: public sources (registries, certificate logs, reputation services) receive the queried value. When false, only local connectors run.",
         "type": "boolean",
         "options": ["false", "true"],
     },
