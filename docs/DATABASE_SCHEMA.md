@@ -262,6 +262,7 @@ Applied migration ledger used to make startup idempotent.
 | 14 | Search index covers case objectives | Investigation triggers recreated with `objective` in the indexed text and case rows reindexed; nothing to do without FTS5 |
 | 15 | AI assistant conversations and action log | `assistant_conversations`, `assistant_messages` |
 | 16 | Cases sent to MISP and OpenCTI | `cti_pushes` (platform, case, remote id, link, object count, time) |
+| 17 | Live URL checks with screenshots | `live_checks` (url, final url, result JSON, PNG screenshot, case, time) |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

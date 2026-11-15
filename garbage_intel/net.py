@@ -220,6 +220,7 @@ def fetch(
     allow_http: bool = False,
     allow_private: bool = False,
     max_redirects: int = MAX_REDIRECTS,
+    follow_redirects: bool = True,
     keep_all_headers: bool = False,
     resolver: Resolver | None = None,
     connection_factory: ConnectionFactory | None = None,
@@ -269,7 +270,7 @@ def fetch(
                 value = value[:4096]
                 # Repeated headers (Set-Cookie) are kept line by line.
                 kept[name] = f"{kept[name]}\n{value}" if name in kept else value
-            if status in _REDIRECT_STATUSES and "location" in kept:
+            if status in _REDIRECT_STATUSES and "location" in kept and follow_redirects:
                 response.read(64 * 1024)
                 if len(redirects) >= max_redirects:
                     raise NetworkError("too many redirects")
@@ -295,7 +296,8 @@ def fetch(
             raise NetworkError(f"connection to {host} failed") from exc
         finally:
             connection.close()
-        kept.pop("location", None)
+        if follow_redirects:
+            kept.pop("location", None)
         return FetchResult(
             url=url,
             final_url=current,

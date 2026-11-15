@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -214,6 +214,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "Indicator engine",
         "Pattern extraction and exact-value correlation with provenance.",
         "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "live-check",
+        "Live URL check",
+        "On request, follows a URL's redirects, reads the final page (forms, loaded hosts, obfuscation, downloads) and takes a screenshot with a headless browser.",
+        "Intelligence",
         "1.0.0",
         "enabled",
     ),
@@ -1316,6 +1324,23 @@ def _migrate_cti_pushes(connection: sqlite3.Connection) -> None:
     )
 
 
+
+def _migrate_live_checks(connection: sqlite3.Connection) -> None:
+    """Version 17: live URL checks and their screenshots."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS live_checks (
+               id TEXT PRIMARY KEY,
+               url TEXT NOT NULL,
+               final_url TEXT NOT NULL DEFAULT '',
+               result_json TEXT NOT NULL,
+               screenshot BLOB,
+               investigation_id TEXT REFERENCES investigations(id) ON DELETE SET NULL,
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS live_checks_url ON live_checks(url, created_at);"""
+    )
+
+
 MIGRATIONS = (
     (1, "Baseline evidence ledger schema", _migrate_ledger),
     (2, "Investigation workspace tables and columns", _migrate_workspace),
@@ -1333,6 +1358,7 @@ MIGRATIONS = (
     (14, "Search index covers case objectives", _migrate_search_objective),
     (15, "AI assistant conversations and action log", _migrate_assistant),
     (16, "Cases sent to MISP and OpenCTI", _migrate_cti_pushes),
+    (17, "Live URL checks with screenshots", _migrate_live_checks),
 )
 
 

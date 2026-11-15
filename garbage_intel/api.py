@@ -52,7 +52,7 @@ from .evidence import (
 )
 from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
-from .modules import actors, attack, email_analysis
+from .modules import actors, attack, email_analysis, live_check
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
@@ -1096,6 +1096,36 @@ class RequestHandler(BaseHTTPRequestHandler):
                 limit=_query_int(query, "limit", 50),
             ),
         )
+
+    def api_live_check_post(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("live-check")
+        unknown = set(payload) - {"url", "screenshot", "javascript", "investigation_id"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(201, live_check.run(
+            self.database_path, url=payload.get("url"), take_screenshot=payload.get("screenshot", True),
+            javascript=payload.get("javascript", False), investigation_id=payload.get("investigation_id"),
+        ))
+
+    def api_live_checks(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("live-check")
+        self._json(200, live_check.history(self.database_path, _query_text(query, "url", ""), _query_int(query, "limit", 20)))
+
+    def api_live_check_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("live-check")
+        self._json(200, live_check.get(self.database_path, match.group(1)))
+
+    def api_live_check_screenshot(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("live-check")
+        self._send(200, "image/png", live_check.image(self.database_path, match.group(1)), {"Content-Disposition": _attachment_disposition(f"captura-{match.group(1)[:8]}.png", inline=True)})
 
     def api_email_analysis(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
@@ -2486,6 +2516,10 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         MAX_BODY_BYTES,
     ),
     ("POST", re.compile(r"^/api/intelligence/email$"), "api_email_analysis", 4 * 1024 * 1024),
+    ("POST", re.compile(r"^/api/intelligence/live-checks$"), "api_live_check_post", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/intelligence/live-checks$"), "api_live_checks", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/intelligence/live-checks/{_ID_PATTERN}$"), "api_live_check_get", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/intelligence/live-checks/{_ID_PATTERN}/screenshot$"), "api_live_check_screenshot", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/cti-platforms$"), "api_cti_platforms", MAX_BODY_BYTES),
     ("PUT", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_put", MAX_BODY_BYTES),
     ("DELETE", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_delete", MAX_BODY_BYTES),

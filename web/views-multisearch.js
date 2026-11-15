@@ -1349,6 +1349,98 @@
       );
     }
 
+    /* Live check of a URL or domain: kept per value so the block survives
+       the redraws of a running search. */
+    function liveBlock(run) {
+      if (!["url", "domain"].includes(run.query_type) || !G.moduleEnabled("live-check")) return null;
+      const live = (state.liveChecks ||= {})[run.query_value] ||= { busy: false, result: null, error: "", screenshot: true, javascript: false };
+      const host = el("section", { class: "dossier-block is-wide live-block", "aria-label": "Verificação ao vivo" });
+      const draw = () => {
+        const shot = el("input", { type: "checkbox", checked: live.screenshot, id: "live-shot" });
+        const script = el("input", { type: "checkbox", checked: live.javascript, id: "live-js" });
+        shot.addEventListener("change", () => { live.screenshot = shot.checked; });
+        script.addEventListener("change", () => { live.javascript = script.checked; });
+        const go = button(live.busy ? "Verificando…" : live.result ? "Verificar de novo" : "Verificar ao vivo", async () => {
+          live.busy = true;
+          live.error = "";
+          draw();
+          try {
+            live.result = await api("/api/intelligence/live-checks", {
+              method: "POST",
+              body: JSON.stringify({ url: run.query_value, screenshot: live.screenshot, javascript: live.javascript, investigation_id: caseSelect.value || run.investigation_id || null }),
+            });
+          } catch (error) {
+            live.error = error.message;
+          } finally {
+            live.busy = false;
+            draw();
+          }
+        }, { variant: live.result ? "button-secondary" : "button-primary", disabled: live.busy });
+        const parts = [
+          el("h3", { class: "dossier-block-title" }, "Verificação ao vivo"),
+          el("div", { class: "live-controls" },
+            go,
+            el("label", { class: "toolbar-check", for: "live-shot" }, shot, "Captura de tela"),
+            el("label", { class: "toolbar-check", for: "live-js" }, script, "Permitir JavaScript na captura (mais fiel, mais arriscado)"),
+          ),
+          el("p", { class: "dossier-muted" }, "Acessa o site a partir deste computador: o site vê o seu IP. Segue os redirecionamentos, lê a página sem executá-la e tira a captura num navegador descartável."),
+        ];
+        if (live.error) parts.push(G.inlineError(live.error));
+        if (live.result) parts.push(...liveResult(live.result).filter(Boolean));
+        host.replaceChildren(...parts);
+      };
+      draw();
+      return host;
+    }
+
+    function liveResult(result) {
+      const page = result.page || {};
+      const flags = (result.flags || []).map((flag) => {
+        const [glyph, label] = FLAG_LEVEL[flag.level] || FLAG_LEVEL.info;
+        return el("li", { class: `dossier-flag level-${FLAG_LEVEL[flag.level] ? flag.level : "info"}` }, G.icon(glyph, { size: 16, className: "dossier-flag-icon" }), el("span", { class: "visually-hidden" }, `${label}: `), el("span", {}, flag.text));
+      });
+      const hops = el("ol", { class: "live-hops" }, ...(result.hops || []).map((hop) =>
+        el("li", {},
+          el("span", { class: "live-status" }, hop.status ? String(hop.status) : "erro"),
+          el("code", {}, hop.url),
+          el("span", { class: "dossier-muted" }, [hop.address, hop.server, hop.error].filter(Boolean).join(" · ")),
+        )));
+      const facts = [
+        ["Página final", result.final_url],
+        ["Título", page.title],
+        ["Tamanho", page.size ? G.formatBytes(page.size) : ""],
+        ["Tecnologias", (page.technologies || []).map((item) => item.name).join(", ")],
+      ].filter(([, value]) => value);
+      const forms = (page.forms || []).map((form) =>
+        el("li", {},
+          form.password ? G.badge("Pede senha", "warning") : null, " ",
+          el("code", {}, `${form.method.toUpperCase()} ${form.action}`),
+          el("span", { class: "dossier-muted" }, ` · ${form.fields} campo(s)${form.other_site ? " · envia para outro site" : ""}`),
+        ));
+      const hosts = (page.external_hosts || []).map((item) => {
+        const node = el("button", { type: "button", class: "dossier-pivot" }, el("span", { class: "dossier-pivot-text" }, item.host), G.icon("arrow", { size: 14, className: "dossier-pivot-icon" }));
+        node.addEventListener("click", () => handlers.pivot(item.host));
+        return el("li", { class: "dossier-item-box" }, node, el("span", { class: "dossier-muted" }, ` ${item.kinds.join(", ")}`));
+      });
+      const shot = result.screenshot;
+      return [
+        flags.length ? el("ul", { class: "dossier-flags" }, ...flags) : el("p", { class: "dossier-muted" }, "Nenhum sinal de alerta na página."),
+        el("h4", { class: "subhead" }, `Caminho (${(result.hops || []).length} passo(s))`),
+        hops,
+        facts.length ? el("dl", { class: "live-facts" }, ...facts.flatMap(([label, value]) => [el("dt", {}, label), el("dd", {}, value)])) : null,
+        forms.length ? el("h4", { class: "subhead" }, "Formulários") : null,
+        forms.length ? el("ul", { class: "live-forms" }, ...forms) : null,
+        hosts.length ? el("h4", { class: "subhead" }, `Outros sites que a página carrega (${hosts.length})`) : null,
+        hosts.length ? el("ul", { class: "dossier-list" }, ...hosts) : null,
+        shot ? el("h4", { class: "subhead" }, "Captura de tela") : null,
+        shot && shot.taken
+          ? el("a", { href: `/api/intelligence/live-checks/${result.id}/screenshot`, target: "_blank", rel: "noopener" },
+              el("img", { class: "live-shot", src: `/api/intelligence/live-checks/${result.id}/screenshot`, alt: `Captura de ${result.final_url}` }))
+          : shot ? el("p", { class: "dossier-muted" }, shot.note || "Sem captura.") : null,
+        shot && shot.taken ? el("p", { class: "dossier-muted" }, shot.note) : null,
+      ];
+    }
+
     function showRun(run) {
       const dossier = run.dossier || fallbackDossier(run);
       const sections = dossier.sections || [];
@@ -1365,6 +1457,7 @@
             { class: "dossier", "aria-label": `Resultado para ${run.query_value}` },
             header(run, dossier),
             ...configurationNotice(run),
+            liveBlock(run),
             blocks.length ? el("div", { class: "dossier-grid" }, ...blocks) : emptyAnswer(run, dossier),
             coverageLine(run, dossier),
             run.results.length ? rawData(run) : null,

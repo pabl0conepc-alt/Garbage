@@ -573,6 +573,15 @@ MX, the source itself) are reported under `skipped`.
   (and whether it has expired) and PGP signature. A non-text answer or one
   without `Contact:` is reported as not published.
 
+## Live URL check
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/intelligence/live-checks` | `{url, screenshot?: true, javascript?: false, investigation_id?}` (201): `hops` (`url`, `status`, `address`, `server`, `location`), `final_url`, `page` (`title`, `forms` with `password`/`other_site`, `external_hosts`, `frames`, `meta_refresh`, `script_redirects`, `obfuscation`, `download`, `technologies`, `headers`), `flags`, `screenshot` (`taken`, `note`). 409 when network sources are off; 400 for private or local addresses |
+| GET | `/api/intelligence/live-checks?url=` | Previous checks, newest first |
+| GET | `/api/intelligence/live-checks/{id}` | One stored check |
+| GET | `/api/intelligence/live-checks/{id}/screenshot` | The PNG screenshot |
+
 ## E-mail analysis
 
 `POST /api/intelligence/email` with `{raw}` (a whole message or only its
