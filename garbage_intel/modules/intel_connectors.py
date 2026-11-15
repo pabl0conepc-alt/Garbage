@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import time
 from typing import Any, Callable
 from urllib.parse import quote, urlsplit
 
@@ -37,6 +38,12 @@ _ORG_ROLES = {"registrar", "abuse", "sponsor", "reseller", "noc"}
 _NETWORK_ROLES = _ORG_ROLES | {"registrant"}
 
 
+RETRY_STATUSES = (502, 503, 504)
+RETRIES = 1
+RETRY_DELAY_SECONDS = 1.5
+SLEEP = time.sleep
+
+
 def _get_json(
     url: str,
     *,
@@ -45,13 +52,19 @@ def _get_json(
     max_bytes: int = 2 * 1024 * 1024,
     timeout: float = 15.0,
 ) -> tuple[Any, FetchResult]:
-    result = FETCH(
-        url,
-        headers={"Accept": "application/json", **(headers or {})},
-        allowed_hosts=hosts,
-        max_bytes=max_bytes,
-        timeout=timeout,
-    )
+    for attempt in range(1 + RETRIES):
+        result = FETCH(
+            url,
+            headers={"Accept": "application/json", **(headers or {})},
+            allowed_hosts=hosts,
+            max_bytes=max_bytes,
+            timeout=timeout,
+        )
+        # Public sources (crt.sh, NVD) answer 502/503/504 when busy; one
+        # short retry turns most of those into answers.
+        if result.status not in RETRY_STATUSES or attempt == RETRIES:
+            break
+        SLEEP(RETRY_DELAY_SECONDS)
     if result.status == 404:
         return None, result
     if result.status == 429:
@@ -103,7 +116,8 @@ def _dns_connector(context: ConnectorContext) -> list[Finding]:
     if not host:
         return []
     findings: list[Finding] = []
-    record_types = ("MX",) if context.query_type == "email" else (
+    # For an email only the domain's mail setup matters: MX, SPF (TXT), NS, DMARC.
+    record_types = ("MX", "TXT", "NS") if context.query_type == "email" else (
         "A", "AAAA", "CNAME", "MX", "NS", "TXT", "CAA"
     )
     for record_type in record_types:
@@ -122,14 +136,13 @@ def _dns_connector(context: ConnectorContext) -> list[Finding]:
             findings.append(
                 Finding(f"dns-{record_type.lower()}", value, data, result.final_url, result.sha256)
             )
-    if context.query_type != "email":
-        answers, result = doh_query(f"_dmarc.{host}", "TXT")
-        for answer in answers:
-            value = answer.strip('"')
-            if value.lower().startswith("v=dmarc1"):
-                findings.append(
-                    Finding("dns-dmarc", value, {"record": "TXT", "name": f"_dmarc.{host}"}, result.final_url, result.sha256)
-                )
+    answers, result = doh_query(f"_dmarc.{host}", "TXT")
+    for answer in answers:
+        value = answer.strip('"')
+        if value.lower().startswith("v=dmarc1"):
+            findings.append(
+                Finding("dns-dmarc", value, {"record": "TXT", "name": f"_dmarc.{host}"}, result.final_url, result.sha256)
+            )
     return findings
 
 
@@ -247,6 +260,8 @@ def _rdap_path(context: ConnectorContext) -> str:
     kind, value = context.query_type, context.query_value
     if kind == "domain":
         return f"/domain/{quote(value)}"
+    if kind == "email":
+        return f"/domain/{quote(value.rsplit('@', 1)[-1])}"
     if kind in {"ipv4", "ipv6"}:
         return f"/ip/{quote(value, safe=':')}"
     if kind == "cidr":
@@ -264,6 +279,16 @@ def _rdap_connector(context: ConnectorContext) -> list[Finding]:
         RDAP_BOOTSTRAP + path,
         headers={"Accept": "application/rdap+json, application/json"},
     )
+    if data is None and path.startswith("/domain/"):
+        # A subdomain (mail.example.com.br) has no RDAP record: ask for its
+        # parents until the registered domain answers.
+        labels = path.removeprefix("/domain/").split(".")
+        while data is None and len(labels) > 2:
+            labels = labels[1:]
+            data, result = _get_json(
+                RDAP_BOOTSTRAP + "/domain/" + ".".join(labels),
+                headers={"Accept": "application/rdap+json, application/json"},
+            )
     if not isinstance(data, dict):
         return []
     source, digest = result.final_url, result.sha256
@@ -324,7 +349,7 @@ def _crtsh_connector(context: ConnectorContext) -> list[Finding]:
     if not host:
         return []
     url = f"{CRTSH_URL}?q={quote('%.' + host, safe='')}&output=json&exclude=expired"
-    data, result = _get_json(url, hosts=("crt.sh",), max_bytes=16 * 1024 * 1024, timeout=45.0)
+    data, result = _get_json(url, hosts=("crt.sh",), max_bytes=16 * 1024 * 1024, timeout=25.0)
     if not isinstance(data, list):
         return []
     names: dict[str, dict[str, Any]] = {}
@@ -504,7 +529,7 @@ CONNECTORS = (
         connector_id="rdap",
         name="RDAP registration data",
         description="Registry status, dates, nameservers, ranges and organisation-level contacts (registrar, abuse). Personal registrant data is not kept.",
-        accepts=("domain", "ipv4", "ipv6", "cidr", "asn"),
+        accepts=("domain", "email", "ipv4", "ipv6", "cidr", "asn"),
         run=_rdap_connector,
         network=True,
         rate_per_minute=30,

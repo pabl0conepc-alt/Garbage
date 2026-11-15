@@ -278,9 +278,11 @@ fallback. See [native/README.md](native/README.md).
 - Loopback only; no authentication, TLS or CSRF token. Do not expose it.
 - No encryption at rest. Protect the database and evidence directory.
 - Static analysis is not antivirus and does not prove a file is safe.
-- Network sources are off until enabled in Settings; sources that contact the
-  target itself have a second switch. Keys are stored locally and never
-  returned by the API.
+- Passive network sources (registries, certificate logs, reputation services)
+  are on for a new workspace: they receive the value you search. Turn them off
+  in Configurações › Conectores. Sources that contact the target itself have a
+  second switch, off by default. Keys are stored locally and never returned by
+  the API.
 - Plugins run in a separate process with brokered network access. That is
   containment, not a sandbox: approve only code you have read.
 - The custody log is hash-chained, which shows tampering inside the

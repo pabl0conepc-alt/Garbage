@@ -336,14 +336,45 @@ def company_findings(data: dict[str, Any], source: str, digest: str) -> list[Fin
     return findings
 
 
-def _cnpj_connector(base: str, host: str) -> Callable[[ConnectorContext], list[Finding]]:
+BRASILAPI_CEP = "https://brasilapi.com.br/api/cep/v2/"
+
+
+def _locate_postal_code(data: dict[str, Any]) -> Finding | None:
+    """The company's postal code as a map point (the CEP's centre, not the
+    building). BrasilAPI answers without coordinates for many CEPs."""
+    postal = re.sub(r"\D", "", str(data.get("cep") or ""))
+    if len(postal) != 8:
+        return None
+    try:
+        place, result = _get_json(f"{BRASILAPI_CEP}{postal}", "brasilapi.com.br", missing=(400, 404))
+    except NetworkError:
+        return None
+    coordinates = ((place or {}).get("location") or {}).get("coordinates") or {}
+    try:
+        latitude, longitude = float(coordinates.get("latitude")), float(coordinates.get("longitude"))
+    except (TypeError, ValueError):
+        return None
+    label = ", ".join(part for part in (_text(place.get("street")), _text(place.get("neighborhood")), _text(place.get("city")), _text(place.get("state"))) if part)
+    return Finding(
+        "geolocation",
+        label or postal,
+        {"coordinates": f"{latitude:.6f},{longitude:.6f}", "kind": "place", "precision": "cep", "postal_code": postal,
+         "meaning": "centro do CEP do endereço cadastrado, não o prédio"},
+        result.final_url,
+        result.sha256,
+    )
+
+
+def _cnpj_connector(base: str, host: str, *, locate: bool = False) -> Callable[[ConnectorContext], list[Finding]]:
     def run(context: ConnectorContext) -> list[Finding]:
         if not cnpj_valid(context.query_value):
             return []
         data, result = _get_json(f"{base}{context.query_value}", host, missing=(400, 404))
         if not isinstance(data, dict) or not (data.get("razao_social") or data.get("cnpj")):
             return []
-        return company_findings(data, result.final_url, result.sha256)
+        findings = company_findings(data, result.final_url, result.sha256)
+        point = _locate_postal_code(data) if locate else None
+        return findings + ([point] if point else [])
 
     return run
 
@@ -408,7 +439,7 @@ for _connector in (
         "BrasilAPI CNPJ",
         "Public Receita Federal company record via BrasilAPI: names, status, activities, address, size, capital. Partner names are not kept.",
         ("cnpj",),
-        _cnpj_connector(BRASILAPI, "brasilapi.com.br"),
+        _cnpj_connector(BRASILAPI, "brasilapi.com.br", locate=True),
         network=True,
         rate_per_minute=20,
         ttl_seconds=7 * 24 * 3600,

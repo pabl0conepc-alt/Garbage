@@ -9,12 +9,18 @@ IPinfo accept an optional key that only raises their rate limits.
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Callable
 from urllib.parse import quote, urlencode, urlsplit
 
 from .. import net
 from ..intel import Connector, ConnectorContext, Finding, register_connector
 from ..net import FetchResult, NetworkError
+
+RETRY_STATUSES = (502, 503, 504)
+RETRIES = 1
+RETRY_DELAY_SECONDS = 1.5
+SLEEP = time.sleep
 
 FETCH: Callable[..., FetchResult] = net.fetch
 RIPESTAT = "https://stat.ripe.net/data"
@@ -32,15 +38,20 @@ def request_json(
     max_bytes: int = 4 * 1024 * 1024,
 ) -> tuple[Any, FetchResult]:
     """Fetch and decode JSON; ``None`` for the provider's "not found" codes."""
-    result = FETCH(
-        url,
-        method=method,
-        headers={"Accept": "application/json", **(headers or {})},
-        body=body,
-        allowed_hosts=hosts,
-        max_bytes=max_bytes,
-        timeout=20.0,
-    )
+    for attempt in range(1 + RETRIES):
+        result = FETCH(
+            url,
+            method=method,
+            headers={"Accept": "application/json", **(headers or {})},
+            body=body,
+            allowed_hosts=hosts,
+            max_bytes=max_bytes,
+            timeout=20.0,
+        )
+        # Busy public sources (NVD answers 503 often): one short retry.
+        if result.status not in RETRY_STATUSES or attempt == RETRIES:
+            break
+        SLEEP(RETRY_DELAY_SECONDS)
     if result.status in not_found:
         return None, result
     if result.status in (401, 403):
@@ -422,6 +433,9 @@ def _osv(context: ConnectorContext) -> list[Finding]:
         )
     for alias in _list(data.get("aliases"), 20):
         findings.append(Finding("alias", _text(alias, 60), {}, result.final_url, result.sha256))
+    text = data.get("summary") or data.get("details")
+    if text:
+        findings.append(Finding("summary", _text(text, 1500), {}, result.final_url, result.sha256))
     return findings
 
 

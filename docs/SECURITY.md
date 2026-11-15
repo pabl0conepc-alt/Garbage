@@ -81,9 +81,11 @@ Out of scope:
 - **No CSRF token.** Origin checks reduce browser-driven cross-origin requests,
   but they are not a substitute for authentication.
 - **No antivirus or sandbox.** Static analysis does not prove a file is safe.
-- **Remote connectors are opt-in.** Third-party lookups run only with
-  `intel.allow_network`; contact with the artifact's own servers also needs
-  `intel.allow_target_contact`. All requests go through the SSRF-safe client in
+- **Passive lookups are on by default; target contact is opt-in.** Third-party
+  lookups run while `intel.allow_network` is true (the default for a new
+  workspace): those services see the searched value. Contact with the
+  artifact's own servers also needs `intel.allow_target_contact`, off by
+  default. All requests go through the SSRF-safe client in
   `net.py`.
 - **API keys are stored in plaintext** in the workspace database, like every
   other record. They are never returned by the API, are sent only to their own

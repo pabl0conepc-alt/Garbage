@@ -114,6 +114,24 @@ class ConnectorTests(unittest.TestCase):
         self.assertIn("User-Agent", web.calls[0]["headers"])
         self.assertEqual(missing, [])  # FakeWeb answers other paths with an empty record
 
+    def test_company_address_becomes_a_map_point(self):
+        web = FakeWeb([
+            (lambda url: url.endswith("/cnpj/v1/00000000000191"), COMPANY),
+            (lambda url: "/cep/v2/" in url, {"cep": "70040912", "street": "Quadra SAUN", "city": "Brasília", "state": "DF",
+                                              "location": {"coordinates": {"latitude": "-15.79", "longitude": "-47.88"}}}),
+        ])
+        with patch.object(br, "FETCH", web):
+            findings = run("brasilapi-cnpj", "cnpj", "00000000000191")
+        point = next(item for item in findings if item.result_type == "geolocation")
+        self.assertEqual((point.data["coordinates"], point.data["precision"], point.data["kind"]), ("-15.790000,-47.880000", "cep", "place"))
+        from garbage_intel.dossier import build
+        dossier = build({"query_type": "cnpj", "query_value": "00000000000191", "sources": [],
+                         "results": [{"connector_id": "brasilapi-cnpj", "result_type": item.result_type, "value": item.value, "data": item.data, "status": "ok"} for item in findings]})
+        self.assertEqual((dossier["map"]["lat"], dossier["map"]["precision"]), (-15.79, "CEP (aproximado)"))
+        # Without coordinates for the CEP there is simply no point.
+        with patch.object(br, "FETCH", FakeWeb([(lambda url: url.endswith("00000000000191"), COMPANY), (lambda url: "/cep/v2/" in url, {"cep": "70040912"})])):
+            self.assertFalse(any(item.result_type == "geolocation" for item in run("brasilapi-cnpj", "cnpj", "00000000000191")))
+
     def test_places_forward_and_reverse(self):
         web = FakeWeb([
             (lambda url: "/search?" in url, [PLACE]),

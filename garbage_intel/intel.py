@@ -665,7 +665,7 @@ def get_run(database: str, run_id: str) -> dict[str, Any]:
         if item["value"] or item["result_type"]:
             entry["count"] += 1
     ordered = sorted(sources.values(), key=lambda item: item["connector_id"])
-    return {
+    payload = {
         **dict(run),
         "progress": {
             "total": len(ordered),
@@ -674,6 +674,10 @@ def get_run(database: str, run_id: str) -> dict[str, Any]:
         "sources": ordered,
         "results": [item for item in results if item["value"] or item["result_type"]],
     }
+    from .dossier import build as build_dossier
+
+    payload["dossier"] = build_dossier(payload)
+    return payload
 
 
 def list_runs(database: str, *, limit: int = 25) -> dict[str, Any]:

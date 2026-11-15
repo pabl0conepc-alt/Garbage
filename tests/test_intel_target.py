@@ -192,6 +192,7 @@ class TargetConnectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             database = str(Path(directory) / "intel.sqlite3")
             initialize(database)
+            update_settings(database, {"intel.allow_network": "false"})
             intel.RATE_LIMITER.reset()
             touched = []
             with patch.object(itc, "FETCH", lambda url, **options: touched.append(url) or page(url)), \

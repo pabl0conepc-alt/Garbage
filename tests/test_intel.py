@@ -98,6 +98,8 @@ class OrchestratorTests(RuntimeTestCase):
             return [Finding("record", "1.2.3.4", {"ttl": 60}, "https://api.example/x", "ab" * 32)]
 
         self.add("test-remote", remote, network=True)
+        # Passive network sources are on by default; switched off, they never run.
+        update_settings(self.database, {"intel.allow_network": "false"})
         run = run_query(self.database, value="example.com", connector_ids=["test-remote"])
         self.assertEqual(run["sources"][0]["status"], "network-disabled")
         self.assertEqual(self.calls, [])
@@ -303,7 +305,8 @@ class IntelApiTests(unittest.TestCase):
     def test_routes(self):
         status, body = self.request("GET", "/api/intel/connectors")
         self.assertEqual(status, 200)
-        self.assertFalse(body["network_allowed"])
+        # Passive sources are on for a new workspace; contacting the target is not.
+        self.assertTrue(body["network_allowed"])
         self.assertIn("local-structure", {item["connector_id"] for item in body["items"]})
 
         status, body = self.request("GET", "/api/intel/detect?value=evil%5B.%5Dexample")
