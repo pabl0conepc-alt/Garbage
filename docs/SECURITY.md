@@ -63,6 +63,26 @@ Out of scope:
   where appropriate.
 - Preview does not execute HTML or SVG as active content.
 
+### AI assistant
+
+- Off until the analyst stores an OpenRouter key and picks a model. The key
+  sits with the other API keys, is sent only to `openrouter.ai` and is scrubbed
+  from errors; the API never returns it.
+- Conversation text and tool results (search dossiers, case and entity
+  records the model reads) are sent to OpenRouter and the chosen model. The
+  panel says so before the first message.
+- The model has no direct database, file-system or network access. It can
+  only call the listed tools, which use the workstation's own functions and
+  their validation; it cannot create person, username or profile records,
+  and searches keep the orchestrator's limits (CPF and phone offline only).
+- Tool results are framed to the model as data; destructive tools
+  (`delete_entity`, `delete_file`) wait for the analyst's confirmation, so a
+  prompt injected through a search result cannot delete anything by itself.
+- Its files are limited to one folder, plain names, `.md/.txt/.json/.csv`,
+  1 MiB each and 200 in total, and are always served as downloads.
+- Every tool call is stored with its arguments and outcome; writes are also
+  recorded in the activity log.
+
 ### Data handling
 
 - SQL uses bound parameters.

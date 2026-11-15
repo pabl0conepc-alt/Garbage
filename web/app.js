@@ -310,6 +310,10 @@ const ICON_PATHS = {
   info: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 11v5.2M12 7.9v.2",
   arrow: "M9.5 6.5 15 12l-5.5 5.5",
   pulse: "M3.5 12.5h3.6l2.2-5.5 4.2 10.5 2.4-5h4.6",
+  robot: "M7.5 8.5h9a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h-9a3 3 0 0 1 -3 -3v-5a3 3 0 0 1 3 -3zM12 8.5V5.6M10.8 4.4a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0zM9 13.2v.6M15 13.2v.6M10 16.6h4M2.5 13v2M21.5 13v2",
+  send: "M4.5 12 19.5 5l-4 14-3.5-5.5zM12 13.5l7.5-8.5",
+  stop: "M7.5 6h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1 -1.5 1.5h-9a1.5 1.5 0 0 1 -1.5 -1.5v-9a1.5 1.5 0 0 1 1.5 -1.5z",
+  trash: "M4.5 7h15M10 4.5h4M6.5 7l.9 11.2a2 2 0 0 0 2 1.8h5.2a2 2 0 0 0 2-1.8L17.5 7M10.3 11v5M13.7 11v5",
 };
 
 /* Legacy glyphs passed by views are mapped onto the icon set so every
@@ -612,6 +616,19 @@ function fieldLabel_(field) {
 }
 
 const ERROR_PATTERNS = [
+  [/^add an OpenRouter key before using the assistant$/, () => "Adicione a chave do OpenRouter para usar o assistente"],
+  [/^choose a model before using the assistant$/, () => "Escolha um modelo para usar o assistente"],
+  [/^model must be an OpenRouter model id/, () => "Use o identificador de um modelo do OpenRouter, como provedor/nome-do-modelo"],
+  [/^the assistant is still working on this conversation$/, () => "O assistente ainda está trabalhando nesta conversa"],
+  [/^answer the pending confirmation first$/, () => "Responda primeiro ao pedido de confirmação"],
+  [/^stop the assistant before deleting this conversation$/, () => "Pare o assistente antes de apagar esta conversa"],
+  [/^this action is not waiting for confirmation$/, () => "Esta ação não está esperando confirmação"],
+  [/^OpenRouter refused the key/, () => "O OpenRouter recusou a chave"],
+  [/^the OpenRouter account has no credits left/, () => "A conta do OpenRouter está sem créditos"],
+  [/^OpenRouter rate-limited the request/, () => "O OpenRouter limitou as requisições; tente de novo em instantes"],
+  [/^OpenRouter answered HTTP (\d+)(.*)$/, (m) => `O OpenRouter respondeu HTTP ${m[1]}${m[2]}`],
+  [/^interrupted by a restart$/, () => "Interrompido porque o GARBAGE reiniciou"],
+  [/^the OpenRouter key was removed$/, () => "A chave do OpenRouter foi removida"],
   [/^refused by network policy: (.+)$/, (m) => `Bloqueado pela política de rede: ${translateError(m[1])}`],
   [/^TLS verification failed for (.+)$/, (m) => `Falha na verificação TLS de ${m[1]}`],
   [/^TLS handshake with (.+) failed$/, (m) => `Falha no handshake TLS com ${m[1]}`],
@@ -951,6 +968,7 @@ const MODULE_TEXT = {
   "file-intelligence": ["Análise de arquivos", "Inspeção estática limitada de documentos, pacotes, imagens e executáveis, com histórico persistente."],
   "source-manager": ["Gerenciador de fontes", "Fontes reutilizáveis vinculadas a investigações e entidades."],
   "indicator-engine": ["Motor de indicadores", "Extração de padrões e correlação por valor exato com proveniência."],
+  "ai-assistant": ["Assistente de IA", "Painel lateral em que um modelo escolhido no OpenRouter usa a estação pelas próprias ações, todas registradas."],
   "intel-orchestrator": ["Inteligência multifonte", "Consulta explícita de um artefato em todos os conectores registrados, com cache, limites de taxa, status das fontes e proveniência."],
   "cisa-kev": ["Conector CISA KEV", "Atualização explícita e somente leitura do catálogo público CISA KEV."],
   "report-center": ["Central de relatórios", "Relatórios estruturados em JSON, HTML, CSV e Markdown a partir de registros reais."],

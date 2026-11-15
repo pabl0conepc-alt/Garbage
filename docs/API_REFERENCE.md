@@ -565,6 +565,34 @@ MX, the source itself) are reported under `skipped`.
   (and whether it has expired) and PGP signature. A non-text answer or one
   without `Contact:` is reported as not published.
 
+## AI assistant
+
+A conversation with a model chosen on OpenRouter. The key is the `openrouter`
+entry of `/api/intel/keys` and is never returned. The server runs the loop in
+a background thread (at most 12 model calls per message); the panel polls the
+conversation. Every tool call is stored as a `tool` message with `action`
+(`status`: `done`, `error`, `pending`, `declined`; `summary`; optional `link`,
+`file`, `refresh`, `ui`). Interface actions (`ui`: open a screen, change the
+graph) are performed by the panel. `delete_entity` and `delete_file` stop the
+run with status `waiting` until `/confirm` answers. Person, username and
+profile entities cannot be created by the assistant, and searches go through
+the multi-source orchestrator with its usual limits.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/assistant` | `configured`, `key_hint`, `model`, `files` (its folder and files), last 30 `conversations` |
+| PUT | `/api/assistant/config` | `{model}`: an OpenRouter model id |
+| GET | `/api/assistant/models` | OpenRouter's public catalogue, only models that accept tools (cached one hour); 502 when it cannot be reached |
+| POST | `/api/assistant/conversations` | `{content, context?: {view, params}}` starts a conversation (201) |
+| GET | `/api/assistant/conversations/{id}` | Conversation with `status` (`running`, `waiting`, `idle`, `error`), `error` and `messages` |
+| POST | `/api/assistant/conversations/{id}/messages` | `{content, context?}`; 409 while running or waiting for a confirmation |
+| POST | `/api/assistant/conversations/{id}/confirm` | `{message_id, approve: bool}` answers a pending action |
+| POST | `/api/assistant/conversations/{id}/stop` | Stops after the current step |
+| DELETE | `/api/assistant/conversations/{id}` | Deletes the conversation and its action log; what it created stays |
+| GET | `/api/assistant/files` | Files in the assistant's folder (`assistant-files` next to the database) |
+| GET | `/api/assistant/files/{name}` | Download (always an attachment) |
+| DELETE | `/api/assistant/files/{name}` | Deletes one file |
+
 ## Monitoring
 
 A monitor is a saved multi-source query that runs again on a local schedule
