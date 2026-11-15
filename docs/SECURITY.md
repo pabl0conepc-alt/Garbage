@@ -54,6 +54,16 @@ Out of scope:
   limitation instead of crashing the request.
 - Indicators are syntactic. The UI labels them as not reputation-checked.
 
+### MISP and OpenCTI
+
+- Requests go only to the configured host. Private, loopback, http and other
+  ports are accepted only when the analyst marks the server as internal, and
+  never without that host allowlist; link-local (cloud metadata), multicast
+  and unspecified addresses stay refused. Redirects stay on the same host.
+- The keys are stored with the other API keys, never returned, and scrubbed
+  from error messages. Sending a case follows the same personal-data rules
+  as the MISP export (people's records are left out).
+
 ### Antivirus
 
 - ClamAV is optional. The bytes go to a clamd on this machine (a local socket

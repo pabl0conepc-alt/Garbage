@@ -37,6 +37,8 @@ PROVIDERS: dict[str, Provider] = {
         Provider("nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key", "Optional: raises the rate limit from 5 to 50 requests per 30 s."),
         Provider("ipinfo", "IPinfo", "https://ipinfo.io/account/token", "Optional: the anonymous tier is rate limited."),
         Provider("portaltransparencia", "Portal da Transparência (CGU)", "https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email", "Free key by e-mail; used for a CNPJ's federal sanctions (CEIS, CNEP, CEPIM, leniency), contracts and payments."),
+        Provider("misp", "MISP (your server)", "https://www.misp-project.org/", "Automation key from your MISP profile; the server address is set in Feeds CTI."),
+        Provider("opencti", "OpenCTI (your server)", "https://docs.opencti.io/", "API token from your OpenCTI profile; the server address is set in Feeds CTI."),
         Provider("openrouter", "OpenRouter (AI assistant)", "https://openrouter.ai/settings/keys", "Used only by the assistant panel; messages and tool results go to OpenRouter and the chosen model."),
     )
 }

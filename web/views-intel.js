@@ -1306,6 +1306,31 @@
   async function renderReports(root) {
     const investigations = await G.loadInvestigations(true);
     const rows = investigations;
+    let platforms = {};
+    try {
+      platforms = G.moduleEnabled("cti-exchange") ? (await api("/api/cti-platforms")).items : {};
+    } catch {
+      platforms = {};
+    }
+    const sendButtons = (row) =>
+      Object.values(platforms)
+        .filter((item) => item.configured)
+        .map((item) => {
+          const node = el("button", { class: "button button-secondary button-small", type: "button" }, `Enviar ao ${item.name}`);
+          node.addEventListener("click", async () => {
+            node.disabled = true;
+            try {
+              const result = await api(`/api/investigations/${row.id}/push/${item.kind}`, { method: "POST", body: JSON.stringify({ tlp: "amber" }) });
+              toast(`${result.objects} objeto(s) enviados ao ${item.name}.`);
+              window.open(result.link, "_blank", "noopener");
+            } catch (error) {
+              toast(error.message, "error");
+            } finally {
+              node.disabled = false;
+            }
+          });
+          return node;
+        });
     const formats = [
       ["html", "HTML"],
       ["json", "JSON"],
@@ -1372,6 +1397,7 @@
                         },
                         "Imprimir",
                       ),
+                      ...sendButtons(row),
                     ),
                 },
               ],

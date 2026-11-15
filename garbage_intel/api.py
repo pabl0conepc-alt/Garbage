@@ -56,7 +56,7 @@ from .modules import actors, attack
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
-from . import assistant, cases, custody, monitoring, plugins
+from . import assistant, cases, cti_platforms, custody, monitoring, plugins
 from .report_sections import parse_sections
 from .graph_io import import_graph
 from .graph_add import add_to_graph
@@ -1446,6 +1446,53 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    # --- MISP and OpenCTI -------------------------------------------------------
+
+    def api_cti_platforms(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        self._json(200, cti_platforms.status(self.database_path))
+
+    def api_cti_platform_put(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("cti-exchange")
+        unknown = set(payload) - {"url", "private", "key"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(200, cti_platforms.configure(self.database_path, match.group(1), url=payload.get("url"), private=payload.get("private", False), key=payload.get("key")))
+
+    def api_cti_platform_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        self._json(200, cti_platforms.remove(self.database_path, match.group(1)))
+
+    def api_cti_platform_check(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        try:
+            self._json(200, cti_platforms.check(self.database_path, match.group(1)))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_case_push(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("cti-exchange")
+        try:
+            self._json(201, cti_platforms.push_case(self.database_path, match.group(2), match.group(1), tlp=payload.get("tlp", "amber")))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_case_pushes(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        self._json(200, cti_platforms.pushes(self.database_path, match.group(1)))
+
     # --- AI assistant -----------------------------------------------------------
 
     def api_assistant_status(
@@ -2427,6 +2474,12 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "api_intel_key_delete",
         MAX_BODY_BYTES,
     ),
+    ("GET", re.compile(r"^/api/cti-platforms$"), "api_cti_platforms", MAX_BODY_BYTES),
+    ("PUT", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_put", MAX_BODY_BYTES),
+    ("DELETE", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/cti-platforms/(misp|opencti)/check$"), "api_cti_platform_check", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/push/(misp|opencti)$"), "api_case_push", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/pushes$"), "api_case_pushes", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/assistant$"), "api_assistant_status", MAX_BODY_BYTES),
     ("PUT", re.compile(r"^/api/assistant/config$"), "api_assistant_config", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/assistant/models$"), "api_assistant_models", MAX_BODY_BYTES),

@@ -425,19 +425,99 @@
     if (ruleId) openRule(ruleId);
   }
 
+  /* ---------------------------------------------------------------- */
+  /* MISP and OpenCTI                                                  */
+  /* ---------------------------------------------------------------- */
+
+  async function renderPlatforms(host) {
+    async function draw() {
+      let data;
+      try {
+        data = await api("/api/cti-platforms");
+      } catch (error) {
+        host.replaceChildren(inlineError(error.message));
+        return;
+      }
+      host.replaceChildren(...["misp", "opencti"].map((kind) => platformPanel(data.items[kind])));
+    }
+
+    function platformPanel(item) {
+      const id = `platform-${item.kind}`;
+      const url = el("input", { class: "input", type: "url", id: `${id}-url`, value: item.url || "", autocomplete: "off", spellcheck: "false" });
+      const key = el("input", { class: "input", type: "password", id: `${id}-key`, autocomplete: "off", placeholder: item.key_hint ? `chave salva ${item.key_hint}` : "" });
+      const internal = el("input", { type: "checkbox", id: `${id}-private`, checked: item.private });
+      const state = el("p", { class: "run-meta" }, item.configured
+        ? `Configurado${item.last_check ? ` · conexão conferida ${formatDate(item.last_check)}` : ""}.`
+        : "Ainda não configurado.");
+      const save = el("button", { class: "button button-primary button-small", type: "submit" }, "Salvar");
+      const test = el("button", { class: "button button-secondary button-small", type: "button", disabled: !item.configured }, "Testar conexão");
+      const remove = el("button", { class: "button button-secondary button-small", type: "button", disabled: !item.url }, "Remover");
+      const form = el(
+        "form",
+        { class: "platform-form" },
+        el("label", { for: `${id}-url` }, "Endereço do servidor"),
+        url,
+        el("label", { for: `${id}-key` }, item.kind === "misp" ? "Chave de automação (Auth key)" : "Token da API"),
+        key,
+        el("label", { class: "toolbar-check", for: `${id}-private` }, internal, "Servidor na rede interna (endereço privado, http ou outra porta)"),
+        el("div", { class: "row-actions" }, save, test, remove),
+        state,
+      );
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        save.disabled = true;
+        try {
+          const body = { url: url.value.trim(), private: internal.checked };
+          if (key.value.trim()) body.key = key.value.trim();
+          await api(`/api/cti-platforms/${item.kind}`, { method: "PUT", body: JSON.stringify(body) });
+          toast(`${item.name} salvo.`);
+          await draw();
+        } catch (error) {
+          toast(error.message, "error");
+          save.disabled = false;
+        }
+      });
+      test.addEventListener("click", async () => {
+        test.disabled = true;
+        try {
+          const result = await api(`/api/cti-platforms/${item.kind}/check`, { method: "POST", body: "{}" });
+          toast(`${item.name} respondeu${result.version ? ` (versão ${result.version})` : ""}.`);
+          await draw();
+        } catch (error) {
+          toast(error.message, "error");
+          test.disabled = false;
+        }
+      });
+      remove.addEventListener("click", async () => {
+        const ok = await G.confirm({ title: `Remover ${item.name}?`, message: "O endereço e a chave saem deste workspace. Nada é apagado no servidor.", confirmLabel: "Remover", danger: true });
+        if (!ok) return;
+        await api(`/api/cti-platforms/${item.kind}`, { method: "DELETE" });
+        await draw();
+      });
+      return panel(
+        { title: item.name, caption: item.kind === "misp" ? "Enviar casos como eventos e procurar valores nos seus eventos" : "Enviar casos como relatórios e procurar valores nos seus observáveis" },
+        form,
+        el("p", { class: "tool-limit" }, "Os casos são enviados pela Central de relatórios. Na pesquisa multifonte, o valor pesquisado é consultado neste servidor."),
+      );
+    }
+
+    await draw();
+  }
+
   async function renderFeeds(root, params = []) {
-    const tab = params[0] === "sigma" ? "sigma" : "taxii";
+    const tab = ["sigma", "plataformas"].includes(params[0]) ? params[0] : "taxii";
     const host = el("div");
     root.replaceChildren(
       pageHeader({
         eyebrow: "INTELIGÊNCIA DE AMEAÇAS",
         title: "Feeds CTI",
-        description: "Coleções STIX de servidores TAXII 2.1 e regras de detecção Sigma ligadas às técnicas ATT&CK. Tudo é baixado só quando você pede.",
+        description: "Coleções STIX de servidores TAXII 2.1, regras Sigma ligadas às técnicas ATT&CK e troca com o seu MISP e o seu OpenCTI. Tudo acontece só quando você pede.",
       }),
       G.tabs({
         items: [
           { key: "taxii", label: "TAXII 2.1" },
           { key: "sigma", label: "Regras Sigma" },
+          { key: "plataformas", label: "MISP e OpenCTI" },
         ],
         active: tab,
         onSelect: (key) => go("feeds", key),
@@ -445,6 +525,7 @@
       host,
     );
     if (tab === "sigma") await renderSigma(host, params[1]);
+    else if (tab === "plataformas") await renderPlatforms(host);
     else await renderTaxii(host);
   }
 

@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -213,6 +213,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "indicator-engine",
         "Indicator engine",
         "Pattern extraction and exact-value correlation with provenance.",
+        "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "cti-exchange",
+        "MISP and OpenCTI exchange",
+        "Send cases to your MISP or OpenCTI and look values up in them from the multi-source search.",
         "Threat Intelligence",
         "1.0.0",
         "enabled",
@@ -1292,6 +1300,22 @@ def _migrate_assistant(connection: sqlite3.Connection) -> None:
     )
 
 
+
+def _migrate_cti_pushes(connection: sqlite3.Connection) -> None:
+    """Version 16: the remote event or report each case was last sent to."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS cti_pushes (
+               platform TEXT NOT NULL,
+               investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+               remote_id TEXT NOT NULL,
+               link TEXT NOT NULL DEFAULT '',
+               object_count INTEGER NOT NULL DEFAULT 0,
+               pushed_at TEXT NOT NULL,
+               PRIMARY KEY (platform, investigation_id)
+           );"""
+    )
+
+
 MIGRATIONS = (
     (1, "Baseline evidence ledger schema", _migrate_ledger),
     (2, "Investigation workspace tables and columns", _migrate_workspace),
@@ -1308,6 +1332,7 @@ MIGRATIONS = (
     (13, "Monitors and notifications", _migrate_monitoring),
     (14, "Search index covers case objectives", _migrate_search_objective),
     (15, "AI assistant conversations and action log", _migrate_assistant),
+    (16, "Cases sent to MISP and OpenCTI", _migrate_cti_pushes),
 )
 
 

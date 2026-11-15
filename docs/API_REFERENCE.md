@@ -573,6 +573,27 @@ MX, the source itself) are reported under `skipped`.
   (and whether it has expired) and PGP signature. A non-text answer or one
   without `Contact:` is reported as not published.
 
+## MISP and OpenCTI
+
+One server of each. The address is stored in the settings table; the key is
+the `misp` or `opencti` entry of `/api/intel/keys` and is never returned.
+With `private: true` the server may be on a private or loopback address, use
+http or a non-standard port; requests still go only to that host and
+link-local addresses stay refused.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/cti-platforms` | `items.misp` and `items.opencti`: `url`, `private`, `configured`, `key_hint`, `last_check` |
+| PUT | `/api/cti-platforms/{misp\|opencti}` | `{url, private?, key?}` |
+| DELETE | `/api/cti-platforms/{misp\|opencti}` | Forgets the address and key |
+| POST | `/api/cti-platforms/{misp\|opencti}/check` | MISP `/servers/getVersion` or OpenCTI `about.version`; 502 with the reason |
+| POST | `/api/investigations/{id}/push/{misp\|opencti}` | `{tlp?}` (201): MISP `/events/add`, or `/events/edit/{uuid}` when the event exists; OpenCTI `stixCyberObservableAdd` per observable and `reportAdd` with a stable `stix_id`. Returns `remote_id`, `link`, `objects` |
+| GET | `/api/investigations/{id}/pushes` | Last send to each platform |
+
+The `misp` and `opencti` connectors look the queried value up in the
+multi-source search (`misp-event`, `opencti-observable`, `opencti-report`
+results); the dossier lists them first.
+
 ## AI assistant
 
 A conversation with a model chosen on OpenRouter. The key is the `openrouter`
