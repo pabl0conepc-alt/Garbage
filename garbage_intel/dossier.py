@@ -20,6 +20,7 @@ from typing import Any, Iterable
 MAX_LIST = 500
 SOURCE_NAMES = {
     "abuseipdb": "AbuseIPDB", "brasilapi-cnpj": "BrasilAPI", "br-documents": "verificação offline",
+    "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)",
     "certspotter": "Cert Spotter", "circl-hashlookup": "CIRCL", "cisa-kev-local": "CISA KEV",
     "crtsh": "crt.sh", "cymru-asn": "Team Cymru", "dns-doh": "DNS", "first-epss": "EPSS",
     "github": "GitHub", "greynoise": "GreyNoise", "ipinfo": "IPinfo", "local-structure": "análise local",
@@ -423,6 +424,16 @@ def _cnpj(value: str, facts: Facts) -> dict[str, Any]:
         flags.append({"level": "high", "text": f"Situação cadastral: {status['value']}."})
     if facts.value("validity") == "inválido":
         flags.append({"level": "high", "text": "Dígitos verificadores inválidos."})
+    sanctions = facts.all("sanction")
+    if sanctions:
+        lists = sorted({entry["data"].get("list", "").split(" (")[0] for entry in sanctions if entry["data"].get("list")})
+        flags.append({"level": "high", "text": f"{len(sanctions)} registro(s) em listas federais de sanção: {', '.join(lists)}."})
+    if _years_since(founded) == 0:
+        flags.append({"level": "medium", "text": f"Empresa aberta há menos de um ano ({_date(founded)})."})
+    if "individual" in facts.value("legal-nature").lower():
+        flags.append({"level": "info", "text": "Empresário individual: o nome da empresa é o do titular; o CPF que vem no nome fica mascarado."})
+    holder = facts.first("registrobr-holder")
+    domains = facts.all("company-domain")
     sources = ["brasilapi-cnpj", "minhareceita-cnpj"]
     sections = [
         _section("company", "Empresa", [
@@ -446,12 +457,53 @@ def _cnpj(value: str, facts: Facts) -> dict[str, Any]:
         _section("partners", "Quadro societário", [
             _row("Sócios", (partners or {}).get("value", ""), hint="nomes de sócios não são coletados: são dados de pessoas"),
         ]),
+        _section(
+            "internet",
+            "Na internet",
+            [
+                _row(
+                    "No Registro.br",
+                    " · ".join(part for part in (
+                        f"{holder['data'].get('domains') or 0} domínio(s) .br",
+                        f"{holder['data'].get('ip_blocks')} bloco(s) de IP" if holder["data"].get("ip_blocks") else "",
+                        f"{holder['data'].get('asns')} AS" if holder["data"].get("asns") else "",
+                    ) if part) if holder else "",
+                    hint=(f"titular desde {_date(holder['data'].get('since'))}" if holder["data"].get("since") else "") + (" · contado na matriz" if holder["data"].get("holder") == "matriz" else "") if holder else "",
+                    sources=["registrobr-cnpj"] if holder else (),
+                ),
+            ],
+            items=[
+                {"value": entry["value"], "meta": entry["data"].get("how", "")}
+                for entry in sorted(domains, key=lambda entry: not entry["data"].get("confirmed"))
+            ],
+            pivot=True,
+            note="O Registro.br não lista os domínios de um titular; os sites acima são os prováveis, confirmados pelo CNPJ do titular." if holder and domains else "",
+        ),
+        _section(
+            "sanctions",
+            "Sanções federais",
+            [_row("Resultado", facts.value("sanction-check"), hint=f"listas: {facts.first('sanction-check')['data'].get('lists', '')}" if facts.first("sanction-check") else "", sources=["sancoes-cgu"])],
+            items=[
+                {
+                    "value": entry["value"],
+                    "meta": " · ".join(part for part in (
+                        entry["data"].get("list", "").split(" (")[0],
+                        f"de {entry['data']['start']}" if entry["data"].get("start") else "",
+                        f"até {entry['data']['end']}" if entry["data"].get("end") else "",
+                        f"processo {entry['data']['process']}" if entry["data"].get("process") else "",
+                    ) if part),
+                }
+                for entry in sanctions
+            ],
+        ),
     ]
     facts_line = [
         {"label": "Situação", "value": status["value"]} if status else None,
         {"label": "Desde", "value": _date(founded)} if founded else None,
         {"label": "Porte", "value": facts.value("company-size")} if facts.value("company-size") else None,
         {"label": "UF", "value": (facts.first("address") or {}).get("data", {}).get("state", "")} if facts.first("address") else None,
+        {"label": "Domínios .br", "value": str(holder["data"].get("domains") or 0)} if holder else None,
+        {"label": "Sanções", "value": str(len(sanctions)) if sanctions else ("nenhuma" if facts.value("sanction-check") else "")},
     ]
     result: dict[str, Any] = {
         "title": name or value,

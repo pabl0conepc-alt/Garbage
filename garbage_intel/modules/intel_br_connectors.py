@@ -373,10 +373,10 @@ def _documents_connector(context: ConnectorContext) -> list[Finding]:
 # CNPJ from public Receita Federal data
 
 
-def _get_json(url: str, host: str, *, missing: tuple[int, ...] = (404,)) -> tuple[Any, FetchResult]:
+def _get_json(url: str, host: str, *, missing: tuple[int, ...] = (404,), headers: dict[str, str] | None = None) -> tuple[Any, FetchResult]:
     result = FETCH(
         url,
-        headers={"Accept": "application/json", "User-Agent": USER_AGENT, "Accept-Language": "pt-BR,pt;q=0.9"},
+        headers={"Accept": "application/json", "User-Agent": USER_AGENT, "Accept-Language": "pt-BR,pt;q=0.9", **(headers or {})},
         allowed_hosts=(host,),
         max_bytes=2 * 1024 * 1024,
         timeout=20.0,
@@ -397,6 +397,25 @@ def _text(value: Any, limit: int = 300) -> str:
     return " ".join(str(value).split())[:limit] if value not in (None, "") else ""
 
 
+_NAME_CPF = re.compile(r"(?<!\d)(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})(?!\d)")
+
+
+def mask_cpf(name: str) -> str:
+    """An individual entrepreneur's company name ends with the owner's CPF;
+    only the first three digits are kept."""
+    return _NAME_CPF.sub(lambda match: f"{match.group(1)}.***.***-**", name)
+
+
+def cnpj_with_check_digits(first_twelve: str) -> str:
+    digits = first_twelve
+    weights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    for size in (12, 13):
+        factors = weights if size == 12 else [6, *weights]
+        remainder = sum(int(digits[index]) * factors[index] for index in range(size)) % 11
+        digits += str(0 if remainder < 2 else 11 - remainder)
+    return digits
+
+
 def company_findings(data: dict[str, Any], source: str, digest: str) -> list[Finding]:
     """Receita Federal company record -> findings. Partner names are dropped."""
     findings: list[Finding] = []
@@ -406,7 +425,7 @@ def company_findings(data: dict[str, Any], source: str, digest: str) -> list[Fin
         if text:
             findings.append(Finding(result_type, text, extra or {}, source, digest))
 
-    add("organization", data.get("razao_social"), {"role": "razão social"})
+    add("organization", mask_cpf(_text(data.get("razao_social"))), {"role": "razão social"})
     add("trade-name", data.get("nome_fantasia"))
     status = _text(data.get("descricao_situacao_cadastral"))
     if status:
@@ -542,6 +561,174 @@ def _nominatim_connector(context: ConnectorContext) -> list[Finding]:
     return findings
 
 
+# --------------------------------------------------------------------------
+# Registro.br: the company's .br domains and internet resources
+
+REGISTRO_BR = "https://rdap.registro.br/"
+FREE_MAIL = frozenset(
+    "gmail.com hotmail.com outlook.com live.com yahoo.com yahoo.com.br bol.com.br uol.com.br terra.com.br ig.com.br "
+    "icloud.com me.com globo.com globomail.com msn.com hotmail.com.br outlook.com.br zipmail.com.br r7.com proton.me "
+    "protonmail.com aol.com gmx.com yandex.com".split()
+)
+_LEGAL_SUFFIXES = re.compile(
+    r"\b(ltda|s\.?\s?a|s/a|me|epp|eireli|limitada|sociedade|anonima|cia|companhia|comercio|servicos|industria|e|de|da|do|das|dos)\b\.?",
+    re.IGNORECASE,
+)
+MAX_DOMAIN_CANDIDATES = 6
+
+
+def _slug(text: str) -> str:
+    import unicodedata
+
+    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    plain = _LEGAL_SUFFIXES.sub(" ", plain)
+    return re.sub(r"[^a-z0-9]", "", plain)
+
+
+def _domain_candidates(data: dict[str, Any]) -> list[tuple[str, str]]:
+    """(domain, how it was guessed): the registered e-mail's domain and the names as .com.br."""
+    found: list[tuple[str, str]] = []
+    email = _text(data.get("email"), 200).lower()
+    if "@" in email:
+        domain = email.rsplit("@", 1)[1].strip(". ")
+        if domain and domain not in FREE_MAIL and re.fullmatch(r"[a-z0-9.-]+\.[a-z]{2,}", domain):
+            found.append((domain, "domínio do e-mail cadastrado na Receita"))
+    for field in ("nome_fantasia", "razao_social"):
+        name = _text(data.get(field))
+        if not name or _NAME_CPF.search(name):
+            continue  # an individual's name is not a company site
+        words = [_slug(word) for word in name.split()]
+        words = [word for word in words if word]
+        for guess in ("".join(words[:2]), words[0] if words else "", "".join(words[:3])):
+            if 3 <= len(guess) <= 40:
+                found.append((f"{guess}.com.br", f"nome {'fantasia' if field == 'nome_fantasia' else 'da empresa'}"))
+    unique: dict[str, str] = {}
+    for domain, how in found:
+        unique.setdefault(domain, how)
+    return list(unique.items())[:MAX_DOMAIN_CANDIDATES]
+
+
+def _registrant_cnpj(record: dict[str, Any]) -> str:
+    for entity in record.get("entities") or []:
+        if not isinstance(entity, dict) or "registrant" not in (entity.get("roles") or []):
+            continue
+        for public in entity.get("publicIds") or []:
+            if isinstance(public, dict) and str(public.get("type", "")).lower() == "cnpj":
+                return _digits(str(public.get("identifier", "")))
+    return ""
+
+
+def _registrobr_connector(context: ConnectorContext) -> list[Finding]:
+    cnpj = context.query_value
+    head_office = cnpj_with_check_digits(cnpj[:8] + "0001")
+    findings: list[Finding] = []
+    # Only the holder's dates and resource counts are kept; contacts and the
+    # legal representative are people and are not read.
+    holder, result = _get_json(f"{REGISTRO_BR}entity/{cnpj}", "rdap.registro.br")
+    holder_cnpj = cnpj
+    if holder is None and head_office != cnpj:
+        holder, result = _get_json(f"{REGISTRO_BR}entity/{head_office}", "rdap.registro.br")
+        holder_cnpj = head_office
+    if holder:
+        since = next((event.get("eventDate", "") for event in holder.get("events") or [] if event.get("eventAction") == "registration"), "")
+        domains = holder.get("nicbr_domainCount")
+        findings.append(
+            Finding(
+                "registrobr-holder",
+                f"{domains or 0} domínio(s) .br",
+                {
+                    "domains": domains,
+                    "ip_blocks": holder.get("nicbr_inetCount"),
+                    "asns": holder.get("nicbr_autnumCount"),
+                    "since": since[:10],
+                    "holder": "matriz" if holder_cnpj != cnpj else "este CNPJ",
+                    "meaning": "Quantos domínios .br, blocos de IP e números de AS o Registro.br tem em nome deste CNPJ.",
+                },
+                result.final_url,
+                result.sha256,
+            )
+        )
+    company, _ = _get_json(f"{BRASILAPI}{cnpj}", "brasilapi.com.br")
+    for domain, how in _domain_candidates(company or {}):
+        if domain.endswith(".br"):
+            record, checked = _get_json(f"{REGISTRO_BR}domain/{domain}", "rdap.registro.br")
+            if not record:
+                continue
+            owner = _registrant_cnpj(record)
+            if owner[:8] == cnpj[:8]:
+                findings.append(
+                    Finding(
+                        "company-domain",
+                        domain,
+                        {"confirmed": True, "how": f"Registro.br: o titular é {'este CNPJ' if owner == cnpj else 'a matriz'}", "guess": how},
+                        checked.final_url,
+                        checked.sha256,
+                    )
+                )
+            elif how.startswith("domínio do e-mail"):
+                findings.append(Finding("company-domain", domain, {"confirmed": False, "how": "do e-mail cadastrado; o titular no Registro.br é outro"}, checked.final_url, checked.sha256))
+        elif how.startswith("domínio do e-mail"):
+            findings.append(Finding("company-domain", domain, {"confirmed": False, "how": how}))
+    return findings
+
+
+# --------------------------------------------------------------------------
+# Federal sanctions lists (Portal da Transparência, CGU)
+
+TRANSPARENCIA = "https://api.portaldatransparencia.gov.br/api-de-dados/"
+SANCTION_LISTS = (
+    ("ceis", "codigoSancionado", "CEIS (empresas inidôneas e suspensas)"),
+    ("cnep", "codigoSancionado", "CNEP (empresas punidas pela Lei Anticorrupção)"),
+    ("cepim", "cnpjSancionado", "CEPIM (entidades impedidas de receber transferências)"),
+    ("acordos-leniencia", "cnpjSancionado", "Acordos de leniência"),
+)
+
+
+def _sanction(kind: str, label: str, item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    if kind == "cepim":
+        organ = _text((item.get("orgaoSuperior") or {}).get("nome"), 200)
+        return f"{label.split(' (')[0]} · {organ or 'órgão não informado'}", {"list": label, "reason": _text(item.get("motivo"), 300), "reference": _text(item.get("dataReferencia"), 20)}
+    if kind == "acordos-leniencia":
+        return (
+            f"Acordo de leniência · {_text(item.get('orgaoResponsavel'), 200)}",
+            {"list": label, "status": _text(item.get("situacaoAcordo"), 80), "start": _text(item.get("dataInicioAcordo"), 20), "end": _text(item.get("dataFimAcordo"), 20)},
+        )
+    kind_text = _text((item.get("tipoSancao") or {}).get("descricaoResumida"), 200) or "sanção"
+    organ = _text((item.get("orgaoSancionador") or {}).get("nome"), 200)
+    basis = "; ".join(_text(entry.get("descricao"), 200) for entry in (item.get("fundamentacao") or [])[:3] if isinstance(entry, dict))
+    return (
+        f"{kind_text} · {organ or 'órgão não informado'}",
+        {
+            "list": label,
+            "start": _text(item.get("dataInicioSancao"), 20),
+            "end": _text(item.get("dataFimSancao"), 20),
+            "process": _text(item.get("numeroProcesso"), 80),
+            "basis": basis,
+            "fine": _text(item.get("valorMulta"), 40),
+            "link": _text(item.get("linkPublicacao"), 300),
+        },
+    )
+
+
+def _sanctions_connector(context: ConnectorContext) -> list[Finding]:
+    findings: list[Finding] = []
+    checked: list[str] = []
+    for kind, parameter, label in SANCTION_LISTS:
+        items, result = _get_json(
+            f"{TRANSPARENCIA}{kind}?{parameter}={context.query_value}&pagina=1",
+            "api.portaldatransparencia.gov.br",
+            headers={"chave-api-dados": context.api_key},
+        )
+        checked.append(label.split(" (")[0])
+        for item in (items or [])[:50]:
+            if isinstance(item, dict):
+                value, data = _sanction(kind, label, item)
+                findings.append(Finding("sanction", value, data, result.final_url, result.sha256))
+    if not findings:
+        findings.append(Finding("sanction-check", "nenhuma sanção encontrada", {"lists": ", ".join(checked)}))
+    return findings
+
+
 for _connector in (
     Connector(
         "br-documents",
@@ -571,6 +758,30 @@ for _connector in (
         rate_per_minute=20,
         ttl_seconds=7 * 24 * 3600,
         source_url="https://docs.minhareceita.org/",
+    ),
+    Connector(
+        "registrobr-cnpj",
+        "Registro.br",
+        "The company's .br domains, IP blocks and AS numbers counted by Registro.br, and its likely sites confirmed by the domain holder's CNPJ. Contacts and representatives are not read.",
+        ("cnpj",),
+        _registrobr_connector,
+        network=True,
+        rate_per_minute=20,
+        ttl_seconds=7 * 24 * 3600,
+        source_url="https://rdap.registro.br/",
+    ),
+    Connector(
+        "sancoes-cgu",
+        "Sanções federais (CGU)",
+        "Federal sanctions lists from the Portal da Transparência: CEIS, CNEP, CEPIM and leniency agreements for the CNPJ.",
+        ("cnpj",),
+        _sanctions_connector,
+        network=True,
+        requires_key=True,
+        key_id="portaltransparencia",
+        rate_per_minute=30,
+        ttl_seconds=24 * 3600,
+        source_url="https://portaldatransparencia.gov.br/sancoes",
     ),
     Connector(
         "nominatim",
