@@ -512,21 +512,94 @@ def _place_title(display_name: str) -> str:
     return parts[0]
 
 
+def _meaning(facts: Facts, result_type: str) -> str:
+    entry = facts.first(result_type)
+    return str(entry["data"].get("meaning", "")) if entry else ""
+
+
+CPF_NOTE = (
+    "Um CPF carrega só isto: os dígitos verificadores e a região fiscal de emissão. Nome, nascimento, "
+    "endereço e situação cadastral ficam na Receita Federal e não são consultados pelo GARBAGE."
+)
+PHONE_NOTE = (
+    "Pelo número dá para saber país, DDD, estado e tipo de linha. A operadora atual não: com a portabilidade "
+    "o prefixo deixou de indicar a operadora. O dono e a localização de quem usa o número não são consultados."
+)
+
+
 def _documents(query_type: str, value: str, facts: Facts) -> dict[str, Any]:
+    validity = facts.value("validity")
+    flags: list[dict[str, str]] = []
+    if query_type == "cpf":
+        region = facts.first("fiscal-region")
+        check = facts.value("check-digits")
+        if facts.value("warning"):
+            flags.append({"level": "high", "text": "CPF com todos os dígitos iguais: inválido por regra."})
+        elif validity == "inválido":
+            flags.append({"level": "high", "text": f"CPF inválido: dígitos verificadores {check}."})
+        rows = [
+            _row("Formato", facts.value("formatted")),
+            _row("Validade", validity, hint=_meaning(facts, "validity")),
+            _row("Dígitos verificadores", check, hint=_meaning(facts, "check-digits")),
+            _row("Região fiscal", region["value"] if region else "", hint=_meaning(facts, "fiscal-region")),
+            _row("Estados da região", region["data"].get("states", "") if region else ""),
+        ]
+        subtitle = f"CPF {validity}" + (f" · emitido na região fiscal {region['value']}" if region else "")
+        return {
+            "title": facts.value("formatted") or value,
+            "subtitle": subtitle,
+            "facts": [fact for fact in (
+                {"label": "Validade", "value": validity},
+                {"label": "Região fiscal", "value": region["value"]} if region else None,
+                {"label": "9º dígito", "value": region["data"].get("digit", "")} if region else None,
+            ) if fact and fact["value"]],
+            "flags": flags,
+            "sections": [section for section in [
+                _section("facts", "Verificação", rows),
+                {"id": "limits", "title": "O que o número diz", "rows": [], "note": CPF_NOTE},
+            ] if section],
+        }
+
+    line = facts.value("line-type")
+    state = facts.first("state")
+    ddd = facts.value("phone-region")
+    country = facts.first("country")
+    suggestion = facts.value("phone-suggestion")
+    if validity == "formato não reconhecido":
+        flags.append({"level": "high", "text": "Número com formato não reconhecido: confira DDD e quantidade de dígitos."})
+    if suggestion:
+        flags.append({"level": "medium", "text": f"Celular sem o 9: hoje ele seria {suggestion}."})
+    if country and country["value"] != "Brasil":
+        flags.append({"level": "info", "text": f"Número de fora do Brasil ({country['value']})."})
     rows = [
-        _row("Formato", facts.value("formatted")),
-        _row("Validade", facts.value("validity")),
-        _row("Região fiscal", facts.value("fiscal-region"), hint="onde foi emitido, não onde a pessoa mora"),
-        _row("País", facts.value("country")),
-        _row("DDD", facts.value("phone-region"), hint="área de emissão; não indica onde alguém está"),
-        _row("Tipo de linha", facts.value("line-type")),
+        _row("Tipo de linha", line, hint=_meaning(facts, "line-type")),
+        _row("Serviço", facts.value("service")),
+        _row("País", f"{country['value']} ({country['data'].get('calling_code', '')})" if country else ""),
+        _row("DDD", ddd, hint=_meaning(facts, "phone-region")),
+        _row("Estado", state["value"] if state else "", hint=_meaning(facts, "state")),
+        _row("Com o 9", suggestion, hint=_meaning(facts, "phone-suggestion")),
     ]
+    formats = [{"value": entry["value"], "meta": entry["data"].get("label", "")} for entry in facts.all("phone-format")]
+    subtitle = " · ".join(part for part in (
+        line.capitalize() if line else "",
+        ddd.split(" · ")[0] if ddd else "",
+        state["value"] if state else (country["value"] if country else ""),
+    ) if part)
     return {
         "title": facts.value("formatted") or value,
-        "subtitle": "Só verificação offline: o GARBAGE não busca o dono de CPF ou telefone.",
-        "facts": [],
-        "flags": [{"level": "high", "text": "Número inválido."}] if facts.value("validity") == "inválido" else [],
-        "sections": [section for section in [_section("facts", "Verificação", rows)] if section],
+        "subtitle": subtitle or "Telefone",
+        "facts": [fact for fact in (
+            {"label": "Tipo", "value": line},
+            {"label": "DDD", "value": ddd.split(" · ")[0].replace("DDD ", "") if ddd else ""},
+            {"label": "Estado", "value": state["value"] if state else ""},
+            {"label": "País", "value": country["value"] if country else ""},
+        ) if fact["value"]],
+        "flags": flags,
+        "sections": [section for section in [
+            _section("facts", "Número", rows),
+            _section("formats", "Como escrever e discar", items=formats),
+            {"id": "limits", "title": "O que o número diz", "rows": [], "note": PHONE_NOTE},
+        ] if section],
     }
 
 

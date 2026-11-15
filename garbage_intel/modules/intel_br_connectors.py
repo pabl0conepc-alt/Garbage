@@ -42,6 +42,15 @@ def _digits(value: str) -> str:
     return re.sub(r"\D", "", value)
 
 
+def cpf_check_digits(first_nine: str) -> str:
+    """The two check digits a CPF with these first nine digits must end in."""
+    digits = first_nine
+    for size in (9, 10):
+        total = sum(int(digits[index]) * (size + 1 - index) for index in range(size))
+        digits += str((total * 10) % 11 % 10)
+    return digits[9:]
+
+
 def cpf_valid(digits: str) -> bool:
     if len(digits) != 11 or len(set(digits)) == 1:
         return False
@@ -170,7 +179,28 @@ DDD = {
     "94": ("PA", "Marabá"), "95": ("RR", "Boa Vista"), "96": ("AP", "Macapá"), "97": ("AM", "interior do Amazonas"),
     "98": ("MA", "São Luís"), "99": ("MA", "Imperatriz"),
 }
-NON_GEOGRAPHIC = ("0800", "0300", "0303", "0500", "0900", "4003", "4004", "4007", "4020")
+NON_GEOGRAPHIC = ("0800", "0300", "0303", "0500", "0900", "3003", "3004", "4002", "4003", "4004", "4007", "4020")
+SERVICE_MEANING = {
+    "0800": "ligação gratuita para quem liga; usado por empresas e serviços de atendimento",
+    "0300": "custo compartilhado: quem liga paga como ligação local",
+    "0303": "prefixo que a Anatel exige para telemarketing ativo",
+    "0500": "ligações de doação para entidades",
+    "0900": "serviço com tarifa adicional (cobrança acima da ligação comum)",
+}
+UNIQUE_NATIONAL = "número único nacional de empresa: o mesmo em todo o país, discado sem DDD"
+STATE_NAMES = {
+    "AC": "Acre", "AL": "Alagoas", "AM": "Amazonas", "AP": "Amapá", "BA": "Bahia", "CE": "Ceará", "DF": "Distrito Federal",
+    "ES": "Espírito Santo", "GO": "Goiás", "MA": "Maranhão", "MG": "Minas Gerais", "MS": "Mato Grosso do Sul",
+    "MT": "Mato Grosso", "PA": "Pará", "PB": "Paraíba", "PE": "Pernambuco", "PI": "Piauí", "PR": "Paraná",
+    "RJ": "Rio de Janeiro", "RN": "Rio Grande do Norte", "RO": "Rondônia", "RR": "Roraima", "RS": "Rio Grande do Sul",
+    "SC": "Santa Catarina", "SE": "Sergipe", "SP": "São Paulo", "TO": "Tocantins",
+}
+# The DDD that covers each state capital.
+CAPITAL_DDD = {
+    "SP": "11", "RJ": "21", "ES": "27", "MG": "31", "PR": "41", "SC": "48", "RS": "51", "DF": "61", "GO": "62",
+    "TO": "63", "MT": "65", "MS": "67", "AC": "68", "RO": "69", "BA": "71", "SE": "79", "PE": "81", "AL": "82",
+    "PB": "83", "RN": "84", "CE": "85", "PI": "86", "PA": "91", "AM": "92", "RR": "95", "AP": "96", "MA": "98",
+}
 
 
 def parse_phone(raw: str) -> dict[str, Any] | None:
@@ -193,18 +223,54 @@ def parse_phone(raw: str) -> dict[str, Any] | None:
         "national": national,
     }
     if code != "55":
-        return result
+        return {
+            **result,
+            "formats": [("E.164 (sistemas e apps)", result["e164"]), ("Discando do Brasil", f"00 + operadora + {code} {national}")],
+        }
     if national[:4] in NON_GEOGRAPHIC:
-        return {**result, "line_type": "não geográfico", "service": f"serviço {national[:4]}"}
+        prefix = national[:4]
+        rest = national[4:]
+        formatted = f"{prefix} {rest[:3]} {rest[3:]}".strip() if prefix.startswith("0") else f"{prefix}-{rest}"
+        return {
+            **result,
+            "line_type": "não geográfico",
+            "service": prefix,
+            "service_meaning": f"{SERVICE_MEANING.get(prefix, UNIQUE_NATIONAL)}. Só funciona discado de dentro do Brasil",
+            "formatted": formatted,
+            "formats": [("Como aparece", formatted), ("Só dígitos", national)],
+        }
     area, subscriber = national[:2], national[2:]
     if area not in DDD or len(subscriber) not in (8, 9):
         return None
     if len(subscriber) == 9 and not subscriber.startswith("9"):
         return None
-    line_type = "celular" if len(subscriber) == 9 else ("fixo" if subscriber[0] in "2345" else "celular antigo ou especial")
+    old_mobile = len(subscriber) == 8 and subscriber[0] in "6789"
+    line_type = "celular" if len(subscriber) == 9 else ("fixo" if subscriber[0] in "2345" else "celular sem o 9 (formato antigo)")
     state, region = DDD[area]
-    formatted = f"+55 ({area}) {subscriber[:-4]}-{subscriber[-4:]}"
-    return {**result, "ddd": area, "state": state, "region": region, "line_type": line_type, "formatted": formatted}
+    local = f"{subscriber[:-4]}-{subscriber[-4:]}"
+    formatted = f"+55 ({area}) {local}"
+    return {
+        **result,
+        "ddd": area,
+        "state": state,
+        "state_name": STATE_NAMES.get(state, state),
+        "region": region,
+        "capital": CAPITAL_DDD.get(state) == area,
+        "state_ddds": [code for code, (uf, _) in DDD.items() if uf == state and code != area],
+        "line_type": line_type,
+        "old_mobile": old_mobile,
+        "suggestion": f"+55 ({area}) 9{local}" if old_mobile else "",
+        "formatted": formatted,
+        "formats": [
+            ("Nacional", f"({area}) {local}"),
+            ("Internacional", f"+55 {area} {subscriber[:-4]} {subscriber[-4:]}"),
+            ("E.164 (sistemas e apps)", f"+55{national}"),
+            ("De outro DDD no Brasil", f"0 + operadora + {area} {local}"),
+            ("Do exterior", f"00 55 {area} {subscriber[:-4]} {subscriber[-4:]}"),
+            ("Só dígitos", national),
+            ("Link tel:", f"tel:+55{national}"),
+        ],
+    }
 
 
 # --------------------------------------------------------------------------
@@ -220,9 +286,36 @@ def _documents_connector(context: ConnectorContext) -> list[Finding]:
     value = context.query_value
     if context.query_type == "cpf":
         valid = cpf_valid(value)
-        findings = [Finding("validity", "válido" if valid else "inválido", {"meaning": "Só os dígitos verificadores; não diz se o CPF existe nem a quem pertence."})]
+        formatted = f"{value[:3]}.{value[3:6]}.{value[6:9]}-{value[9:]}"
+        findings = [
+            Finding("formatted", formatted, {}),
+            Finding("validity", "válido" if valid else "inválido", {"meaning": "Só os dígitos verificadores; não diz se o CPF existe nem a quem pertence."}),
+        ]
+        if len(set(value)) == 1:
+            findings.append(Finding("warning", "todos os dígitos iguais", {"meaning": "Inválido por regra da Receita; aparece em testes e cadastros falsos."}))
+        else:
+            expected = cpf_check_digits(value[:9])
+            findings.append(
+                Finding(
+                    "check-digits",
+                    f"{value[9:]} conferem" if valid else f"{value[9:]} não conferem; o certo seria {expected}",
+                    {"expected": expected, "meaning": "Calculados a partir dos 9 primeiros dígitos. Um dígito trocado costuma ser erro de digitação."},
+                )
+            )
         if valid:
-            findings.append(Finding("fiscal-region", CPF_REGIONS[value[8]], {"meaning": "Região fiscal onde o CPF foi emitido, pelo 9º dígito; não é onde a pessoa mora."}))
+            states = CPF_REGIONS[value[8]]
+            names = [STATE_NAMES.get(code.strip(), code.strip()) for code in re.split(r",| e ", states)]
+            findings.append(
+                Finding(
+                    "fiscal-region",
+                    states,
+                    {
+                        "digit": value[8],
+                        "states": ", ".join(names),
+                        "meaning": f"Região fiscal onde o CPF foi emitido, pelo 9º dígito ({value[8]}); não é onde a pessoa mora.",
+                    },
+                )
+            )
         return findings
     if context.query_type == "cnpj":
         valid = cnpj_valid(value)
@@ -237,6 +330,8 @@ def _documents_connector(context: ConnectorContext) -> list[Finding]:
         if not phone:
             return [Finding("validity", "formato não reconhecido", {})]
         findings = [Finding("formatted", phone.get("formatted") or phone["e164"], {"e164": phone["e164"]})]
+        for label, text in phone.get("formats", []):
+            findings.append(Finding("phone-format", text, {"label": label}))
         if phone["country"]:
             findings.append(Finding("country", phone["country"], {"calling_code": f"+{phone['country_code']}"}))
         if phone.get("ddd"):
@@ -247,8 +342,29 @@ def _documents_connector(context: ConnectorContext) -> list[Finding]:
                     {"state": phone["state"], "meaning": "Área onde o número foi emitido; com portabilidade e celulares, não indica onde alguém está."},
                 )
             )
+            others = phone.get("state_ddds") or []
+            findings.append(
+                Finding(
+                    "state",
+                    f"{phone['state_name']} ({phone['state']})",
+                    {
+                        "capital": phone["capital"],
+                        "other_ddds": ", ".join(others),
+                        "meaning": ("DDD da capital" if phone["capital"] else "DDD do interior") + (f"; outros DDDs do estado: {', '.join(others)}" if others else "; único DDD do estado"),
+                    },
+                )
+            )
         if phone.get("line_type"):
-            findings.append(Finding("line-type", phone["line_type"], {}))
+            meaning = {
+                "celular": "Nove dígitos começando por 9, o padrão dos celulares no Brasil desde 2016.",
+                "fixo": "Oito dígitos começando de 2 a 5: linha fixa.",
+                "não geográfico": phone.get("service_meaning", ""),
+            }.get(phone["line_type"], "Oito dígitos começando de 6 a 9: era celular antes de 2016; hoje precisa do 9 na frente.")
+            findings.append(Finding("line-type", phone["line_type"], {"meaning": meaning}))
+        if phone.get("service"):
+            findings.append(Finding("service", f"{phone['service']} · {phone['service_meaning']}", {}))
+        if phone.get("suggestion"):
+            findings.append(Finding("phone-suggestion", phone["suggestion"], {"meaning": "Como o número fica com o 9 que os celulares ganharam."}))
         return findings
     return []
 
