@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from garbage_intel import assistant, intel
 from garbage_intel.db import initialize
@@ -151,6 +152,34 @@ class AssistantTests(unittest.TestCase):
         result = json.loads(json.loads(self.requests[1]["body"])["messages"][-1]["content"])
         self.assertEqual(result["value"], "example.org")
         self.assertIn("mail.example.org", json.dumps(result))
+
+    def test_new_tools_email_graph_and_confirmed_live_check(self):
+        self.ready()
+        register_connector(Connector("test-dns", "DNS", "test", ("domain",), lambda context: [Finding("subdomain", "mail.example.org")]))
+        self.addCleanup(unregister_connector, "test-dns")
+        run = intel.run_query(self.database, value="example.org", wait=True)
+        raw = "From: \"suporte@banco.example\" <x@golpe.example>\nTo: a@example.org\nSubject: Oi\nReceived: from a (a [45.33.32.156]) by b; Sat, 14 Nov 2026 10:00:00 -0300\n\ncorpo"
+        self.replies = [
+            (200, reply("", [
+                ("analyze_email", {"raw": raw}),
+                ("add_to_graph", {"run_id": run["id"], "value": "mail.example.org", "section": "Subdomínios"}),
+                ("live_check_url", {"url": "https://example.org"}),
+            ])),
+            (200, reply("Pronto.")),
+        ]
+        conversation = assistant.start_conversation(self.database, "analisa e verifica")
+        tools = [message for message in conversation["messages"] if message["role"] == "tool"]
+        self.assertEqual([tool["action"]["status"] for tool in tools], ["done", "done", "pending"])
+        self.assertIn("vai ver o seu IP", tools[2]["action"]["summary"])
+        sent = json.loads(self.requests[0]["body"])
+        self.assertIn("live_check_url", {tool["function"]["name"] for tool in sent["tools"]})
+        from garbage_intel.modules import live_check
+
+        update_settings(self.database, {"intel.allow_network": True})  # a live check needs the network on
+        with patch.object(live_check, "check", lambda url, **options: ({"url": url, "final_url": url, "final_status": 200, "hops": [{}], "flags": [], "page": None, "screenshot": None}, None)):
+            done = assistant.confirm(self.database, conversation["id"], tools[2]["id"], True)
+        self.assertEqual(done["messages"][-2]["action"]["status"], "done")
+        self.assertEqual(len(list_entities(self.database)["items"]), 2)
 
     def test_provider_errors_end_the_run_without_the_key(self):
         self.ready()
