@@ -86,18 +86,32 @@ class DetectionTests(unittest.TestCase):
         self.assertEqual(br.parse_phone("+351 21 123 4567")["country"], "Portugal")
         self.assertIsNone(br.parse_phone("(20) 98765-4321"))  # DDD 20 does not exist
         self.assertIsNone(br.parse_phone("(11) 88765-4321"))  # nine digits must start with 9
+        old = br.parse_phone("(21) 8251-6781")
+        self.assertEqual((old["line_type"], old["suggestion"]), ("celular sem o 9 (formato antigo)", "+55 (21) 98251-6781"))
+        self.assertTrue(mobile["capital"])
+        self.assertEqual(mobile["state_ddds"], ["22", "24"])
+        self.assertIn(("E.164 (sistemas e apps)", "+5521998765432"), mobile["formats"])
+        self.assertEqual(br.parse_phone("4004 1234")["formatted"], "4004-1234")
+        self.assertEqual(br.cpf_check_digits("529982247"), "25")
 
 
 class ConnectorTests(unittest.TestCase):
     def test_offline_facts_never_name_an_owner(self):
         cpf = {finding.result_type: finding.value for finding in run("br-documents", "cpf", "52998224725")}
-        self.assertEqual(cpf, {"validity": "válido", "fiscal-region": "ES e RJ"})
+        self.assertEqual(cpf, {"formatted": "529.982.247-25", "validity": "válido", "check-digits": "25 conferem", "fiscal-region": "ES e RJ"})
+        typo = {finding.result_type: finding.value for finding in run("br-documents", "cpf", "52998224724")}
+        self.assertEqual(typo["check-digits"], "24 não conferem; o certo seria 25")
+        self.assertNotIn("fiscal-region", typo)
+        same = {finding.result_type: finding.value for finding in run("br-documents", "cpf", "11111111111")}
+        self.assertEqual(same["warning"], "todos os dígitos iguais")
         cnpj = {finding.result_type: finding.value for finding in run("br-documents", "cnpj", "00000000000191")}
         self.assertEqual(cnpj["establishment"], "matriz")
         self.assertEqual(cnpj["formatted"], "00.000.000/0001-91")
         phone = {finding.result_type: finding.value for finding in run("br-documents", "phone", "+5511987654321")}
         self.assertEqual(phone["line-type"], "celular")
         self.assertIn("DDD 11", phone["phone-region"])
+        self.assertEqual(phone["state"], "São Paulo (SP)")
+        self.assertNotIn("owner", " ".join(phone).lower())
 
     def test_company_record_without_partner_names(self):
         web = FakeWeb([(lambda url: url.endswith("/00000000000191"), COMPANY)])

@@ -125,6 +125,25 @@ class OtherTypesTests(unittest.TestCase):
         ip = build(run("ipv4", "192.0.2.1", [result("ipinfo", "network-owner", "AS64500 Example Net")]))
         self.assertEqual(ip["facts"][0], {"label": "Dono", "value": "Example Net"})
 
+    def test_phone_and_cpf_say_what_the_number_tells(self):
+        phone = build(run("phone", "+552182516781", [
+            result("br-documents", "formatted", "+55 (21) 8251-6781"),
+            result("br-documents", "line-type", "celular sem o 9 (formato antigo)"),
+            result("br-documents", "phone-region", "DDD 21 · Rio de Janeiro e região metropolitana (RJ)"),
+            result("br-documents", "state", "Rio de Janeiro (RJ)", meaning="DDD da capital"),
+            result("br-documents", "phone-suggestion", "+55 (21) 98251-6781"),
+            result("br-documents", "phone-format", "(21) 8251-6781", label="Nacional"),
+        ]))
+        self.assertEqual(phone["subtitle"], "Celular sem o 9 (formato antigo) · DDD 21 · Rio de Janeiro (RJ)")
+        self.assertIn("98251-6781", phone["flags"][0]["text"])
+        self.assertEqual(section(phone, "formats")["list"]["items"][0], {"value": "(21) 8251-6781", "meta": "Nacional"})
+        self.assertIn("não são consultados", section(phone, "limits")["note"])
+        cpf = build(run("cpf", "52998224724", [
+            result("br-documents", "validity", "inválido"),
+            result("br-documents", "check-digits", "24 não conferem; o certo seria 25"),
+        ]))
+        self.assertIn("o certo seria 25", cpf["flags"][0]["text"])
+
     def test_coverage_counts_and_failed_sources_by_name(self):
         dossier = build(run("domain", "example.org", [], sources=[
             {"connector_id": "dns-doh", "status": "ok"},

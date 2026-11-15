@@ -85,7 +85,8 @@
     "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
     typosquat: "Variação existente", "typosquat-summary": "Resumo de typosquatting",
     validity: "Validade", "fiscal-region": "Região fiscal", establishment: "Estabelecimento", formatted: "Formato",
-    country: "País", "phone-region": "DDD", "line-type": "Tipo de linha", "trade-name": "Nome fantasia",
+    country: "País", "phone-region": "DDD", "line-type": "Tipo de linha", "check-digits": "Dígitos verificadores",
+    "phone-format": "Formato para discar", state: "Estado", service: "Serviço", "phone-suggestion": "Com o 9", "trade-name": "Nome fantasia",
     "registration-status": "Situação cadastral", founded: "Início das atividades", "main-activity": "Atividade principal",
     "secondary-activity": "Atividade secundária", "legal-nature": "Natureza jurídica", "company-size": "Porte",
     "share-capital": "Capital social", address: "Endereço", "company-phone": "Telefone da empresa",
@@ -464,8 +465,10 @@
       const value = pivotable ? cleanValue({ result_type: section.id, value: entry.value }) : entry.value;
       const box = infoBox({
         key: `item-${section.id}-${entry.value}`,
+        // Dialling formats read best with their name on the closed box.
+        label: section.id === "formats" ? entry.meta : "",
         value: entry.value,
-        meta: entry.meta ? (section.id === "lookalikes" ? LOOKALIKE_KIND[entry.meta] || entry.meta : entry.meta) : "",
+        meta: entry.meta && section.id !== "formats" ? (section.id === "lookalikes" ? LOOKALIKE_KIND[entry.meta] || entry.meta : entry.meta) : "",
         pivotValue: pivotable && value ? value : "",
         section,
         ctx,
