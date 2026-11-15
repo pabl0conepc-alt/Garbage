@@ -528,6 +528,14 @@ community_size}}}`, computed on the simple undirected graph (duplicates and
 self-loops ignored). `GET /api/graph/path?from=&to=&investigation_id=` returns
 the shortest chain of recorded relationships.
 
+`POST /api/graph/pivot` with `{entity_id, depth?: 1|2, investigation_id?}` (201)
+expands a domain or IP through passive sources only: DNS A/AAAA/CNAME/MX/NS
+for a domain; Team Cymru AS, IPinfo reverse name and Mnemonic passive DNS seen
+in the last year for an IP. New values become entities linked to the node
+(`hosted-on`, `uses`, `references`, `belongs-to`, `associated-with`, described
+as "Pivô automático: …"); at most 8 per node and 40 new per call. Returns
+`created`, `reused`, `relationships`, `skipped`, `new_ids`.
+
 `POST /api/graph/add` with `{run_id, item?: {value, label?, pivot_value?,
 hint?, meta?, sources?, section?}, investigation_id?}` (201) is the search
 screen's "+": the run's artifact becomes (or reuses) an entity, and the item

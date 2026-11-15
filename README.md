@@ -146,7 +146,9 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
   (icon, kind, name) that open on click to show what is recorded; edges are
   curves between cards. A dock on the right appears on hover: graph types
   (keys 1–8), settings, actions, the selected entity and the shortcut list
-  (N or double-click: new entity, L: link two cards, E: open cards, F: fit,
+  (N or double-click: new entity, L: link two cards, X: expand a domain or IP
+  into its addresses, mail and name servers, AS and recent passive DNS — Shift+X
+  goes two levels —, E: open cards, F: fit,
   D: keep the dock open). Every finding on the search screen is a box with a
   **+** that puts it on the graph, linked to the searched artifact, and opens
   the graph on it.
