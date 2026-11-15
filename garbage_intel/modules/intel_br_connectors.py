@@ -729,6 +729,121 @@ def _sanctions_connector(context: ConnectorContext) -> list[Finding]:
     return findings
 
 
+# --------------------------------------------------------------------------
+# Federal contracts and payments (Portal da Transparência, CGU)
+
+CONTRACT_PAGES = 3
+PAYMENT_YEARS = 2
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    text = str(value or "").strip().replace("R$", "").replace(" ", "")
+    if not text:
+        return None
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def brl(value: float) -> str:
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _contract(item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    unit = item.get("unidadeGestora") or {}
+    organ = _text(((unit.get("orgaoVinculado") or {}).get("nome")) or ((unit.get("orgaoMaximo") or {}).get("nome")) or unit.get("nome"), 200)
+    value = _number(item.get("valorFinalCompra")) or _number(item.get("valorInicialCompra"))
+    subject = " ".join(_text(item.get("objeto") or (item.get("compra") or {}).get("objeto"), 400).split())
+    return (
+        f"{_text(item.get('numero'), 40) or 'sem número'} · {subject[:160] or 'objeto não informado'}",
+        {
+            "organ": organ,
+            "unit": _text(unit.get("nome"), 200),
+            "amount": value,
+            "signed": _text(item.get("dataAssinatura"), 20),
+            "start": _text(item.get("dataInicioVigencia"), 20),
+            "end": _text(item.get("dataFimVigencia"), 20),
+            "status": _text(item.get("situacaoContrato"), 80),
+            "modality": _text(item.get("modalidadeCompra"), 120),
+            "process": _text(item.get("numeroProcesso"), 80),
+        },
+    )
+
+
+def _contracts_connector(context: ConnectorContext) -> list[Finding]:
+    findings: list[Finding] = []
+    headers = {"chave-api-dados": context.api_key}
+    host = "api.portaldatransparencia.gov.br"
+    contracts: list[tuple[str, dict[str, Any], FetchResult]] = []
+    more = False
+    for page in range(1, CONTRACT_PAGES + 1):
+        items, result = _get_json(f"{TRANSPARENCIA}contratos/cpf-cnpj?cpfCnpj={context.query_value}&pagina={page}", host, headers=headers)
+        items = [item for item in items or [] if isinstance(item, dict)]
+        contracts.extend((*_contract(item), result) for item in items)
+        if len(items) < 15:
+            break
+        more = page == CONTRACT_PAGES
+    for value, data, result in contracts:
+        findings.append(Finding("contract", value, data, result.final_url, result.sha256))
+    total = sum(data["amount"] or 0 for _, data, _ in contracts)
+    organs: dict[str, int] = {}
+    for _, data, _ in contracts:
+        if data["organ"]:
+            organs[data["organ"]] = organs.get(data["organ"], 0) + 1
+    findings.append(
+        Finding(
+            "contracts-summary",
+            f"{len(contracts)}{'+' if more else ''} contrato(s)",
+            {"count": len(contracts), "more": more, "total": total, "organs": dict(sorted(organs.items(), key=lambda item: -item[1])[:8])},
+        )
+    )
+    year = _this_year()
+    for ano in range(year, year - PAYMENT_YEARS, -1):
+        # Largest payments first; one page is the top of the year, not all of it.
+        items, result = _get_json(
+            f"{TRANSPARENCIA}despesas/documentos-por-favorecido?codigoPessoa={context.query_value}&fase=3&ano={ano}&ordenacaoResultado=2&pagina=1",
+            host,
+            headers=headers,
+        )
+        items = [item for item in items or [] if isinstance(item, dict)]
+        listed = 0.0
+        for item in items:
+            amount = _number(item.get("valor")) or 0.0
+            listed += amount
+            organ = _text(item.get("orgao") or item.get("orgaoSuperior"), 200)
+            findings.append(
+                Finding(
+                    "payment",
+                    f"{brl(amount)} · {organ or 'órgão não informado'}",
+                    {
+                        "year": ano,
+                        "date": _text(item.get("data"), 20),
+                        "document": _text(item.get("documentoResumido") or item.get("documento"), 60),
+                        "amount": amount,
+                        "organ": organ,
+                        "program": _text(item.get("programa"), 200),
+                        "action": _text(item.get("acao"), 200),
+                        "element": _text(item.get("elemento"), 200),
+                    },
+                    result.final_url,
+                    result.sha256,
+                )
+            )
+        findings.append(Finding("payments-summary", f"{ano}: {len(items)} pagamento(s) listados", {"year": ano, "count": len(items), "listed_total": listed, "top_only": len(items) >= 15}))
+    return findings
+
+
+def _this_year() -> int:
+    from datetime import date
+
+    return date.today().year
+
+
 for _connector in (
     Connector(
         "br-documents",
@@ -782,6 +897,19 @@ for _connector in (
         rate_per_minute=30,
         ttl_seconds=24 * 3600,
         source_url="https://portaldatransparencia.gov.br/sancoes",
+    ),
+    Connector(
+        "contratos-cgu",
+        "Contratos e pagamentos federais (CGU)",
+        "Federal government contracts with the CNPJ and its largest payments in the last two years, from the Portal da Transparência.",
+        ("cnpj",),
+        _contracts_connector,
+        network=True,
+        requires_key=True,
+        key_id="portaltransparencia",
+        rate_per_minute=30,
+        ttl_seconds=24 * 3600,
+        source_url="https://portaldatransparencia.gov.br/contratos",
     ),
     Connector(
         "nominatim",

@@ -171,6 +171,31 @@ class ConnectorTests(unittest.TestCase):
             clean = registry()["sancoes-cgu"].run(ConnectorContext("", "cnpj", "00000000000191", None, api_key="k" * 32))
         self.assertEqual(clean[0].value, "nenhuma sanção encontrada")
 
+    def test_federal_contracts_and_largest_payments(self):
+        contract = {"numero": "12/2024", "objeto": "Serviços  de limpeza", "situacaoContrato": "Ativo", "modalidadeCompra": "Pregão",
+                    "dataAssinatura": "10/01/2024", "dataFimVigencia": "31/12/2030", "valorInicialCompra": 100.0, "valorFinalCompra": 150000.5,
+                    "compra": {"contatoResponsavel": "Pessoa Contato"},
+                    "unidadeGestora": {"nome": "UG X", "orgaoVinculado": {"nome": "Ministério A"}}}
+        payment = {"data": "05/03/2026", "documentoResumido": "2026OB000001", "valor": "10.000,50", "orgao": "Ministério A", "programa": "Gestão", "autor": "Autor X"}
+        web = FakeWeb([
+            (lambda url: "contratos/cpf-cnpj" in url and "pagina=1" in url, [contract]),
+            (lambda url: "documentos-por-favorecido" in url and "ano=2026" in url, [payment]),
+            (lambda url: "api-de-dados" in url, []),
+        ])
+        with patch.object(br, "FETCH", web), patch.object(br, "_this_year", lambda: 2026):
+            found = registry()["contratos-cgu"].run(ConnectorContext("", "cnpj", "00000000000191", None, api_key="k" * 32))
+        kinds = [(item.result_type, item.value) for item in found]
+        self.assertIn(("contract", "12/2024 · Serviços de limpeza"), kinds)
+        self.assertIn(("contracts-summary", "1 contrato(s)"), kinds)
+        self.assertIn(("payment", "R$ 10.000,50 · Ministério A"), kinds)
+        self.assertIn(("payments-summary", "2025: 0 pagamento(s) listados"), kinds)
+        contract_data = next(item.data for item in found if item.result_type == "contract")
+        self.assertEqual((contract_data["organ"], contract_data["amount"]), ("Ministério A", 150000.5))
+        stored = json.dumps([item.__dict__ for item in found], ensure_ascii=False)
+        self.assertNotIn("Pessoa Contato", stored)
+        self.assertNotIn("Autor X", stored)
+        self.assertTrue(all(call["headers"]["chave-api-dados"] == "k" * 32 for call in web.calls))
+
     def test_company_address_becomes_a_map_point(self):
         web = FakeWeb([
             (lambda url: url.endswith("/cnpj/v1/00000000000191"), COMPANY),
@@ -243,7 +268,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual({key: sources[key] for key in ("br-documents", "brasilapi-cnpj", "minhareceita-cnpj")}, {"br-documents": "ok", "brasilapi-cnpj": "ok", "minhareceita-cnpj": "ok"})
         # Only public company registries; the sanctions lists wait for their key.
         self.assertEqual(sorted({url.split("/")[2] for url in web.urls}), ["brasilapi.com.br", "minhareceita.org", "rdap.registro.br"])
-        self.assertEqual(sources["sancoes-cgu"], "key-missing")
+        self.assertEqual((sources["sancoes-cgu"], sources["contratos-cgu"]), ("key-missing", "key-missing"))
 
 
 if __name__ == "__main__":

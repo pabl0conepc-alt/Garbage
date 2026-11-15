@@ -165,6 +165,19 @@ class OtherTypesTests(unittest.TestCase):
         self.assertTrue(any("menos de um ano" in text for text in texts))
         self.assertEqual(section(company, "sanctions")["list"]["items"][0]["meta"], "CEIS · de 01/01/2025")
 
+    def test_company_contracts_sorted_by_value_with_active_ones(self):
+        company = build(run("cnpj", "00000000000191", [
+            result("contratos-cgu", "contract", "1/2020 · Obras", organ="Ministério B", amount=2000000.0, end="01/02/2021"),
+            result("contratos-cgu", "contract", "12/2024 · Limpeza", organ="Ministério A", amount=150000.5, end="31/12/2099"),
+            result("contratos-cgu", "contracts-summary", "2 contrato(s)", count=2, total=2150000.5, organs={"Ministério A": 1, "Ministério B": 1}),
+            result("contratos-cgu", "payments-summary", "2026: 1 pagamento(s) listados", year=2026, count=1, listed_total=10000.0),
+        ]))
+        contracts = section(company, "contracts")
+        self.assertEqual(rows(company, "contracts")["Contratos"], "2 contrato(s) · R$ 2.150.000,50")
+        self.assertEqual(rows(company, "contracts")["Vigentes"], "1")
+        self.assertTrue(contracts["list"]["items"][0]["value"].startswith("R$ 2.000.000,00"))
+        self.assertEqual(rows(company, "payments")["2026"], "R$ 10.000,00 em 1 pagamento(s)")
+
     def test_coverage_counts_and_failed_sources_by_name(self):
         dossier = build(run("domain", "example.org", [], sources=[
             {"connector_id": "dns-doh", "status": "ok"},
