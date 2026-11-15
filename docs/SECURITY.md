@@ -54,6 +54,18 @@ Out of scope:
   limitation instead of crashing the request.
 - Indicators are syntactic. The UI labels them as not reputation-checked.
 
+### Live URL check
+
+- Runs only on an explicit request with network sources allowed; the site
+  sees this machine's IP. Redirect hops go through the SSRF-safe fetch one
+  at a time (private and local destinations refused) with a browser-like
+  User-Agent, since phishing kits hide from tools.
+- The page is parsed as text; nothing on it runs in GARBAGE. The screenshot
+  uses a headless Chromium or Firefox with a temporary profile deleted
+  afterwards, a 45-second limit and JavaScript off by default. A real browser
+  loads the page's resources: with JavaScript on, a hostile page runs code in
+  that browser, so turn it on only for pages you accept that risk for.
+
 ### MISP and OpenCTI
 
 - Requests go only to the configured host. Private, loopback, http and other
