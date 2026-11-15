@@ -144,6 +144,7 @@ _STATIC_FILES = {
     "views-intel.js": "text/javascript; charset=utf-8",
     "views-system.js": "text/javascript; charset=utf-8",
     "views-file.js": "text/javascript; charset=utf-8",
+    "street-map.js": "text/javascript; charset=utf-8",
     "views-multisearch.js": "text/javascript; charset=utf-8",
     "views-yara.js": "text/javascript; charset=utf-8",
     "charts.js": "text/javascript; charset=utf-8",
@@ -238,7 +239,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self'; "
-            "img-src 'self' blob:; connect-src 'self'; object-src 'none'; "
+            # Street-map tiles from OpenStreetMap; only requested while
+            # network sources are allowed.
+            "img-src 'self' blob: https://tile.openstreetmap.org; connect-src 'self'; object-src 'none'; "
             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
         )
         for header, value in (extra_headers or {}).items():

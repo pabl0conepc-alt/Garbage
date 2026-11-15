@@ -538,7 +538,18 @@
 
   /* A small equirectangular map (the local Natural Earth outline of the
      GEOINT screen) framed around the point. */
-  function dossierMap(map) {
+  /* With network sources allowed, a street map (OpenStreetMap data, CARTO
+     tiles) replaces the outline map. It is kept between the redraws of a
+     running search so the tiles and the user's pan and zoom survive. */
+  function streetFrame(map, geocoded) {
+    const key = `${Number(map.lat).toFixed(6)},${Number(map.lon).toFixed(6)}`;
+    if (state.streetMap?.key !== key) {
+      state.streetMap = { key, element: G.streetMap({ lat: Number(map.lat), lon: Number(map.lon), zoom: geocoded ? 16 : 10, label: map.label }) };
+    }
+    return state.streetMap.element;
+  }
+
+  function dossierMap(map, streets = false) {
     const geocoded = map.precision !== "rede (aproximada)";
     const width = geocoded ? 36 : 64;
     const height = width / 2;
@@ -573,7 +584,7 @@
       "section",
       { class: "dossier-block dossier-map", "aria-labelledby": "dossier-map-title" },
       el("h3", { id: "dossier-map-title", class: "dossier-block-title" }, "Mapa"),
-      el("div", { class: "dmap-frame" }, svg),
+      streets && G.streetMap ? streetFrame(map, geocoded) : el("div", { class: "dmap-frame" }, svg),
       el(
         "dl",
         { class: "dossier-rows" },
@@ -582,12 +593,25 @@
           "div",
           { class: "dossier-row" },
           el("dt", {}, "Precisão"),
-          el("dd", {}, el("span", { class: "dossier-value" }, geocoded ? "geocodificado" : "rede (aproximada)"),
-            el("span", { class: "dossier-hint" }, geocoded ? "endereço convertido pelo OpenStreetMap" : "cidade ou região do bloco de IPs, não de uma pessoa")),
+          el("dd", {}, el("span", { class: "dossier-value" }, map.precision || (geocoded ? "geocodificado" : "rede (aproximada)")),
+            el("span", { class: "dossier-hint" }, /cep/i.test(map.precision || "") ? "centro do CEP do endereço cadastrado, não o prédio" : geocoded ? "endereço convertido pelo OpenStreetMap" : "cidade ou região do bloco de IPs, não de uma pessoa")),
         ),
         el("div", { class: "dossier-row" }, el("dt", {}, "Coordenadas"), el("dd", {}, el("span", { class: "dossier-value" }, coords), copyButton(coords, "map-coords-copy"))),
       ),
-      el("a", { class: "dossier-link", href: "#/geoint" }, "Abrir no mapa GEOINT"),
+      el(
+        "p",
+        { class: "dossier-links" },
+        ...(G.mapLinks
+          ? (() => {
+              const links = G.mapLinks(map.lat, map.lon, geocoded ? 17 : 11);
+              return [
+                el("a", { class: "dossier-link", href: links.osm, target: "_blank", rel: "noopener noreferrer" }, "Abrir no OpenStreetMap"),
+                el("a", { class: "dossier-link", href: links.google, target: "_blank", rel: "noopener noreferrer" }, "Abrir no Google Maps"),
+              ];
+            })()
+          : []),
+        el("a", { class: "dossier-link", href: "#/geoint" }, "Abrir no mapa GEOINT"),
+      ),
     );
   }
 
@@ -1262,7 +1286,7 @@
       if (dossier.map && Number.isFinite(Number(dossier.map.lat)) && Number.isFinite(Number(dossier.map.lon))) {
         const anchor = sections.findIndex((section) => ["location", "place", "network", "company", "contact"].includes(section.id));
         const at = sections.findIndex((section) => ["location", "place"].includes(section.id));
-        blocks.splice((at >= 0 ? at : anchor >= 0 ? anchor : 0) + 1, 0, dossierMap(dossier.map));
+        blocks.splice((at >= 0 ? at : anchor >= 0 ? anchor : 0) + 1, 0, dossierMap(dossier.map, Boolean(connectorData.network_allowed)));
       }
       keepFocus(() => {
         resultArea.replaceChildren(

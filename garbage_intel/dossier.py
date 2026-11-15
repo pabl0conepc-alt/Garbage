@@ -453,13 +453,18 @@ def _cnpj(value: str, facts: Facts) -> dict[str, Any]:
         {"label": "Porte", "value": facts.value("company-size")} if facts.value("company-size") else None,
         {"label": "UF", "value": (facts.first("address") or {}).get("data", {}).get("state", "")} if facts.first("address") else None,
     ]
-    return {
+    result: dict[str, Any] = {
         "title": name or value,
         "subtitle": " · ".join(part for part in (facts.value("trade-name"), facts.value("formatted") or value) if part),
         "facts": [item for item in facts_line if item and item["value"]],
         "flags": flags,
         "sections": [section for section in sections if section],
     }
+    place = facts.first("geolocation")
+    point = _point((place or {}).get("data", {}).get("coordinates", ""), facts.value("address") or (place or {}).get("value", ""))
+    if point:
+        result["map"] = {**point, "precision": "CEP (aproximado)"}
+    return result
 
 
 def _location(value: str, facts: Facts) -> dict[str, Any]:
