@@ -295,71 +295,350 @@
     }
   }
 
+
   /* ---------------------------------------------------------------- */
-  /* Results                                                          */
+  /* Results: the dossier first, sources in one line, raw data last   */
   /* ---------------------------------------------------------------- */
 
-  function sourceList(run, connectorsById) {
-    const list = el("ol", { class: "source-list", "aria-label": "Status por fonte" });
-    const order = { pending: -1, ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4, "network-disabled": 5, "module-disabled": 6, unsupported: 7 };
-    const sources = [...run.sources].sort(
-      (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.connector_id.localeCompare(b.connector_id),
+  const LIST_PREVIEW = 12;
+  const RAW_PREVIEW = 40;
+  const SOURCE_ORDER = {
+    pending: -1, ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4,
+    "network-disabled": 5, "target-contact-disabled": 6, "module-disabled": 7, unsupported: 8,
+  };
+  const LOOKALIKE_KIND = {
+    "tld-swap": "outro TLD", omission: "letra omitida", insertion: "letra inserida", addition: "letra a mais",
+    transposition: "letras trocadas de lugar", replacement: "letra substituída", repetition: "letra repetida",
+    homoglyph: "caractere parecido", bitsquatting: "bit trocado", hyphenation: "hífen inserido", "vowel-swap": "vogal trocada",
+  };
+  /* A list that follows label/value rows gets a short caption. */
+  const LIST_CAPTION = {
+    hosting: "Endereços no DNS",
+    activity: "Atividades secundárias",
+    services: "Portas abertas",
+    host: "Endereços no DNS",
+    reputation: "Relatórios",
+    reports: "Relatórios",
+  };
+  const FLAG_LEVEL = {
+    high: ["alert", "Importante"],
+    medium: ["diamond", "Atenção"],
+    info: ["info", "Nota"],
+  };
+
+  /* "1 fonte respondeu" / "12 fontes responderam". */
+  function count(n, one, many) {
+    return `${G.formatNumber(n)} ${n === 1 ? one : many}`;
+  }
+
+  function copyIcon() {
+    return G.svgEl(
+      "svg",
+      {
+        class: "icon", viewBox: "0 0 24 24", width: 15, height: 15, fill: "none", stroke: "currentColor",
+        "stroke-width": "1.7", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false",
+      },
+      G.svgEl("path", { d: "M9.5 8.5h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2zM15.5 8.5V6.5a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" }),
     );
-    for (const source of sources) {
-      const connector = connectorsById[source.connector_id];
-      list.append(
-        el(
-          "li",
-          { class: `source-row status-${source.status}` },
+  }
+
+  async function copyText(text, done = "Copiado.") {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(done);
+    } catch {
+      const area = el("textarea", { class: "visually-hidden", "aria-hidden": "true", tabindex: "-1" });
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      }
+      area.remove();
+      toast(copied ? done : "Não foi possível copiar.", copied ? undefined : "error");
+    }
+  }
+
+  function copyButton(value, key) {
+    return el(
+      "button",
+      {
+        type: "button",
+        class: "dossier-copy",
+        "aria-label": `Copiar ${value}`,
+        "data-focus-key": key,
+        onClick: () => copyText(value, "Valor copiado."),
+      },
+      copyIcon(),
+    );
+  }
+
+  /* A value that starts a new search: link-styled, with an arrow on hover. */
+  function pivotControl(value, ctx, key, shown = value) {
+    const technique = /^T\d{4}(?:\.\d{3})?\b/.exec(value);
+    const content = [el("span", { class: "dossier-pivot-text" }, shown), G.icon("arrow", { size: 14, className: "dossier-pivot-icon" })];
+    if (ctx.attack && technique) {
+      return el(
+        "a",
+        { class: "dossier-pivot", href: `#/attack?technique=${encodeURIComponent(technique[0])}`, "aria-label": `Abrir ${shown} no ATT&CK`, "data-focus-key": key },
+        ...content,
+      );
+    }
+    return el(
+      "button",
+      { type: "button", class: "dossier-pivot", "aria-label": `Pesquisar ${shown}`, "data-focus-key": key, onClick: () => ctx.pivot(value) },
+      ...content,
+    );
+  }
+
+  function dossierRow(row, section, ctx) {
+    const key = `row-${section.id}-${row.label}`;
+    return el(
+      "div",
+      { class: "dossier-row" },
+      el("dt", {}, row.label),
+      el(
+        "dd",
+        {},
+        row.pivot ? pivotControl(row.value, ctx, key) : el("span", { class: "dossier-value" }, row.value),
+        row.hint ? el("span", { class: "dossier-hint" }, row.hint) : null,
+        row.sources?.length
+          ? el("span", { class: "dossier-src" }, `${row.sources.length > 1 ? "fontes" : "fonte"}: ${row.sources.join(", ")}`)
+          : null,
+        row.pivot ? copyButton(row.value, `${key}-copy`) : null,
+      ),
+    );
+  }
+
+  function dossierList(section, ctx) {
+    const list = section.list;
+    const items = list.items || [];
+    const pivotable = Boolean(list.pivot) || PIVOTABLE.has(section.id) || section.id === "others";
+    const attack = section.id === "techniques";
+    const long = items.length > LIST_PREVIEW;
+    const ui = ctx.ui;
+    const ul = el("ul", { class: "dossier-list", "aria-label": section.title });
+    const foot = el("div", { class: "dossier-list-foot" });
+
+    const item = (entry) => {
+      const value = pivotable ? cleanValue({ result_type: section.id, value: entry.value }) : entry.value;
+      const key = `item-${section.id}-${entry.value}`;
+      return el(
+        "li",
+        { class: "dossier-item" },
+        pivotable && value
+          ? pivotControl(value, { ...ctx, attack }, key, entry.value)
+          : el("span", { class: "dossier-value" }, entry.value),
+        entry.meta
+          ? el("span", { class: "dossier-item-meta" }, section.id === "lookalikes" ? LOOKALIKE_KIND[entry.meta] || entry.meta : entry.meta)
+          : null,
+        copyButton(entry.value, `${key}-copy`),
+      );
+    };
+
+    const draw = () => {
+      const needle = (ui.filters[section.id] || "").trim().toLocaleLowerCase("pt-BR");
+      const matching = needle
+        ? items.filter((entry) => `${entry.value} ${entry.meta || ""}`.toLocaleLowerCase("pt-BR").includes(needle))
+        : items;
+      const expanded = ui.expanded.has(section.id);
+      const shown = needle || expanded ? matching : matching.slice(0, LIST_PREVIEW);
+      ul.replaceChildren(...shown.map(item));
+      if (!shown.length) ul.append(el("li", { class: "dossier-item is-empty" }, "Nada corresponde ao filtro."));
+      const parts = [];
+      if (needle) parts.push(el("span", { class: "dossier-muted" }, `${G.formatNumber(matching.length)} de ${G.formatNumber(items.length)}`));
+      else if (long) {
+        parts.push(
           el(
-            "div",
-            { class: "source-row-main" },
-            el("strong", {}, connectorName(source.connector_id, connector?.name)),
-            el(
-              "span",
-              { class: "source-row-meta" },
-              ...[
-                source.status === "ok" ? `${source.count} resultado(s)` : null,
-                source.elapsed_ms ? `${G.formatNumber(source.elapsed_ms)} ms` : null,
-                source.cached ? "cache" : null,
-                connector?.network ? "rede" : "local",
-              ]
-                .filter(Boolean)
-                .map((text) => el("span", {}, text)),
-            ),
+            "button",
+            {
+              type: "button",
+              class: "dossier-more",
+              "aria-expanded": String(expanded),
+              "data-focus-key": `more-${section.id}`,
+              onClick: () => {
+                if (ui.expanded.has(section.id)) ui.expanded.delete(section.id);
+                else ui.expanded.add(section.id);
+                draw();
+              },
+            },
+            expanded ? "Mostrar menos" : `Mostrar todos (${G.formatNumber(items.length)})`,
           ),
-          statusBadgeFor(source.status),
-          source.error ? el("p", { class: "source-row-error" }, G.translateError(source.error)) : null,
+        );
+      }
+      if (list.total > items.length) {
+        parts.push(el("span", { class: "dossier-muted" }, `A lista guarda os primeiros ${G.formatNumber(items.length)} de ${G.formatNumber(list.total)}.`));
+      }
+      foot.replaceChildren(...parts);
+      foot.hidden = !parts.length;
+    };
+
+    let tools = null;
+    if (long) {
+      const filter = el("input", {
+        class: "input dossier-filter",
+        type: "search",
+        autocomplete: "off",
+        spellcheck: "false",
+        "aria-label": `Filtrar ${section.title.toLocaleLowerCase("pt-BR")}`,
+        placeholder: "Filtrar",
+        "data-focus-key": `filter-${section.id}`,
+        value: ui.filters[section.id] || "",
+      });
+      filter.addEventListener("input", () => {
+        ui.filters[section.id] = filter.value;
+        draw();
+      });
+      tools = el(
+        "div",
+        { class: "dossier-list-tools" },
+        filter,
+        el(
+          "button",
+          {
+            type: "button",
+            class: "button button-secondary button-small",
+            "data-focus-key": `copyall-${section.id}`,
+            onClick: () => copyText(items.map((entry) => entry.value).join("\n"), `${G.formatNumber(items.length)} itens copiados.`),
+          },
+          "Copiar lista",
         ),
       );
     }
-    return list;
+    draw();
+    const caption = section.rows?.length ? LIST_CAPTION[section.id] : null;
+    return [caption ? el("p", { class: "dossier-list-caption" }, caption) : null, tools, ul, foot];
   }
 
-  function resultGroups(run, connectorsById, handlers) {
+  function dossierSection(section, ctx) {
+    const id = `dossier-${section.id}`;
+    const listed = section.list?.items?.length || 0;
+    return el(
+      "section",
+      { class: `dossier-block${listed > 6 ? " is-wide" : ""}`, "aria-labelledby": id },
+      el(
+        "h3",
+        { id, class: "dossier-block-title" },
+        section.title,
+        section.list && section.list.total > 1 ? el("span", { class: "dossier-count" }, G.formatNumber(section.list.total)) : null,
+      ),
+      section.rows?.length ? el("dl", { class: "dossier-rows" }, ...section.rows.map((row) => dossierRow(row, section, ctx))) : null,
+      section.list && listed ? dossierList(section, ctx) : null,
+      section.note ? el("p", { class: "dossier-note" }, section.note) : null,
+    );
+  }
+
+  async function worldMap() {
+    if (!state.worldMap) state.worldMap = await api("/world.json");
+    return state.worldMap;
+  }
+
+  /* A small equirectangular map (the local Natural Earth outline of the
+     GEOINT screen) framed around the point. */
+  function dossierMap(map) {
+    const geocoded = map.precision !== "rede (aproximada)";
+    const width = geocoded ? 36 : 64;
+    const height = width / 2;
+    const x = Math.max(-180, Math.min(180, Number(map.lon))) + 180;
+    const y = 90 - Math.max(-90, Math.min(90, Number(map.lat)));
+    const left = Math.min(360 - width, Math.max(0, x - width / 2));
+    const top = Math.min(180 - height, Math.max(0, y - height / 2));
+    const coords = `${Number(map.lat).toFixed(4)}, ${Number(map.lon).toFixed(4)}`;
+    const base = G.svgEl("g");
+    const svg = G.svgEl(
+      "svg",
+      {
+        class: "dmap",
+        viewBox: `${left} ${top} ${width} ${height}`,
+        preserveAspectRatio: "xMidYMid slice",
+        role: "img",
+        "aria-label": `Mapa com o ponto em ${map.label || coords}`,
+      },
+      base,
+      G.svgEl("circle", { class: "dmap-halo", cx: x, cy: y, r: width / (geocoded ? 30 : 14) }),
+      G.svgEl("circle", { class: "dmap-dot", cx: x, cy: y, r: width / 110 }),
+    );
+    const drawBase = (world) =>
+      base.replaceChildren(
+        G.svgEl("rect", { class: "dmap-ocean", x: 0, y: 0, width: 360, height: 180 }),
+        G.svgEl("path", { class: "dmap-land", d: world.land }),
+        G.svgEl("path", { class: "dmap-borders", d: world.borders }),
+      );
+    if (state.worldMap) drawBase(state.worldMap);
+    else worldMap().then(drawBase).catch(() => {});
+    return el(
+      "section",
+      { class: "dossier-block dossier-map", "aria-labelledby": "dossier-map-title" },
+      el("h3", { id: "dossier-map-title", class: "dossier-block-title" }, "Mapa"),
+      el("div", { class: "dmap-frame" }, svg),
+      el(
+        "dl",
+        { class: "dossier-rows" },
+        map.label ? el("div", { class: "dossier-row" }, el("dt", {}, "Ponto"), el("dd", {}, el("span", { class: "dossier-value" }, map.label))) : null,
+        el(
+          "div",
+          { class: "dossier-row" },
+          el("dt", {}, "Precisão"),
+          el("dd", {}, el("span", { class: "dossier-value" }, geocoded ? "geocodificado" : "rede (aproximada)"),
+            el("span", { class: "dossier-hint" }, geocoded ? "endereço convertido pelo OpenStreetMap" : "cidade ou região do bloco de IPs, não de uma pessoa")),
+        ),
+        el("div", { class: "dossier-row" }, el("dt", {}, "Coordenadas"), el("dd", {}, el("span", { class: "dossier-value" }, coords), copyButton(coords, "map-coords-copy"))),
+      ),
+      el("a", { class: "dossier-link", href: "#/geoint" }, "Abrir no mapa GEOINT"),
+    );
+  }
+
+  function sourceTable(run, connectorsById) {
+    const sources = [...run.sources].sort(
+      (a, b) => (SOURCE_ORDER[a.status] ?? 9) - (SOURCE_ORDER[b.status] ?? 9) || a.connector_id.localeCompare(b.connector_id),
+    );
+    return table({
+      columns: [
+        {
+          label: "Fonte",
+          render: (row) =>
+            el(
+              "div",
+              { class: "dossier-source-cell" },
+              el("strong", {}, connectorName(row.connector_id, connectorsById[row.connector_id]?.name)),
+              row.error ? el("span", { class: "source-row-error" }, G.translateError(row.error)) : null,
+            ),
+        },
+        { label: "Situação", render: (row) => statusBadgeFor(row.status) },
+        { label: "Resultados", cellClass: "numeric-col", render: (row) => (row.status === "ok" ? G.formatNumber(row.count) : "—") },
+        {
+          label: "Tempo",
+          render: (row) => (row.cached ? "cache" : row.elapsed_ms ? `${G.formatNumber(row.elapsed_ms)} ms` : "—"),
+        },
+      ],
+      rows: sources,
+    });
+  }
+
+  function resultGroups(run, connectorsById, handlers, ui) {
     const groups = new Map();
     for (const item of run.results) {
       if (!groups.has(item.connector_id)) groups.set(item.connector_id, []);
       groups.get(item.connector_id).push(item);
     }
-    if (!groups.size) {
-      return emptyState({
-        icon: "search",
-        title: "Nenhum resultado",
-        description: "Nenhuma fonte retornou dados para este artefato. Verifique o status de cada fonte ao lado.",
-      });
-    }
+    if (!groups.size) return el("p", { class: "dossier-muted" }, "Nenhuma fonte retornou dados.");
     const wrap = el("div", { class: "result-groups" });
     for (const [connectorId, items] of groups) {
       const connector = connectorsById[connectorId];
+      const name = connectorName(connectorId, connector?.name);
+      const full = ui.rawExpanded.has(connectorId);
+      const rows = full ? items : items.slice(0, RAW_PREVIEW);
       wrap.append(
         el(
           "section",
-          { class: "result-group", "aria-label": connectorName(connectorId, connector?.name) },
+          { class: "result-group", "aria-label": name },
           el(
             "header",
             { class: "result-group-head" },
-            el("h3", {}, connectorName(connectorId, connector?.name)),
+            el("h3", {}, name),
             el("span", { class: "result-group-count" }, `${items.length}`),
             items[0]?.source_url
               ? el(
@@ -371,9 +650,9 @@
           ),
           table({
             columns: [
-              { label: "TIPO", render: (row) => el("span", { class: "result-type" }, RESULT_LABELS[row.result_type] || row.result_type) },
-              { label: "VALOR", render: (row) => el("code", { class: "result-value" }, G.translateText(row.value)) },
-              { label: "DETALHES", render: (row) => el("span", { class: "result-data" }, dataSummary(row.data)) },
+              { label: "Tipo", render: (row) => el("span", { class: "result-type" }, RESULT_LABELS[row.result_type] || row.result_type) },
+              { label: "Valor", render: (row) => el("code", { class: "result-value" }, G.translateText(row.value)) },
+              { label: "Detalhes", render: (row) => el("span", { class: "result-data" }, dataSummary(row.data)) },
               {
                 label: "",
                 cellClass: "result-actions",
@@ -389,17 +668,30 @@
                 ),
               },
             ],
-            rows: items,
+            rows,
           }),
+          items.length > RAW_PREVIEW
+            ? el(
+                "button",
+                {
+                  type: "button",
+                  class: "dossier-more",
+                  "aria-expanded": String(full),
+                  onClick: (event) => {
+                    if (full) ui.rawExpanded.delete(connectorId);
+                    else ui.rawExpanded.add(connectorId);
+                    const group = event.currentTarget.closest(".result-groups");
+                    group.replaceWith(resultGroups(run, connectorsById, handlers, ui));
+                  },
+                },
+                full ? "Mostrar menos" : `Mostrar todos (${G.formatNumber(items.length)})`,
+              )
+            : null,
         ),
       );
     }
     return wrap;
   }
-
-  /* ---------------------------------------------------------------- */
-  /* View                                                             */
-  /* ---------------------------------------------------------------- */
 
   /* ---------------------------------------------------------------- */
   /* Sources and API keys (shown in Configurações)                    */
@@ -583,6 +875,34 @@
   /* Search screen                                                    */
   /* ---------------------------------------------------------------- */
 
+  function freshUi() {
+    return { expanded: new Set(), filters: {}, rawExpanded: new Set(), sourcesOpen: false, rawOpen: false };
+  }
+
+  /* Coverage computed on the client when a run carries no dossier. */
+  function fallbackDossier(run) {
+    const sources = run.sources || [];
+    const names = (status) => sources.filter((item) => status.includes(item.status)).map((item) => connectorName(item.connector_id));
+    return {
+      type: run.query_type,
+      type_label: TYPE_LABELS[run.query_type] || run.query_type,
+      value: run.query_value,
+      title: run.query_value,
+      subtitle: "",
+      facts: [],
+      flags: [],
+      sections: [],
+      coverage: {
+        answered: names(["ok"]).length,
+        empty: names(["empty"]).length,
+        failed: names(["error", "rate-limited"]),
+        missing_key: names(["key-missing"]),
+        network_off: names(["network-disabled", "target-contact-disabled"]).length,
+        pending: names(["pending"]).length,
+      },
+    };
+  }
+
   async function renderMultiSearch(root, params = []) {
     // The source and key screens moved to Configurações.
     const moved = { conectores: "conectores", chaves: "chaves" }[params[0]];
@@ -595,9 +915,15 @@
     const investigations = (state.investigations || []).filter((item) => item.status === "open");
     const connectorsById = Object.fromEntries(connectorData.items.map((item) => [item.connector_id, item]));
     let detected = null;
-    let currentRun = null;
+    let detectedFor = null;
+    let detectError = "";
     let pollToken = 0;
     let detectTimer = null;
+    let ui = freshUi();
+    G.cleanupFns.push(() => {
+      pollToken += 1;
+      clearTimeout(detectTimer);
+    });
 
     const input = el("input", {
       class: "input query-input",
@@ -622,17 +948,23 @@
       el("span", { "data-icon": "search", "aria-hidden": "true" }),
       "Consultar",
     );
-    const resultArea = el("div", { class: "multisearch-results", "aria-live": "polite" });
+    const resultArea = el("div", { class: "multisearch-results" });
 
     async function detect() {
       const value = input.value.trim();
+      clearTimeout(detectTimer);
       if (!value) {
         detected = null;
+        detectedFor = "";
+        detectError = "";
         detectedNode.replaceChildren();
         return;
       }
       try {
-        detected = await api(`/api/intel/detect?value=${encodeURIComponent(value)}`);
+        const answer = await api(`/api/intel/detect?value=${encodeURIComponent(value)}`);
+        if (input.value.trim() !== value) return;
+        detected = answer;
+        detectError = "";
         detectedNode.replaceChildren(
           ...[
             badge(TYPE_LABELS[detected.type] || detected.type, "info"),
@@ -640,137 +972,332 @@
           ].filter(Boolean),
         );
       } catch (error) {
+        if (input.value.trim() !== value) return;
         detected = null;
+        detectError = error.message;
         detectedNode.replaceChildren(el("span", { class: "query-invalid" }, error.message));
       }
+      detectedFor = value;
+    }
+
+    /* Re-render without losing the control the user is on (a filter being
+       typed into, a "Mostrar todos" just pressed) while sources arrive. */
+    function keepFocus(render) {
+      const active = document.activeElement;
+      const key = active && resultArea.contains(active) ? active.dataset?.focusKey : null;
+      const selection = key && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
+      render();
+      if (!key) return;
+      const next = [...resultArea.querySelectorAll("[data-focus-key]")].find((node) => node.dataset.focusKey === key);
+      if (!next) return;
+      next.focus({ preventScroll: true });
+      if (selection && next.setSelectionRange) next.setSelectionRange(...selection);
+    }
+
+    const handlers = {
+      pivot: (value) => {
+        input.value = value;
+        window.scrollTo({ top: 0, behavior: "auto" });
+        submit({ fromPivot: true });
+      },
+      entity: (row) =>
+        G.entityDialog(
+          {
+            entity_type: ENTITY_FROM_RESULT[row.result_type],
+            identifier: cleanValue(row),
+            name: cleanValue(row),
+            description: `${RESULT_LABELS[row.result_type] || row.result_type} obtido na consulta multifonte de ${row.run_value || input.value.trim()}.`,
+            source_reference: row.source_url || `note://garbage/intel-run/${row.run_id}`,
+            collection_basis: "public",
+          },
+          {},
+        ),
+    };
+
+    async function recordRun(run) {
+      const investigationId = caseSelect.value || run.investigation_id;
+      if (!investigationId) {
+        toast("Escolha uma investigação aberta, na barra de pesquisa, para registrar os resultados.", "warning");
+        caseSelect.focus();
+        return;
+      }
+      try {
+        const recorded = await api(`/api/intel/runs/${run.id}/record`, {
+          method: "POST",
+          body: JSON.stringify({ investigation_id: investigationId }),
+        });
+        toast(
+          `Observação registrada com ${recorded.finding_count} resultado(s)${recorded.truncated ? " (texto truncado no limite)" : ""}.`,
+        );
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    function header(run, dossier) {
+      const progress = run.progress || { total: run.sources.length, pending: dossier.coverage?.pending || 0 };
+      const running = run.status === "running" && progress.pending > 0;
+      const answered = progress.total - progress.pending;
+      const fill = el("span", { class: "dossier-progress-fill" });
+      fill.style.width = `${Math.round((answered / Math.max(1, progress.total)) * 100)}%`;
+      const facts = (dossier.facts || []).filter((fact) => fact && fact.value);
+      const flags = dossier.flags || [];
+      const caseId = caseSelect.value || run.investigation_id || "";
+      return el(
+        "header",
+        { class: "dossier-head" },
+        el(
+          "div",
+          { class: "dossier-head-top" },
+          el("span", { class: "dossier-type" }, dossier.type_label || TYPE_LABELS[run.query_type] || run.query_type),
+          el(
+            "div",
+            { class: "dossier-actions" },
+            button("Exportar JSON", () => downloadJson(`garbage-intel-${shortId(run.id)}.json`, run)),
+            button("Registrar no caso", () => recordRun(run), {
+              variant: caseId ? "button-primary" : "button-secondary",
+              disabled: !run.results.length,
+            }),
+          ),
+        ),
+        el("h2", { class: "dossier-title", tabindex: "-1", "data-focus-key": "title" }, dossier.title || run.query_value),
+        dossier.subtitle ? el("p", { class: "dossier-subtitle" }, dossier.subtitle) : null,
+        facts.length
+          ? el(
+              "dl",
+              { class: "dossier-facts" },
+              ...facts.map((fact) => el("div", { class: "dossier-fact" }, el("dt", {}, fact.label), el("dd", {}, fact.value))),
+            )
+          : null,
+        flags.length
+          ? el(
+              "ul",
+              { class: "dossier-flags", "aria-label": "Pontos de atenção" },
+              ...flags.map((flag) => {
+                const [glyph, label] = FLAG_LEVEL[flag.level] || FLAG_LEVEL.info;
+                return el(
+                  "li",
+                  { class: `dossier-flag level-${FLAG_LEVEL[flag.level] ? flag.level : "info"}` },
+                  G.icon(glyph, { size: 16, className: "dossier-flag-icon" }),
+                  el("span", { class: "visually-hidden" }, `${label}: `),
+                  el("span", {}, flag.text),
+                );
+              }),
+            )
+          : null,
+        running
+          ? el(
+              "div",
+              { class: "dossier-progress", role: "status" },
+              el("span", { class: "dossier-progress-track", "aria-hidden": "true" }, fill),
+              el("span", {}, `${answered} de ${progress.total} fontes responderam…`),
+              progress.pending <= 3
+                ? el(
+                    "span",
+                    { class: "dossier-muted" },
+                    `aguardando ${run.sources
+                      .filter((item) => item.status === "pending")
+                      .map((item) => connectorName(item.connector_id, connectorsById[item.connector_id]?.name))
+                      .join(", ")}`,
+                  )
+                : null,
+            )
+          : run.status === "interrupted"
+            ? el("p", { class: "dossier-progress", role: "status" }, "A consulta foi interrompida antes de todas as fontes responderem.")
+            : null,
+      );
+    }
+
+    /* One clear line when sources were left out by configuration. */
+    function configurationNotice(run) {
+      const network = run.sources.filter((item) => item.status === "network-disabled").length;
+      const target = run.sources.filter((item) => item.status === "target-contact-disabled").length;
+      const lines = [];
+      if (network) {
+        lines.push(
+          el(
+            "p",
+            { class: "dossier-alert", role: "note" },
+            G.icon("alert", { size: 16, className: "dossier-flag-icon" }),
+            el("span", {}, `A rede está desativada: ${count(network, "fonte não foi consultada", "fontes não foram consultadas")}.`),
+            el("a", { class: "dossier-link", href: "#/settings/conectores" }, "Ativar em Configurações › Conectores"),
+          ),
+        );
+      }
+      if (target) {
+        lines.push(
+          el(
+            "p",
+            { class: "dossier-alert", role: "note" },
+            G.icon("info", { size: 16, className: "dossier-flag-icon" }),
+            el("span", {}, `${count(target, "fonte que acessa", "fontes que acessam")} o próprio alvo ${target === 1 ? "ficou" : "ficaram"} de fora.`),
+            el("a", { class: "dossier-link", href: "#/settings/conectores" }, "Permitir em Configurações › Conectores"),
+          ),
+        );
+      }
+      return lines;
+    }
+
+    function coverageLine(run, dossier) {
+      const coverage = dossier.coverage || {};
+      const parts = [];
+      const waiting = run.status === "running" && coverage.pending > 0;
+      parts.push(el("span", {}, count(coverage.answered || 0, "fonte respondeu", "fontes responderam")));
+      if (coverage.empty) parts.push(el("span", {}, `${G.formatNumber(coverage.empty)} sem resultado`));
+      if (coverage.missing_key?.length) {
+        parts.push(
+          el("span", {}, `${G.formatNumber(coverage.missing_key.length)} sem chave (${coverage.missing_key.join(", ")})`),
+          el("a", { class: "dossier-link", href: "#/settings/chaves" }, "Configurar chaves"),
+        );
+      }
+      if (coverage.failed?.length) {
+        parts.push(
+          el("span", {}, `${G.formatNumber(coverage.failed.length)} ${coverage.failed.length === 1 ? "falhou" : "falharam"} (${coverage.failed.join(", ")})`),
+        );
+      }
+      if (coverage.network_off) parts.push(el("span", {}, `${G.formatNumber(coverage.network_off)} fora por configuração`));
+      if (waiting) parts.push(el("span", {}, `${G.formatNumber(coverage.pending)} ainda consultando`));
+      if (run.started_at) parts.push(el("span", { class: "dossier-muted" }, formatDate(run.started_at, { time: true })));
+      const line = [];
+      parts.forEach((part, index) => {
+        if (index) line.push(el("span", { class: "dossier-sep", "aria-hidden": "true" }, "·"));
+        line.push(part);
+      });
+      const tableHost = el("div", { class: "dossier-sources", id: "dossier-sources" });
+      const toggle = el("button", {
+        type: "button",
+        class: "dossier-more",
+        "aria-controls": "dossier-sources",
+        "data-focus-key": "sources-toggle",
+      });
+      const sync = () => {
+        toggle.setAttribute("aria-expanded", String(ui.sourcesOpen));
+        toggle.textContent = ui.sourcesOpen ? "Ocultar fontes" : "Ver fontes";
+        tableHost.hidden = !ui.sourcesOpen;
+        tableHost.replaceChildren(...(ui.sourcesOpen ? [sourceTable(run, connectorsById)] : []));
+      };
+      toggle.addEventListener("click", () => {
+        ui.sourcesOpen = !ui.sourcesOpen;
+        sync();
+      });
+      sync();
+      return el(
+        "section",
+        { class: "dossier-coverage", "aria-label": "Fontes consultadas" },
+        el("p", { class: "dossier-coverage-line" }, ...line, el("span", { class: "dossier-sep", "aria-hidden": "true" }, "·"), toggle),
+        tableHost,
+      );
+    }
+
+    function rawData(run) {
+      const host = el("div", { class: "dossier-raw-body" });
+      const fill = () => {
+        if (host.childElementCount) return;
+        const rowHandlers = {
+          pivot: handlers.pivot,
+          entity: (row) => handlers.entity({ ...row, run_value: run.query_value, run_id: run.id }),
+        };
+        host.append(resultGroups(run, connectorsById, rowHandlers, ui));
+        G.hydrateIcons(host);
+      };
+      const details = el(
+        "details",
+        { class: "dossier-raw", open: ui.rawOpen },
+        el(
+          "summary",
+          { "data-focus-key": "raw-summary" },
+          el("span", {}, "Dados brutos por fonte"),
+          el("span", { class: "dossier-count" }, G.formatNumber(run.results.length)),
+        ),
+        host,
+      );
+      details.addEventListener("toggle", () => {
+        ui.rawOpen = details.open;
+        if (details.open) fill();
+      });
+      if (ui.rawOpen) fill();
+      return details;
+    }
+
+    /* What stands in for the sections when there is nothing to show. */
+    function emptyAnswer(run, dossier) {
+      const coverage = dossier.coverage || {};
+      const pending = run.status === "running" && coverage.pending > 0;
+      if (pending) {
+        return el("p", { class: "dossier-waiting" }, "As respostas aparecem aqui conforme as fontes respondem.");
+      }
+      // Nothing to show: say why (failures, network off) before "not found".
+      if (coverage.failed?.length) {
+        return el(
+          "div",
+          { class: "dossier-empty", role: "status" },
+          el("h3", {}, coverage.answered ? "Nenhuma resposta útil" : "Nenhuma fonte conseguiu responder"),
+          el("p", {}, `${count(coverage.failed.length, "fonte falhou", "fontes falharam")}: ${coverage.failed.join(", ")}. Pode ser limite de taxa ou instabilidade do serviço; as outras não trouxeram dados.`),
+          button("Consultar de novo", () => {
+            input.value = run.query_value;
+            submit({ fresh: true });
+          }, { variant: "button-primary" }),
+        );
+      }
+      if (coverage.network_off) {
+        return el(
+          "div",
+          { class: "dossier-empty", role: "status" },
+          el("h3", {}, "Só as verificações locais rodaram"),
+          el("p", {}, `Elas não têm nada a dizer sobre ${run.query_value}. As outras fontes precisam de rede ou de contato com o alvo.`),
+        );
+      }
+      return el(
+        "div",
+        { class: "dossier-empty", role: "status" },
+        el("h3", {}, "Nenhuma fonte encontrou dados"),
+        el("p", {}, `As fontes consultadas não têm registros sobre ${run.query_value}.`),
+      );
     }
 
     function showRun(run) {
-      currentRun = run;
-      const networkSkipped = run.sources.some((item) => item.status === "network-disabled");
-      const keyless = run.sources.filter((item) => item.status === "key-missing");
-      const caseId = caseSelect.value || run.investigation_id || "";
-      const summaryNodes = [
-        el(
-          "div",
-          { class: "run-summary" },
+      const dossier = run.dossier || fallbackDossier(run);
+      const sections = dossier.sections || [];
+      const blocks = sections.map((section) => dossierSection(section, { ui, pivot: handlers.pivot }));
+      if (dossier.map && Number.isFinite(Number(dossier.map.lat)) && Number.isFinite(Number(dossier.map.lon))) {
+        const anchor = sections.findIndex((section) => ["location", "place", "network", "company", "contact"].includes(section.id));
+        const at = sections.findIndex((section) => ["location", "place"].includes(section.id));
+        blocks.splice((at >= 0 ? at : anchor >= 0 ? anchor : 0) + 1, 0, dossierMap(dossier.map));
+      }
+      keepFocus(() => {
+        resultArea.replaceChildren(
           el(
-            "div",
-            {},
-            el(
-              "h2",
-              {},
-              badge(TYPE_LABELS[run.query_type] || run.query_type, "info"),
-              " ",
-              el("code", {}, run.query_value),
-            ),
-            el(
-              "p",
-              { class: "run-meta" },
-              run.status === "running"
-                ? `${formatDate(run.started_at, { time: true })} · ${run.progress.total - run.progress.pending} de ${run.progress.total} fonte(s) responderam · ${run.results.length} resultado(s) até agora`
-                : `${formatDate(run.started_at, { time: true })} · ${run.result_count} resultado(s) de ${run.sources.filter((item) => item.status === "ok").length} fonte(s)`,
-              run.status === "completed-with-errors" ? " · com erros em fontes" : "",
-              run.status === "interrupted" ? " · interrompida" : "",
-            ),
-          ),
-          el(
-            "div",
-            { class: "page-actions" },
-            button("Exportar JSON", () => downloadJson(`garbage-intel-${shortId(run.id)}.json`, run)),
-            button(
-              "Registrar no caso",
-              async () => {
-                const investigationId = caseSelect.value || run.investigation_id;
-                if (!investigationId) {
-                  toast("Escolha uma investigação aberta para registrar os resultados.", "warning");
-                  caseSelect.focus();
-                  return;
-                }
-                try {
-                  const recorded = await api(`/api/intel/runs/${run.id}/record`, {
-                    method: "POST",
-                    body: JSON.stringify({ investigation_id: investigationId }),
-                  });
-                  toast(
-                    `Observação registrada com ${recorded.finding_count} resultado(s)${recorded.truncated ? " (texto truncado no limite)" : ""}.`,
-                  );
-                } catch (error) {
-                  toast(error.message, "error");
-                }
-              },
-              { variant: caseId ? "button-primary" : "button-secondary", disabled: !run.results.length },
-            ),
-          ),
-        ),
-      ];
-      if (networkSkipped && !connectorData.network_allowed) {
-        summaryNodes.push(
-          el(
-              "div",
-              { class: "notice-bar", role: "note" },
-              el("span", {}, "Fontes de rede foram ignoradas porque os conectores de rede estão desativados."),
-              button("Ativar rede", () => enableNetwork(() => G.refreshView())),
+            "article",
+            { class: "dossier", "aria-label": `Resultado para ${run.query_value}` },
+            header(run, dossier),
+            ...configurationNotice(run),
+            blocks.length ? el("div", { class: "dossier-grid" }, ...blocks) : emptyAnswer(run, dossier),
+            coverageLine(run, dossier),
+            run.results.length ? rawData(run) : null,
           ),
         );
-      }
-      if (keyless.length) {
-        summaryNodes.push(
-          el(
-            "div",
-            { class: "notice-bar is-quiet", role: "note" },
-            el(
-              "span",
-              {},
-              `${keyless.length} fonte(s) ficaram de fora por falta de chave: ` +
-                keyless.map((item) => connectorName(item.connector_id, item.connector_id)).join(", ") + ".",
-            ),
-            el("a", { class: "button button-secondary button-small", href: "#/settings/chaves" }, "Configurar chaves"),
-          ),
-        );
-      }
-      summaryNodes.push(
-        el(
-          "div",
-          { class: "multisearch-layout" },
-          el(
-            "aside",
-            { class: "multisearch-sources" },
-            el("h3", { class: "side-heading" }, "Fontes"),
-            sourceList(run, connectorsById),
-          ),
-          resultGroups(run, connectorsById, {
-            pivot: (value) => {
-              input.value = value;
-              detect().then(() => submit());
-            },
-            entity: (row) =>
-              G.entityDialog(
-                {
-                  entity_type: ENTITY_FROM_RESULT[row.result_type],
-                  identifier: cleanValue(row),
-                  name: cleanValue(row),
-                  description: `${RESULT_LABELS[row.result_type] || row.result_type} obtido na consulta multifonte de ${run.query_value}.`,
-                  source_reference: row.source_url || `note://garbage/intel-run/${run.id}`,
-                  collection_basis: "public",
-                },
-                {},
-              ),
-          }),
-        ),
-      );
-      resultArea.replaceChildren(...summaryNodes);
-      G.hydrateIcons(resultArea);
+        G.hydrateIcons(resultArea);
+      });
     }
 
-    /* Each source's results land as soon as it answers; poll until the run
-       is closed, re-rendering only when something changed. */
+    function showMessage(title, description) {
+      resultArea.replaceChildren(
+        el(
+          "div",
+          { class: "dossier" },
+          el("div", { class: "dossier-empty", role: "status" }, el("h2", {}, title), description ? el("p", {}, description) : null),
+        ),
+      );
+    }
+
+    /* Sources answer one by one: poll and redraw while any is pending. */
     async function follow(run, token) {
       let seen = run.progress?.pending;
-      while (run.status === "running" && token === pollToken && root.isConnected) {
+      while (run.status === "running" && token === pollToken) {
         await new Promise((resolve) => window.setTimeout(resolve, 700));
-        if (token !== pollToken || !root.isConnected) return;
+        if (token !== pollToken) return;
         run = await api(`/api/intel/runs/${run.id}`);
+        if (token !== pollToken) return;
         if (run.progress?.pending !== seen || run.status !== "running") {
           seen = run.progress?.pending;
           showRun(run);
@@ -778,41 +1305,67 @@
       }
     }
 
-    async function submit() {
+    async function submit({ fromPivot = false, fresh = false } = {}) {
       const value = input.value.trim();
       if (!value) {
         input.focus();
         return;
       }
-      if (!detected || detected.value === undefined) await detect();
-      // Every compatible source runs; there is no per-source choice.
-      const compatible = connectorData.items
-        .filter((item) => !detected || item.accepts.includes(detected.type))
-        .map((item) => item.connector_id);
-      if (detected && !compatible.length) {
-        toast("Nenhuma fonte aceita este tipo de artefato.", "warning");
+      if (detectedFor !== value) await detect();
+      if (!detected) {
+        showMessage("Não reconheci este artefato", detectError ? G.translateError(detectError) : "");
         return;
       }
-      runButton.disabled = true;
-      resultArea.replaceChildren(loadingBlock(`Consultando ${compatible.length || ""} fonte(s)…`));
+      // Every compatible source runs; there is no per-source choice.
+      const compatible = connectorData.items
+        .filter((item) => item.accepts.includes(detected.type))
+        .map((item) => item.connector_id);
+      if (!compatible.length) {
+        showMessage(
+          "Nenhuma fonte aceita este tipo de artefato",
+          `${detected.value} foi reconhecido como ${TYPE_LABELS[detected.type] || detected.type}, mas nenhuma fonte instalada consulta esse tipo.`,
+        );
+        return;
+      }
       const token = ++pollToken;
+      runButton.disabled = true;
+      resultArea.replaceChildren(
+        el(
+          "div",
+          { class: "dossier" },
+          el(
+            "header",
+            { class: "dossier-head" },
+            el("div", { class: "dossier-head-top" }, el("span", { class: "dossier-type" }, TYPE_LABELS[detected.type] || detected.type)),
+            el("h2", { class: "dossier-title", tabindex: "-1", "data-focus-key": "title" }, detected.value),
+            el("div", { class: "dossier-progress", role: "status" }, el("span", {}, `Consultando ${count(compatible.length, "fonte", "fontes")}…`)),
+          ),
+        ),
+      );
       try {
-        let run = await api("/api/intel/runs", {
+        const run = await api("/api/intel/runs", {
           method: "POST",
           body: JSON.stringify({
             value,
-            ...(detected ? { connectors: compatible } : {}),
+            connectors: compatible,
             investigation_id: caseSelect.value || null,
-            use_cache: cacheToggle.checked,
+            use_cache: fresh ? false : cacheToggle.checked,
             async: true,
           }),
         });
-        history.replaceState(null, "", `#/multisearch/${run.id}`);
+        if (token !== pollToken) return;
+        // Each search is a history entry: Back returns to the previous answer.
+        const target = `#/multisearch/${run.id}`;
+        if (location.hash !== target) history.pushState(null, "", target);
+        state.currentParams = [run.id];
+        ui = freshUi();
         showRun(run);
+        if (fromPivot) resultArea.querySelector(".dossier-title")?.focus({ preventScroll: true });
+        runButton.disabled = false;
         await follow(run, token);
-        renderHistory();
+        if (token === pollToken) renderHistory();
       } catch (error) {
-        resultArea.replaceChildren(G.inlineError(error.message));
+        if (token === pollToken) resultArea.replaceChildren(G.inlineError(error.message));
       } finally {
         runButton.disabled = false;
       }
@@ -844,6 +1397,12 @@
       clearTimeout(detectTimer);
       detectTimer = window.setTimeout(detect, 250);
     });
+    // Enter always searches, even while a previous search is still running.
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      submit();
+    });
     const form = el(
       "form",
       {
@@ -852,6 +1411,7 @@
         onSubmit: (event) => {
           event.preventDefault();
           submit();
+          input.focus();
         },
       },
       el("div", { class: "query-field" }, el("span", { class: "query-icon", "aria-hidden": "true" }, G.icon("search", { size: 18 })), input, detectedNode),
@@ -892,7 +1452,7 @@
       try {
         const run = await api(`/api/intel/runs/${runId}`);
         input.value = run.query_value;
-        await detect();
+        detect();
         showRun(run);
         if (run.status === "running") follow(run, ++pollToken).catch(() => {});
       } catch (error) {
