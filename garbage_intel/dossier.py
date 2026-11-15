@@ -520,6 +520,314 @@ def _generic(facts: Facts, labels: dict[str, str]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# URL, email, hashes, ASN, ranges, CVE
+
+
+def _threat_reports(facts: Facts) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    count = facts.first("pulse-count")
+    pulses = [
+        {"value": entry["value"], "meta": _date(entry["data"].get("created", "")) + (f" · {entry['data']['adversary']}" if entry["data"].get("adversary") else "")}
+        for entry in facts.all("pulse")
+    ]
+    return count, pulses
+
+
+def _mail_rows(facts: Facts) -> tuple[list[dict[str, Any] | None], str, list[dict[str, str]]]:
+    mx = sorted({re.sub(r"^\d+\s+", "", entry["value"]).rstrip(".") for entry in facts.all("dns-mx")})
+    spf = next((entry["value"] for entry in facts.all("dns-txt") if entry["data"].get("policy") == "spf" or entry["value"].lower().startswith("v=spf1")), "")
+    dmarc = facts.value("dns-dmarc")
+    policy = (re.search(r"\bp=(\w+)", dmarc or "") or [None, ""])[1]
+    provider = ""
+    for marker, name in (("outlook.com", "Microsoft 365"), ("google.com", "Google Workspace"), ("googlemail.com", "Google Workspace"), ("zoho", "Zoho"), ("protonmail", "Proton Mail"), ("mimecast", "Mimecast"), ("pphosted", "Proofpoint"), ("secureserver.net", "GoDaddy"), ("locaweb", "Locaweb"), ("umbler", "Umbler"), ("hostinger", "Hostinger"), ("kinghost", "KingHost")):
+        if marker in " ".join(mx).lower():
+            provider = name
+            break
+    null_mx = any(entry["data"].get("null_mx") for entry in facts.all("dns-mx"))
+    # Only say SPF/DMARC are missing when TXT records were actually asked for.
+    txt_checked = bool(facts.all("dns-txt", "dns-dmarc"))
+    flags: list[dict[str, str]] = []
+    if not txt_checked:
+        spf = dmarc = policy = ""
+        mx_only = True
+    else:
+        mx_only = False
+    if null_mx:
+        flags.append({"level": "info", "text": "O domínio declara que não recebe e-mail (null MX)."})
+    elif mx and not dmarc and not mx_only:
+        flags.append({"level": "medium", "text": "Sem DMARC: fica mais fácil falsificar o remetente deste domínio."})
+    elif policy == "none":
+        flags.append({"level": "info", "text": "DMARC só observa (p=none); não bloqueia falsificações."})
+    if mx and not spf and not null_mx and not mx_only:
+        flags.append({"level": "medium", "text": "Sem SPF publicado."})
+    rows = [
+        _row("Provedor", provider),
+        _row("Servidores MX", ", ".join(mx) or ("nenhum" if facts.all("dns-txt") else ""), sources=["dns-doh"]),
+        _row("SPF", spf or ("não publicado" if mx and not mx_only else ""), sources=["dns-doh"]),
+        _row("DMARC", dmarc or ("não publicado" if mx and not mx_only else ""), hint=f"política {policy}" if policy else "", sources=["dns-doh"]),
+    ]
+    return rows, provider, flags
+
+
+def _url(value: str, facts: Facts) -> dict[str, Any]:
+    from urllib.parse import urlsplit
+
+    host = (urlsplit(value).hostname or "").lower()
+    http = facts.first("http-response")
+    title = facts.value("page-title")
+    count, pulses = _threat_reports(facts)
+    mail_rows, provider, mail_flags = _mail_rows(facts)
+    validity = facts.first("cert-validity")
+    days_left = (validity or {}).get("data", {}).get("days_remaining")
+    present = {entry["value"] for entry in facts.all("security-header")}
+    cookies = facts.all("cookie")
+    insecure_cookies = [entry["value"] for entry in cookies if not entry["data"].get("secure") or not entry["data"].get("httponly")]
+    scans = facts.all("scan")
+    flags = list(mail_flags)
+    if count and str(count["value"]) not in ("0", ""):
+        flags.insert(0, {"level": "high", "text": f"Citada em {count['value']} relatório(s) de ameaça na AlienVault OTX."})
+    if facts.all("malicious-url"):
+        flags.insert(0, {"level": "high", "text": "Listada no URLhaus como distribuidora de malware."})
+    if insecure_cookies:
+        flags.append({"level": "info", "text": f"{len(insecure_cookies)} cookie(s) sem Secure ou HttpOnly."})
+    sections = [
+        _section("page", "Página", [
+            _row("Título", title),
+            _row("Endereço final", (http or {}).get("data", {}).get("final_url", "")),
+            _row("Resposta HTTP", (http or {}).get("value", "")),
+            _row("Redirecionamentos", " → ".join(entry["value"] for entry in facts.all("http-redirect"))),
+            _row("Tecnologias", ", ".join(sorted({entry["value"] for entry in facts.all("technology")}))),
+            _row("Cabeçalhos de segurança", f"{len(present)} presentes" if present else ""),
+            _row("Cookies", ", ".join(entry["value"] for entry in cookies)),
+            _row("Hash do favicon", facts.value("favicon"), hint="mmh3, igual ao do Shodan"),
+        ]),
+        _section("host", "Domínio", [
+            _row("Domínio", host, pivot=True),
+            _row("Servidor que respondeu", (http or {}).get("data", {}).get("address", ""), pivot=True),
+        ], items=[{"value": entry["value"], "meta": ""} for entry in facts.all("dns-a", "dns-aaaa")], pivot=True),
+        _section("mail", "E-mail do domínio", mail_rows),
+        _section("tls", "Certificado TLS", [
+            _row("Emitido para", facts.value("cert-subject")),
+            _row("Emissor", (facts.first("cert-issuer") or {}).get("data", {}).get("organization", "")),
+            _row("Validade", (validity or {}).get("value", "").replace("T", " ").replace("Z", ""), hint=f"{days_left} dia(s) restantes" if isinstance(days_left, int) else ""),
+        ]),
+        _section("security", "Contato de segurança", [
+            _row("security.txt", {"published": "publicado", "not published": "não publicado"}.get(facts.value("security-txt"), facts.value("security-txt"))),
+            _row("Contato", facts.value("security-contact-email", "security-contact-url", "security-contact")),
+            _row("Política", facts.value("security-policy")),
+        ]),
+        _section("reputation", "Relatórios de ameaça", [
+            _row("AlienVault OTX", f"{count['value']} relatório(s)" if count else ""),
+            _row("Varreduras públicas (urlscan)", str(len(scans)) if scans else ""),
+        ], items=pulses),
+        _section("history", "Histórico", [
+            _row("Primeira captura no Wayback", _date((facts.first("archive-summary") or {}).get("data", {}).get("first", ""))),
+            _row("Capturas", facts.value("archive-summary").replace("distinct captures", "capturas distintas")),
+        ]),
+    ]
+    return {
+        "title": value,
+        "subtitle": " · ".join(part for part in (title, provider and f"e-mail em {provider}") if part),
+        "facts": [item for item in (
+            {"label": "HTTP", "value": (http or {}).get("value", "")},
+            {"label": "Domínio", "value": host},
+            {"label": "Relatórios", "value": str(count["value"]) if count else ""},
+        ) if item["value"]],
+        "flags": flags,
+        "sections": [section for section in sections if section],
+    }
+
+
+def _email(value: str, facts: Facts) -> dict[str, Any]:
+    domain = value.rsplit("@", 1)[-1].lower()
+    rows, provider, flags = _mail_rows(facts)
+    events = {entry["data"].get("action", ""): entry["value"] for entry in facts.all("rdap-event")}
+    created = events.get("registration") or events.get("registered") or ""
+    age = _years_since(created)
+    if age is not None and age < 1:
+        flags.append({"level": "medium", "text": "O domínio do e-mail foi registrado há menos de um ano."})
+    if not facts.all("dns-mx") and facts.all("dns-txt", "dns-ns"):
+        flags.append({"level": "medium", "text": "O domínio não tem servidores MX: este endereço provavelmente não recebe e-mail."})
+    sections = [
+        _section("mail", "Configuração de e-mail do domínio", rows),
+        _section("domain", "Domínio", [
+            _row("Domínio", domain, pivot=True),
+            _row("Situação", facts.value("rdap-status")),
+            _row("Criado em", _date(created), hint=f"há {age} ano(s)" if age else ""),
+            _row("Expira em", _date(events.get("expiration", ""))),
+            _row("Servidores de nome", ", ".join(sorted({entry["value"].rstrip(".") for entry in facts.all("dns-ns", "nameserver")}))),
+        ]),
+    ]
+    return {
+        "title": value,
+        "subtitle": "Configuração pública do domínio. O GARBAGE não verifica se a caixa existe nem busca quem a usa.",
+        "facts": [item for item in (
+            {"label": "Domínio", "value": domain},
+            {"label": "Provedor", "value": provider},
+            {"label": "Criado", "value": _date(created)},
+        ) if item["value"]],
+        "flags": flags,
+        "sections": [section for section in sections if section],
+    }
+
+
+def _hash(value: str, facts: Facts) -> dict[str, Any]:
+    known = facts.first("known-file")
+    count, pulses = _threat_reports(facts)
+    # MalwareBazaar/ThreatFox signatures are families; OTX "families" are loose report tags.
+    families = sorted({entry["value"] for entry in facts.all("signature", "malware")})
+    tags = sorted({entry["value"] for entry in facts.all("malware-family")} - set(families))
+    techniques = sorted({entry["value"] for entry in facts.all("attack-technique")})
+    sample = facts.first("sample")
+    detections = facts.first("detection-ratio", "detections")
+    flags = []
+    if (known or {}).get("data", {}).get("known_malicious"):
+        flags.append({"level": "high", "text": f"Marcado como malicioso por {known['data']['known_malicious']} (CIRCL)."})
+    if count and str(count["value"]) not in ("0", ""):
+        flags.append({"level": "high", "text": f"Citado em {count['value']} relatório(s) de ameaça na AlienVault OTX."})
+    if families:
+        flags.append({"level": "high", "text": f"Ligado a {len(families)} família(s) de malware."})
+    if known and not flags:
+        flags.append({"level": "info", "text": "Arquivo conhecido de software distribuído (NSRL e outras bases)."})
+    sections = [
+        _section("file", "Arquivo", [
+            _row("Nome conhecido", (known or {}).get("value", "")),
+            _row("Produto", (known or {}).get("data", {}).get("product", "")),
+            _row("Amostra", (sample or {}).get("value", "")),
+            _row("Detecções", (detections or {}).get("value", "")),
+        ]),
+        _section("families", "Famílias de malware", items=[{"value": name, "meta": ""} for name in families]),
+        _section("tags", "Etiquetas nos relatórios (OTX)", items=[{"value": name, "meta": ""} for name in tags]),
+        _section("reports", "Relatórios de ameaça", [_row("AlienVault OTX", f"{count['value']} relatório(s)" if count else "")], items=pulses),
+        _section("techniques", "Técnicas ATT&CK citadas nos relatórios", items=[{"value": item, "meta": ""} for item in techniques], pivot=True),
+    ]
+    return {
+        "title": value,
+        "subtitle": (known or {}).get("value", ""),
+        "facts": [item for item in (
+            {"label": "Relatórios", "value": str(count["value"]) if count else ""},
+            {"label": "Famílias", "value": str(len(families)) if families else ""},
+            {"label": "Técnicas", "value": str(len(techniques)) if techniques else ""},
+        ) if item["value"]],
+        "flags": flags,
+        "sections": [section for section in sections if section],
+    }
+
+
+def _asn(value: str, facts: Facts) -> dict[str, Any]:
+    holder = facts.value("as-holder") or facts.value("as-name") or facts.value("rdap-name")
+    operator = facts.first("network-operator")
+    data = (operator or {}).get("data", {})
+    as_name = facts.first("as-name")
+    prefixes = facts.all("announced-prefix")
+    events = {entry["data"].get("action", ""): entry["value"] for entry in facts.all("rdap-event")}
+    sections = [
+        _section("holder", "Titular", [
+            _row("Nome", holder),
+            _row("Operador", (operator or {}).get("value", ""), sources=["peeringdb"]),
+            _row("País", (as_name or {}).get("data", {}).get("country", "")),
+            _row("Registro", str((as_name or {}).get("data", {}).get("registry", "")).upper()),
+            _row("Alocado em", _date((as_name or {}).get("data", {}).get("allocated", "") or events.get("registration", ""))),
+            _row("Contato de abuso", facts.value("abuse-contact")),
+        ]),
+        _section("peering", "Interconexão (PeeringDB)", [
+            _row("Política de peering", data.get("policy", "")),
+            _row("Pontos de troca", str(data.get("ix_count", "")) if data.get("ix_count") else ""),
+            _row("Data centers", str(data.get("facility_count", "")) if data.get("facility_count") else ""),
+            _row("Alcance", data.get("scope", "")),
+            _row("Tipo de rede", data.get("info_type", "")),
+            _row("AS-SET", data.get("irr_as_set", "")),
+        ]),
+        _section("prefixes", "Prefixos anunciados", items=[{"value": entry["value"], "meta": ""} for entry in prefixes], pivot=True,
+                 note="Blocos de IP que este sistema autônomo anuncia hoje na internet (RIPEstat)."),
+    ]
+    return {
+        "title": value.upper(),
+        "subtitle": holder,
+        "facts": [item for item in (
+            {"label": "Prefixos", "value": str(len(prefixes)) if prefixes else ""},
+            {"label": "Pontos de troca", "value": str(data.get("ix_count", "")) if data.get("ix_count") else ""},
+            {"label": "País", "value": (as_name or {}).get("data", {}).get("country", "")},
+        ) if item["value"]],
+        "flags": [],
+        "sections": [section for section in sections if section],
+    }
+
+
+def _cidr(value: str, facts: Facts) -> dict[str, Any]:
+    origin = facts.first("origin-asn")
+    owner = next((entry["value"] for entry in facts.all("organization") if entry["data"].get("role") == "registrant"), "") or facts.value("rdap-name")
+    ip_range = facts.first("ip-range")
+    sections = [
+        _section("range", "Faixa", [
+            _row("Intervalo", (ip_range or {}).get("value", "")),
+            _row("Titular", owner),
+            _row("Nome no registro", facts.value("rdap-name")),
+            _row("País", (ip_range or {}).get("data", {}).get("country", "")),
+            _row("Tipo", (ip_range or {}).get("data", {}).get("type", "")),
+            _row("Contato de abuso", facts.value("abuse-contact")),
+        ]),
+        _section("routing", "Roteamento", [
+            _row("Anunciado por", (origin or {}).get("value", ""), hint=(origin or {}).get("data", {}).get("holder", ""), pivot=True),
+            _row("Prefixo anunciado", (origin or {}).get("data", {}).get("prefix", ""), pivot=True),
+        ]),
+    ]
+    return {
+        "title": value,
+        "subtitle": owner,
+        "facts": [item for item in ({"label": "ASN", "value": (origin or {}).get("value", "")}, {"label": "País", "value": (ip_range or {}).get("data", {}).get("country", "")}) if item["value"]],
+        "flags": [],
+        "sections": [section for section in sections if section],
+    }
+
+
+def _cve(value: str, facts: Facts) -> dict[str, Any]:
+    epss = facts.first("epss")
+    score = float(epss["value"]) if epss and re.match(r"^[\d.]+$", epss["value"]) else None
+    percentile = (epss or {}).get("data", {}).get("percentile")
+    kev = facts.first("kev-entry", "kev")
+    cvss = facts.first("cvss")
+    description = facts.value("description", "summary")
+    packages = facts.all("affected-package")
+    count, pulses = _threat_reports(facts)
+    families = sorted({entry["value"] for entry in facts.all("malware-family")})
+    flags = []
+    if kev:
+        flags.append({"level": "high", "text": "Está no catálogo KEV da CISA: exploração confirmada."})
+    if score is not None and score >= 0.5:
+        flags.append({"level": "high", "text": f"EPSS {score:.0%}: alta chance de exploração nos próximos 30 dias."})
+    elif score is not None and score >= 0.1:
+        flags.append({"level": "medium", "text": f"EPSS {score:.0%}."})
+    if facts.first("notice") and not kev:
+        flags.append({"level": "info", "text": "O catálogo KEV local não foi baixado; a ausência dele não diz nada."})
+    sections = [
+        _section("summary", "Resumo", [
+            _row("Descrição", description),
+            _row("CVSS", (cvss or {}).get("value", ""), hint=(cvss or {}).get("data", {}).get("severity", "")),
+            _row("EPSS", f"{score:.1%}" if score is not None else "", hint=f"percentil {float(percentile):.0%}" if isinstance(percentile, (int, float)) else ""),
+            _row("CISA KEV", "sim" if kev else ""),
+            _row("Outros identificadores", ", ".join(entry["value"] for entry in facts.all("alias"))),
+        ]),
+        _section("packages", "Pacotes afetados", items=[
+            {"value": entry["value"], "meta": ("corrigido em " + ", ".join(entry["data"].get("fixed_in") or [])) if entry["data"].get("fixed_in") else ""} for entry in packages
+        ], note="Do OSV.dev; a lista de versões completa fica nos dados brutos."),
+        _section("reports", "Relatórios de ameaça", [_row("AlienVault OTX", f"{count['value']} relatório(s)" if count else "")], items=pulses),
+        _section("families", "Malware que usa esta falha", items=[{"value": name, "meta": ""} for name in families]),
+    ]
+    return {
+        "title": value.upper(),
+        "subtitle": description[:160],
+        "facts": [item for item in (
+            {"label": "EPSS", "value": f"{score:.0%}" if score is not None else ""},
+            {"label": "KEV", "value": "sim" if kev else ""},
+            {"label": "Pacotes", "value": str(len(packages)) if packages else ""},
+            {"label": "Relatórios", "value": str(count["value"]) if count else ""},
+        ) if item["value"]],
+        "flags": flags,
+        "sections": [section for section in sections if section],
+    }
+
+
+# ---------------------------------------------------------------------------
 
 
 def build(run: dict[str, Any], labels: dict[str, str] | None = None) -> dict[str, Any]:
@@ -536,6 +844,18 @@ def build(run: dict[str, Any], labels: dict[str, str] | None = None) -> dict[str
         body = _location(value, facts)
     elif query_type in ("cpf", "phone"):
         body = _documents(query_type, value, facts)
+    elif query_type == "url":
+        body = _url(value, facts)
+    elif query_type == "email":
+        body = _email(value, facts)
+    elif query_type in ("md5", "sha1", "sha256"):
+        body = _hash(value, facts)
+    elif query_type == "asn":
+        body = _asn(value, facts)
+    elif query_type == "cidr":
+        body = _cidr(value, facts)
+    elif query_type == "cve":
+        body = _cve(value, facts)
     else:
         body = {"title": value, "subtitle": "", **_generic(facts, labels or {})}
     body.setdefault("title", value)
