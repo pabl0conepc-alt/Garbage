@@ -113,6 +113,20 @@ class DnsTests(unittest.TestCase):
         self.assertEqual(len(web.urls), 4)
         self.assertFalse(any("a%40" in url or "a@" in url for url in web.urls))
 
+    def test_rdap_walks_up_from_a_subdomain(self):
+        asked = []
+
+        def web(url, **options):
+            asked.append(url)
+            if url.endswith("/domain/example.com.br"):
+                return result(url, {"objectClassName": "domain", "ldhName": "example.com.br", "status": ["active"]})
+            return result(url, {"errorCode": 404}, status=404)
+
+        with patch.object(ic, "FETCH", web):
+            findings = ic._rdap_connector(context("domain", "mail.dev.example.com.br"))
+        self.assertEqual([url.rsplit("/domain/", 1)[1] for url in asked], ["mail.dev.example.com.br", "dev.example.com.br", "example.com.br"])
+        self.assertIn(("rdap-status", "active"), {(item.result_type, item.value) for item in findings})
+
     def test_busy_source_is_retried_once(self):
         calls = []
 

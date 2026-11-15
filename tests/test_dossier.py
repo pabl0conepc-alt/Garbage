@@ -104,6 +104,27 @@ class OtherTypesTests(unittest.TestCase):
         cve = build(run("cve", "CVE-2021-44228", [result("first-epss", "epss", "0.9700", percentile=0.99)]))
         self.assertIn("EPSS 97%", cve["flags"][0]["text"])
 
+    def test_cve_reads_the_nvd_record_and_falls_back_to_osv(self):
+        nvd = build(run("cve", "CVE-2021-44228", [
+            result("nvd", "cve-record", "CVE-2021-44228", description="Log4j JNDI lookup", cwe=["CWE-502"], published="2021-12-10T10:15:09",
+                   kev_due_date="2021-12-24", cvss={"version": "3.1", "score": 10.0, "severity": "CRITICAL"}),
+        ]))
+        summary = rows(nvd, "summary")
+        self.assertEqual((summary["Descrição"], summary["CVSS"], summary["CISA KEV"], summary["Fraqueza (CWE)"]), ("Log4j JNDI lookup", "10.0 (CVSS 3.1)", "sim", "CWE-502"))
+        self.assertIn("KEV", nvd["flags"][0]["text"])
+        osv = build(run("cve", "CVE-2021-44228", [result("osv", "summary", "Remote code injection in Log4j")]))
+        self.assertEqual(rows(osv, "summary")["Descrição"], "Remote code injection in Log4j")
+
+    def test_portuguese_labels_and_owner_without_asn(self):
+        domain = build(run("domain", "example.org", [
+            result("rdap", "rdap-status", "client delete prohibited"),
+            result("typosquat", "typosquat", "example.net", kind="tld-swap"),
+        ]))
+        self.assertEqual(rows(domain, "registration")["Situação"], "exclusão bloqueada")
+        self.assertEqual(section(domain, "lookalikes")["list"]["items"][0]["meta"], "outro TLD")
+        ip = build(run("ipv4", "192.0.2.1", [result("ipinfo", "network-owner", "AS64500 Example Net")]))
+        self.assertEqual(ip["facts"][0], {"label": "Dono", "value": "Example Net"})
+
     def test_coverage_counts_and_failed_sources_by_name(self):
         dossier = build(run("domain", "example.org", [], sources=[
             {"connector_id": "dns-doh", "status": "ok"},

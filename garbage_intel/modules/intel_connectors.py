@@ -279,6 +279,16 @@ def _rdap_connector(context: ConnectorContext) -> list[Finding]:
         RDAP_BOOTSTRAP + path,
         headers={"Accept": "application/rdap+json, application/json"},
     )
+    if data is None and path.startswith("/domain/"):
+        # A subdomain (mail.example.com.br) has no RDAP record: ask for its
+        # parents until the registered domain answers.
+        labels = path.removeprefix("/domain/").split(".")
+        while data is None and len(labels) > 2:
+            labels = labels[1:]
+            data, result = _get_json(
+                RDAP_BOOTSTRAP + "/domain/" + ".".join(labels),
+                headers={"Accept": "application/rdap+json, application/json"},
+            )
     if not isinstance(data, dict):
         return []
     source, digest = result.final_url, result.sha256
@@ -339,7 +349,7 @@ def _crtsh_connector(context: ConnectorContext) -> list[Finding]:
     if not host:
         return []
     url = f"{CRTSH_URL}?q={quote('%.' + host, safe='')}&output=json&exclude=expired"
-    data, result = _get_json(url, hosts=("crt.sh",), max_bytes=16 * 1024 * 1024, timeout=45.0)
+    data, result = _get_json(url, hosts=("crt.sh",), max_bytes=16 * 1024 * 1024, timeout=25.0)
     if not isinstance(data, list):
         return []
     names: dict[str, dict[str, Any]] = {}

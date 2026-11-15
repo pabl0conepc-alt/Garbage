@@ -31,6 +31,24 @@ SOURCE_NAMES = {
     "urlscan": "urlscan.io", "virustotal": "VirusTotal", "wayback": "Wayback Machine",
     "web-fingerprint": "página web",
 }
+RDAP_STATUS = {
+    "active": "ativo", "inactive": "inativo", "client delete prohibited": "exclusão bloqueada",
+    "client transfer prohibited": "transferência bloqueada", "client update prohibited": "alteração bloqueada",
+    "server delete prohibited": "exclusão bloqueada pelo registro", "server transfer prohibited": "transferência bloqueada pelo registro",
+    "server update prohibited": "alteração bloqueada pelo registro", "client hold": "suspenso", "server hold": "suspenso pelo registro",
+    "pending delete": "exclusão pendente", "redemption period": "em recuperação", "auto renew period": "renovado",
+}
+LOOKALIKE_KINDS = {
+    "replacement": "letra trocada", "omission": "letra a menos", "insertion": "letra a mais", "transposition": "letras invertidas",
+    "repetition": "letra repetida", "homoglyph": "caractere parecido", "bitsquatting": "bit trocado", "tld-swap": "outro TLD",
+    "hyphenation": "com hífen", "subdomain": "subdomínio", "vowel-swap": "vogal trocada", "addition": "letra a mais",
+}
+
+
+def _status_text(facts: "Facts") -> str:
+    return ", ".join(RDAP_STATUS.get(entry["value"].lower(), entry["value"]) for entry in facts.all("rdap-status"))
+
+
 TYPE_NAMES = {
     "domain": "Domínio", "ipv4": "Endereço IPv4", "ipv6": "Endereço IPv6", "cidr": "Faixa de IP",
     "url": "URL", "email": "E-mail", "md5": "Hash MD5", "sha1": "Hash SHA-1", "sha256": "Hash SHA-256",
@@ -219,7 +237,7 @@ def _domain(value: str, facts: Facts) -> dict[str, Any]:
     first_capture = _date((wayback or {}).get("data", {}).get("first", "")) if wayback else ""
     sections = [
         _section("registration", "Registro", [
-            _row("Situação", facts.value("rdap-status"), sources=["rdap"]),
+            _row("Situação", _status_text(facts), sources=["rdap"]),
             _row("Criado em", _date(created), hint=f"há {age} ano(s)" if age else "", sources=["rdap"]),
             _row("Expira em", _date(events.get("expiration", "")), sources=["rdap"]),
             _row("Última alteração", _date(events.get("last changed", "")), sources=["rdap"]),
@@ -265,7 +283,7 @@ def _domain(value: str, facts: Facts) -> dict[str, Any]:
             _row("ThreatFox", f"{len(facts.all('ioc'))} indicador(es)" if facts.all("ioc") else ""),
         ]),
         _section("lookalikes", "Domínios parecidos registrados", items=[
-            {"value": entry["value"], "meta": str(entry["data"].get("kind", ""))} for entry in lookalikes
+            {"value": entry["value"], "meta": LOOKALIKE_KINDS.get(str(entry["data"].get("kind", "")), str(entry["data"].get("kind", "")))} for entry in lookalikes
         ], pivot=True, note="Existem e respondem no DNS; isso não quer dizer que sejam maliciosos."),
     ]
     facts_line = [
@@ -366,7 +384,7 @@ def _ip(value: str, facts: Facts) -> dict[str, Any]:
         ]),
     ]
     facts_line = [
-        {"label": "Dono", "value": owner} if owner else None,
+        {"label": "Dono", "value": re.sub(r"^AS\d+\s+", "", owner)} if owner else None,
         {"label": "ASN", "value": asn} if asn else None,
         {"label": "Local", "value": place} if place else None,
         {"label": "Portas", "value": str(len(ports))} if ports else None,
@@ -460,7 +478,7 @@ def _location(value: str, facts: Facts) -> dict[str, Any]:
         ]),
         _section("others", "Outros resultados", items=[
             {"value": entry["value"], "meta": entry["data"].get("coordinates", "")} for entry in places[1:]
-        ]),
+        ], pivot=True),
     ]
     result: dict[str, Any] = {
         "title": _place_title((best or {}).get("value", "")) or value,
@@ -651,7 +669,7 @@ def _email(value: str, facts: Facts) -> dict[str, Any]:
         _section("mail", "Configuração de e-mail do domínio", rows),
         _section("domain", "Domínio", [
             _row("Domínio", domain, pivot=True),
-            _row("Situação", facts.value("rdap-status")),
+            _row("Situação", _status_text(facts)),
             _row("Criado em", _date(created), hint=f"há {age} ano(s)" if age else ""),
             _row("Expira em", _date(events.get("expiration", ""))),
             _row("Servidores de nome", ", ".join(sorted({entry["value"].rstrip(".") for entry in facts.all("dns-ns", "nameserver")}))),
@@ -785,26 +803,31 @@ def _cve(value: str, facts: Facts) -> dict[str, Any]:
     score = float(epss["value"]) if epss and re.match(r"^[\d.]+$", epss["value"]) else None
     percentile = (epss or {}).get("data", {}).get("percentile")
     kev = facts.first("kev-entry", "kev")
-    cvss = facts.first("cvss")
-    description = facts.value("description", "summary")
+    record = facts.first("cve-record")
+    record_data = (record or {}).get("data", {})
+    cvss_data = record_data.get("cvss") or {}
+    cvss = {"value": f"{cvss_data.get('score')} (CVSS {cvss_data.get('version')})", "data": {"severity": str(cvss_data.get("severity", "")).lower()}} if cvss_data.get("score") is not None else None
+    description = record_data.get("description") or facts.value("summary")
     packages = facts.all("affected-package")
     count, pulses = _threat_reports(facts)
     families = sorted({entry["value"] for entry in facts.all("malware-family")})
     flags = []
-    if kev:
+    if kev or record_data.get("kev_due_date"):
         flags.append({"level": "high", "text": "Está no catálogo KEV da CISA: exploração confirmada."})
     if score is not None and score >= 0.5:
         flags.append({"level": "high", "text": f"EPSS {score:.0%}: alta chance de exploração nos próximos 30 dias."})
     elif score is not None and score >= 0.1:
         flags.append({"level": "medium", "text": f"EPSS {score:.0%}."})
-    if facts.first("notice") and not kev:
+    if facts.first("notice") and not kev and not record_data.get("kev_due_date"):
         flags.append({"level": "info", "text": "O catálogo KEV local não foi baixado; a ausência dele não diz nada."})
     sections = [
         _section("summary", "Resumo", [
             _row("Descrição", description),
             _row("CVSS", (cvss or {}).get("value", ""), hint=(cvss or {}).get("data", {}).get("severity", "")),
             _row("EPSS", f"{score:.1%}" if score is not None else "", hint=f"percentil {float(percentile):.0%}" if isinstance(percentile, (int, float)) else ""),
-            _row("CISA KEV", "sim" if kev else ""),
+            _row("CISA KEV", "sim" if kev or record_data.get("kev_due_date") else "", hint=f"prazo {_date(record_data['kev_due_date'])}" if record_data.get("kev_due_date") else ""),
+            _row("Fraqueza (CWE)", ", ".join(record_data.get("cwe") or [])),
+            _row("Publicada em", _date(record_data.get("published", ""))),
             _row("Outros identificadores", ", ".join(entry["value"] for entry in facts.all("alias"))),
         ]),
         _section("packages", "Pacotes afetados", items=[

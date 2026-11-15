@@ -433,6 +433,9 @@ def _osv(context: ConnectorContext) -> list[Finding]:
         )
     for alias in _list(data.get("aliases"), 20):
         findings.append(Finding("alias", _text(alias, 60), {}, result.final_url, result.sha256))
+    text = data.get("summary") or data.get("details")
+    if text:
+        findings.append(Finding("summary", _text(text, 1500), {}, result.final_url, result.sha256))
     return findings
 
 
