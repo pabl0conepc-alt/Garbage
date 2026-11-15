@@ -20,7 +20,7 @@ from typing import Any, Iterable
 MAX_LIST = 500
 SOURCE_NAMES = {
     "abuseipdb": "AbuseIPDB", "brasilapi-cnpj": "BrasilAPI", "br-documents": "verificação offline",
-    "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)",
+    "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)", "contratos-cgu": "CGU (Portal da Transparência)",
     "certspotter": "Cert Spotter", "circl-hashlookup": "CIRCL", "cisa-kev-local": "CISA KEV",
     "crtsh": "crt.sh", "cymru-asn": "Team Cymru", "dns-doh": "DNS", "first-epss": "EPSS",
     "github": "GitHub", "greynoise": "GreyNoise", "ipinfo": "IPinfo", "local-structure": "análise local",
@@ -414,6 +414,20 @@ def _point(coordinates: str, label: str) -> dict[str, Any] | None:
 # Company, place, documents
 
 
+def brl(value: float) -> str:
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _iso(value: Any) -> str:
+    """dd/mm/yyyy or yyyy-mm-dd as yyyy-mm-dd, for comparisons; '' otherwise."""
+    text = str(value or "")
+    match = re.match(r"(\d{2})/(\d{2})/(\d{4})", text)
+    if match:
+        return f"{match.group(3)}-{match.group(2)}-{match.group(1)}"
+    match = re.match(r"(\d{4})-(\d{2})-(\d{2})", text)
+    return match.group(0) if match else ""
+
+
 def _cnpj(value: str, facts: Facts) -> dict[str, Any]:
     name = facts.value("organization")
     status = facts.first("registration-status")
@@ -434,6 +448,14 @@ def _cnpj(value: str, facts: Facts) -> dict[str, Any]:
         flags.append({"level": "info", "text": "Empresário individual: o nome da empresa é o do titular; o CPF que vem no nome fica mascarado."})
     holder = facts.first("registrobr-holder")
     domains = facts.all("company-domain")
+    contracts = sorted(facts.all("contract"), key=lambda entry: -(entry["data"].get("amount") or 0))
+    contract_summary = facts.first("contracts-summary")
+    payments = sorted(facts.all("payment"), key=lambda entry: -(entry["data"].get("amount") or 0))
+    payment_years = sorted(facts.all("payments-summary"), key=lambda entry: -int(entry["data"].get("year") or 0))
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    active = [entry for entry in contracts if _iso(entry["data"].get("end")) >= today]
+    if sanctions and active:
+        flags.append({"level": "high", "text": f"Empresa com sanção federal e {len(active)} contrato(s) federal(is) ainda vigente(s)."})
     sources = ["brasilapi-cnpj", "minhareceita-cnpj"]
     sections = [
         _section("company", "Empresa", [
@@ -480,6 +502,55 @@ def _cnpj(value: str, facts: Facts) -> dict[str, Any]:
             note="O Registro.br não lista os domínios de um titular; os sites acima são os prováveis, confirmados pelo CNPJ do titular." if holder and domains else "",
         ),
         _section(
+            "contracts",
+            "Contratos com o governo federal",
+            [
+                _row(
+                    "Contratos",
+                    f"{contract_summary['value']} · {brl(contract_summary['data'].get('total') or 0)}" if contract_summary and contract_summary["data"].get("count") else ("nenhum encontrado" if contract_summary else ""),
+                    hint="soma do valor final de cada contrato listado" + (" (lista cortada nos primeiros)" if contract_summary and contract_summary["data"].get("more") else "") if contract_summary and contract_summary["data"].get("count") else "",
+                    sources=["contratos-cgu"] if contract_summary else (),
+                ),
+                _row("Vigentes", f"{len(active)}" if contracts else ""),
+                _row(
+                    "Órgãos principais",
+                    "; ".join(f"{name} ({count})" for name, count in list((contract_summary or {}).get("data", {}).get("organs", {}).items())[:4]),
+                ),
+            ],
+            items=[
+                {
+                    "value": f"{brl(entry['data']['amount'])} · {entry['value']}" if entry["data"].get("amount") else entry["value"],
+                    "meta": " · ".join(part for part in (
+                        entry["data"].get("organ", ""),
+                        f"assinado em {entry['data']['signed']}" if entry["data"].get("signed") else "",
+                        f"vigência até {entry['data']['end']}" if entry["data"].get("end") else "",
+                        entry["data"].get("modality", ""),
+                    ) if part),
+                }
+                for entry in contracts
+            ],
+        ),
+        _section(
+            "payments",
+            "Pagamentos federais",
+            [
+                _row(
+                    str(entry["data"].get("year")),
+                    f"{brl(entry['data'].get('listed_total') or 0)} em {entry['data'].get('count')} pagamento(s)" if entry["data"].get("count") else "nenhum pagamento",
+                    hint="só os maiores do ano; o total pode ser maior" if entry["data"].get("top_only") else "",
+                    sources=["contratos-cgu"],
+                )
+                for entry in payment_years
+            ],
+            items=[
+                {
+                    "value": entry["value"],
+                    "meta": " · ".join(part for part in (entry["data"].get("date", ""), entry["data"].get("program", ""), entry["data"].get("document", "")) if part),
+                }
+                for entry in payments
+            ],
+        ),
+        _section(
             "sanctions",
             "Sanções federais",
             [_row("Resultado", facts.value("sanction-check"), hint=f"listas: {facts.first('sanction-check')['data'].get('lists', '')}" if facts.first("sanction-check") else "", sources=["sancoes-cgu"])],
@@ -504,6 +575,7 @@ def _cnpj(value: str, facts: Facts) -> dict[str, Any]:
         {"label": "UF", "value": (facts.first("address") or {}).get("data", {}).get("state", "")} if facts.first("address") else None,
         {"label": "Domínios .br", "value": str(holder["data"].get("domains") or 0)} if holder else None,
         {"label": "Sanções", "value": str(len(sanctions)) if sanctions else ("nenhuma" if facts.value("sanction-check") else "")},
+        {"label": "Contratos federais", "value": contract_summary["value"].split(" ")[0]} if contract_summary else None,
     ]
     result: dict[str, Any] = {
         "title": name or value,

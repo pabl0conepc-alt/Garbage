@@ -45,6 +45,7 @@
     "brasilapi-cnpj": ["BrasilAPI CNPJ", "Cadastro público da Receita Federal: razão social, situação, atividades, endereço, porte e capital. Sem nomes de sócios."],
     "minhareceita-cnpj": ["Minha Receita", "O mesmo cadastro público da Receita Federal por outro espelho. Sem nomes de sócios."],
     "registrobr-cnpj": ["Registro.br", "Quantos domínios .br, blocos de IP e AS estão em nome do CNPJ, e os sites prováveis confirmados pelo titular. Contatos não são lidos."],
+    "contratos-cgu": ["Contratos e pagamentos federais (CGU)", "Contratos do governo federal com a empresa e os maiores pagamentos dos últimos dois anos. Usa a mesma chave gratuita."],
     "sancoes-cgu": ["Sanções federais (CGU)", "CEIS, CNEP, CEPIM e acordos de leniência no Portal da Transparência. Precisa de uma chave gratuita."],
     nominatim: ["OpenStreetMap", "Endereço para coordenadas ou coordenadas para endereço, com dados do OpenStreetMap."],
   };
@@ -87,7 +88,7 @@
     "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
     typosquat: "Variação existente", "typosquat-summary": "Resumo de typosquatting",
     validity: "Validade", "fiscal-region": "Região fiscal", establishment: "Estabelecimento", formatted: "Formato",
-    country: "País", "phone-region": "DDD", "line-type": "Tipo de linha", "check-digits": "Dígitos verificadores", "registrobr-holder": "Registro.br", "company-domain": "Site da empresa", sanction: "Sanção", "sanction-check": "Sanções",
+    country: "País", "phone-region": "DDD", "line-type": "Tipo de linha", "check-digits": "Dígitos verificadores", "registrobr-holder": "Registro.br", "company-domain": "Site da empresa", sanction: "Sanção", "sanction-check": "Sanções", contract: "Contrato federal", "contracts-summary": "Contratos federais", payment: "Pagamento federal", "payments-summary": "Pagamentos federais",
     "phone-format": "Formato para discar", state: "Estado", service: "Serviço", "phone-suggestion": "Com o 9", "trade-name": "Nome fantasia",
     "registration-status": "Situação cadastral", founded: "Início das atividades", "main-activity": "Atividade principal",
     "secondary-activity": "Atividade secundária", "legal-nature": "Natureza jurídica", "company-size": "Porte",
