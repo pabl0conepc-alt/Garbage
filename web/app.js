@@ -968,6 +968,7 @@ const MODULE_TEXT = {
   "file-intelligence": ["Análise de arquivos", "Inspeção estática limitada de documentos, pacotes, imagens e executáveis, com histórico persistente."],
   "source-manager": ["Gerenciador de fontes", "Fontes reutilizáveis vinculadas a investigações e entidades."],
   "indicator-engine": ["Motor de indicadores", "Extração de padrões e correlação por valor exato com proveniência."],
+  "cti-exchange": ["Troca com MISP e OpenCTI", "Envia casos ao seu MISP ou OpenCTI e procura valores neles pela pesquisa multifonte."],
   antivirus: ["Antivírus (ClamAV)", "Passa cada arquivo analisado pelo ClamAV, quando ele está instalado; tudo local, nada sai da máquina."],
   "ai-assistant": ["Assistente de IA", "Painel lateral em que um modelo escolhido no OpenRouter usa a estação pelas próprias ações, todas registradas."],
   "intel-orchestrator": ["Inteligência multifonte", "Consulta explícita de um artefato em todos os conectores registrados, com cache, limites de taxa, status das fontes e proveniência."],

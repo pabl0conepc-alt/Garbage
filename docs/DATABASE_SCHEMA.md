@@ -225,6 +225,11 @@ summary, link, interface action; user rows: the screen that was open),
 `created_at`. Tool rows are the assistant's action log. `assistant.model` is
 stored in `application_settings`.
 
+### `cti_pushes`
+
+`platform` (`misp` or `opencti`), `investigation_id`, `remote_id`, `link`,
+`object_count`, `pushed_at`; one row per platform and case, the last send.
+
 ### `application_settings`
 
 `key`, `value`, `updated_at`
@@ -256,6 +261,7 @@ Applied migration ledger used to make startup idempotent.
 | 13 | Monitors and notifications | `monitors`, `monitor_runs`, `notifications` |
 | 14 | Search index covers case objectives | Investigation triggers recreated with `objective` in the indexed text and case rows reindexed; nothing to do without FTS5 |
 | 15 | AI assistant conversations and action log | `assistant_conversations`, `assistant_messages` |
+| 16 | Cases sent to MISP and OpenCTI | `cti_pushes` (platform, case, remote id, link, object count, time) |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

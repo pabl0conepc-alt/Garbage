@@ -20,6 +20,7 @@ from typing import Any, Iterable
 MAX_LIST = 500
 SOURCE_NAMES = {
     "abuseipdb": "AbuseIPDB", "brasilapi-cnpj": "BrasilAPI", "br-documents": "verificação offline",
+    "misp": "MISP", "opencti": "OpenCTI",
     "reverse-ip": "HackerTarget", "mnemonic-pdns": "Mnemonic", "ip-lists": "listas públicas", "dnsbl": "DNSBL",
     "hackertarget-hosts": "HackerTarget", "otx-hosts": "OTX", "subdomain-center": "subdomain.center", "dns-common-names": "nomes comuns",
     "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)", "contratos-cgu": "CGU (Portal da Transparência)",
@@ -1105,6 +1106,32 @@ def _cve(value: str, facts: Facts) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _own_intel(body: dict[str, Any], facts: Facts) -> None:
+    """What the analyst's own MISP and OpenCTI already hold about the value."""
+    events = facts.all("misp-event")
+    observables = facts.all("opencti-observable")
+    reports = facts.all("opencti-report")
+    items = [
+        {"value": entry["value"], "meta": " · ".join(part for part in (
+            "MISP", _date(entry["data"].get("date", "")), ", ".join(entry["data"].get("tags") or [])[:120]) if part)}
+        for entry in events
+    ] + [
+        {"value": entry["value"], "meta": " · ".join(part for part in (
+            "OpenCTI", f"pontuação {entry['data']['score']}" if entry["data"].get("score") is not None else "",
+            ", ".join(entry["data"].get("labels") or [])[:120]) if part)}
+        for entry in observables
+    ] + [
+        {"value": entry["value"], "meta": " · ".join(part for part in ("relatório no OpenCTI", _date(entry["data"].get("published", ""))) if part)}
+        for entry in reports
+    ]
+    section = _section("own-intel", "Na sua base (MISP e OpenCTI)", items=items)
+    if not section:
+        return
+    body.setdefault("sections", []).insert(0, section)
+    parts = [f"{len(events)} evento(s) do seu MISP" if events else "", f"{len(observables) + len(reports)} registro(s) do seu OpenCTI" if observables or reports else ""]
+    body.setdefault("flags", []).insert(0, {"level": "medium", "text": "Já aparece em " + " e ".join(part for part in parts if part) + "."})
+
+
 def build(run: dict[str, Any], labels: dict[str, str] | None = None) -> dict[str, Any]:
     """Dossier for one stored run (as returned by intel.get_run)."""
     query_type, value = run.get("query_type", ""), run.get("query_value", "")
@@ -1135,6 +1162,7 @@ def build(run: dict[str, Any], labels: dict[str, str] | None = None) -> dict[str
         body = {"title": value, "subtitle": "", **_generic(facts, labels or {})}
     body.setdefault("title", value)
     body.setdefault("subtitle", "")
+    _own_intel(body, facts)
     sources = run.get("sources") or []
     coverage = {
         "answered": sum(1 for item in sources if item["status"] == "ok"),

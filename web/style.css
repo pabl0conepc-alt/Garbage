@@ -8717,3 +8717,8 @@ body.assistant-open .assistant-fab { display: none; }
 .doc-text-count { color: var(--text-muted); font-size: var(--text-sm); }
 .doc-text { max-height: 480px; overflow: auto; margin: 0; padding: 14px 16px; border-radius: 14px; background: var(--surface-secondary); color: var(--text-primary); font-family: inherit; font-size: var(--text-base); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
 .doc-text mark { background: var(--warning-soft); color: inherit; border-radius: 3px; }
+
+/* ---- MISP and OpenCTI settings (views-feeds.js) ---------------------- */
+.platform-form { display: flex; flex-direction: column; gap: 6px; max-width: 560px; }
+.platform-form label:not(.toolbar-check) { margin-top: 6px; font-weight: 600; font-size: var(--text-sm); }
+.platform-form .row-actions { margin-top: 10px; }
