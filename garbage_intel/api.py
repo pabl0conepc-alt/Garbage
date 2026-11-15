@@ -52,7 +52,7 @@ from .evidence import (
 )
 from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
-from .modules import actors, attack
+from .modules import actors, attack, email_analysis
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
@@ -1096,6 +1096,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                 limit=_query_int(query, "limit", 50),
             ),
         )
+
+    def api_email_analysis(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("file-intelligence")
+        raw = payload.get("raw")
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValidationError("raw must be the message or its headers as text")
+        if len(raw) > 2 * 1024 * 1024:
+            raise ValidationError("the message is larger than 2 MiB")
+        self._json(200, email_analysis.analyse(raw.encode("utf-8", "replace")))
 
     def api_file_analysis_post(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
@@ -2474,6 +2485,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "api_intel_key_delete",
         MAX_BODY_BYTES,
     ),
+    ("POST", re.compile(r"^/api/intelligence/email$"), "api_email_analysis", 4 * 1024 * 1024),
     ("GET", re.compile(r"^/api/cti-platforms$"), "api_cti_platforms", MAX_BODY_BYTES),
     ("PUT", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_put", MAX_BODY_BYTES),
     ("DELETE", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_delete", MAX_BODY_BYTES),

@@ -20,7 +20,7 @@ from typing import Any, Iterable
 MAX_LIST = 500
 SOURCE_NAMES = {
     "abuseipdb": "AbuseIPDB", "brasilapi-cnpj": "BrasilAPI", "br-documents": "verificação offline",
-    "misp": "MISP", "opencti": "OpenCTI",
+    "misp": "MISP", "opencti": "OpenCTI", "phishing-lists": "listas de phishing",
     "reverse-ip": "HackerTarget", "mnemonic-pdns": "Mnemonic", "ip-lists": "listas públicas", "dnsbl": "DNSBL",
     "hackertarget-hosts": "HackerTarget", "otx-hosts": "OTX", "subdomain-center": "subdomain.center", "dns-common-names": "nomes comuns",
     "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)", "contratos-cgu": "CGU (Portal da Transparência)",
@@ -1106,6 +1106,27 @@ def _cve(value: str, facts: Facts) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _phishing(body: dict[str, Any], facts: Facts) -> None:
+    """Public phishing lists that name the value or names under it."""
+    listed = facts.all("phishing-listed")
+    under = facts.all("phishing-under")
+    check = facts.first("phishing-check")
+    if not (listed or under or check):
+        return
+    names = sorted({name for entry in under for name in entry["data"].get("names") or []})
+    rows = [
+        _row("Resultado", ", ".join(f"{entry['value']} ({entry['data'].get('match', '')})" for entry in listed) or "não listado",
+             hint=f"conferidas: {', '.join(check['data'].get('checked') or [])}" if check else "", sources=["phishing-lists"]),
+    ]
+    section = _section("phishing", "Listas de phishing", rows, items=[{"value": name, "meta": "listado"} for name in names], pivot=True)
+    if section:
+        body.setdefault("sections", []).append(section)
+    if listed:
+        body.setdefault("flags", []).insert(0, {"level": "high", "text": f"Em lista pública de phishing: {', '.join(entry['value'] for entry in listed)}."})
+    elif names:
+        body.setdefault("flags", []).append({"level": "medium", "text": f"{len(names)} nome(s) abaixo deste domínio em listas de phishing."})
+
+
 def _own_intel(body: dict[str, Any], facts: Facts) -> None:
     """What the analyst's own MISP and OpenCTI already hold about the value."""
     events = facts.all("misp-event")
@@ -1163,6 +1184,7 @@ def build(run: dict[str, Any], labels: dict[str, str] | None = None) -> dict[str
     body.setdefault("title", value)
     body.setdefault("subtitle", "")
     _own_intel(body, facts)
+    _phishing(body, facts)
     sources = run.get("sources") or []
     coverage = {
         "answered": sum(1 for item in sources if item["status"] == "ok"),

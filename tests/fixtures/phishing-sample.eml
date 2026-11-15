@@ -1,0 +1,28 @@
+Return-Path: <bounce@mailer-x.example.net>
+Delivered-To: analista@example.org
+Received: from mx.example.org (mx.example.org [10.0.0.2])
+	by inbox.example.org with LMTP; Sat, 14 Nov 2026 10:00:09 -0300
+Received: from mailer-x.example.net (unknown [45.33.32.156])
+	by mx.example.org (Postfix) with ESMTP id 4A1B2; Sat, 14 Nov 2026 10:00:05 -0300
+Authentication-Results: mx.example.org; spf=softfail smtp.mailfrom=mailer-x.example.net; dkim=none; dmarc=fail header.from=banco.example.com
+DKIM-Signature: v=1; a=rsa-sha256; d=mailer-x.example.net; s=s1; b=abc
+From: "suporte@banco.example.com" <alerta@banco-seguro.example.net>
+Reply-To: atendimento@outro.example.info
+To: analista@example.org
+Subject: Sua conta foi bloqueada
+Date: Sat, 14 Nov 2026 10:00:00 -0300
+Message-ID: <123@mailer-x.example.net>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/html; charset=utf-8
+
+<p>Clique em <a href="http://login-banco.example.xyz/verificar">https://www.banco.example.com/seguranca</a> para desbloquear.</p>
+--b1
+Content-Type: application/octet-stream; name="comprovante.html"
+Content-Disposition: attachment; filename="comprovante.html"
+Content-Transfer-Encoding: base64
+
+PGh0bWw+PC9odG1sPg==
+--b1--

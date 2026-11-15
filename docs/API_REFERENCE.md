@@ -573,6 +573,17 @@ MX, the source itself) are reported under `skipped`.
   (and whether it has expired) and PGP signature. A non-text answer or one
   without `Contact:` is reported as not published.
 
+## E-mail analysis
+
+`POST /api/intelligence/email` with `{raw}` (a whole message or only its
+headers, up to 2 MiB) returns the same `email` structure that a `.eml` file
+gets in its file analysis: `subject`, `from`, `reply_to`, `return_path`,
+`message_id`, `authentication` (`spf`, `dkim`, `dmarc`), `dkim_domains`,
+`hops` (oldest first, with `ip` and `delay_seconds`), `origin_ip` (first
+public address), `links` (`url`, `text`, `host`, `disguised`), `attachments`
+(`name`, `content_type`, `size`, `sha256`), `body` and `flags`. Nothing is
+stored or sent.
+
 ## MISP and OpenCTI
 
 One server of each. The address is stored in the settings table; the key is

@@ -8722,3 +8722,8 @@ body.assistant-open .assistant-fab { display: none; }
 .platform-form { display: flex; flex-direction: column; gap: 6px; max-width: 560px; }
 .platform-form label:not(.toolbar-check) { margin-top: 6px; font-weight: 600; font-size: var(--text-sm); }
 .platform-form .row-actions { margin-top: 10px; }
+
+/* ---- E-mail analysis (views-file.js) ---------------------------------- */
+.email-paste.input { width: 100%; min-height: 120px; font-family: inherit; resize: vertical; }
+.link-button { border: 0; padding: 0; background: none; color: var(--text-primary); font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; overflow-wrap: anywhere; }
+.subhead { margin: 18px 0 8px; font-size: var(--text-base); font-weight: 600; }
