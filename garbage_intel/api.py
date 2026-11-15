@@ -12,7 +12,7 @@ import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
 from .boards import get_board, save_board
@@ -56,7 +56,7 @@ from .modules import actors, attack
 from .geoint import geo_points
 from .net import NetworkError
 from .modules import sigma, taxii
-from . import cases, custody, monitoring, plugins
+from . import assistant, cases, custody, monitoring, plugins
 from .report_sections import parse_sections
 from .graph_io import import_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
@@ -145,6 +145,7 @@ _STATIC_FILES = {
     "views-system.js": "text/javascript; charset=utf-8",
     "views-file.js": "text/javascript; charset=utf-8",
     "street-map.js": "text/javascript; charset=utf-8",
+    "assistant.js": "text/javascript; charset=utf-8",
     "views-multisearch.js": "text/javascript; charset=utf-8",
     "views-yara.js": "text/javascript; charset=utf-8",
     "charts.js": "text/javascript; charset=utf-8",
@@ -1444,6 +1445,89 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    # --- AI assistant -----------------------------------------------------------
+
+    def api_assistant_status(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.status(self.database_path))
+
+    def api_assistant_config(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        unknown = set(payload) - {"model"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(200, assistant.set_model(self.database_path, payload.get("model")))
+
+    def api_assistant_models(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        try:
+            self._json(200, assistant.list_models())
+        except (assistant.AssistantError, NetworkError) as exc:
+            self._error(502, str(exc))
+
+    def api_assistant_start(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(201, assistant.start_conversation(self.database_path, payload.get("content"), payload.get("context")))
+
+    def api_assistant_conversation(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.get_conversation(self.database_path, match.group(1)))
+
+    def api_assistant_conversation_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.delete_conversation(self.database_path, match.group(1)))
+
+    def api_assistant_message(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.send_message(self.database_path, match.group(1), payload.get("content"), payload.get("context")))
+
+    def api_assistant_confirm(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.confirm(self.database_path, match.group(1), payload.get("message_id"), payload.get("approve")))
+
+    def api_assistant_stop(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.stop(self.database_path, match.group(1)))
+
+    def api_assistant_files(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.list_files(self.database_path))
+
+    def api_assistant_file_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        name = unquote(match.group(1))
+        text = assistant.read_file(self.database_path, name)
+        # Always a download: the model wrote it, so it is never rendered here.
+        self._send(200, "application/octet-stream", text.encode("utf-8"), {"Content-Disposition": _attachment_disposition(name)})
+
+    def api_assistant_file_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.delete_file(self.database_path, unquote(match.group(1))))
+
     def api_intel_keys(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -2332,6 +2416,18 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "api_intel_key_delete",
         MAX_BODY_BYTES,
     ),
+    ("GET", re.compile(r"^/api/assistant$"), "api_assistant_status", MAX_BODY_BYTES),
+    ("PUT", re.compile(r"^/api/assistant/config$"), "api_assistant_config", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/assistant/models$"), "api_assistant_models", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/assistant/conversations$"), "api_assistant_start", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}$"), "api_assistant_conversation", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}$"), "api_assistant_conversation_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}/messages$"), "api_assistant_message", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}/confirm$"), "api_assistant_confirm", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}/stop$"), "api_assistant_stop", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/assistant/files$"), "api_assistant_files", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/assistant/files/([A-Za-z0-9%._-]{1,300})$"), "api_assistant_file_get", MAX_BODY_BYTES),
+    ("DELETE", re.compile(r"^/api/assistant/files/([A-Za-z0-9%._-]{1,300})$"), "api_assistant_file_delete", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/intel/runs$"), "api_intel_runs_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/intel/runs$"), "api_intel_runs_post", MAX_BODY_BYTES),
@@ -2388,6 +2484,7 @@ def prepare_runtime(database: str | Path) -> None:
     """What a running workstation needs besides the HTTP server: interrupted
     runs closed, approved plugins loaded and the monitor scheduler started."""
     recover_interrupted_runs(str(database))
+    assistant.recover(str(database))
     loaded = plugins.load_approved(str(database))
     if loaded:
         print(f"Plugins loaded: {', '.join(loaded)}")

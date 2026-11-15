@@ -1981,6 +1981,23 @@
       altHost,
     );
 
+    // Requests from the assistant panel (assistant.js).
+    function onAssistant(event) {
+      const request = event.detail || {};
+      if (request.action === "layout" && G.graphLayouts[request.layout]) {
+        layoutSelect.value = request.layout;
+        layoutSelect.dispatchEvent(new Event("change"));
+      } else if (request.action === "focus" && nodes.some((node) => node.id === request.entity_id)) {
+        selectFromView(request.entity_id);
+        selectNode(request.entity_id);
+      } else if (request.action === "fit") {
+        fit();
+        render();
+      }
+    }
+    window.addEventListener("garbage:graph", onAssistant);
+    G.cleanupFns.push(() => window.removeEventListener("garbage:graph", onAssistant));
+
     renderViewTabs();
     await loadGraph();
   }

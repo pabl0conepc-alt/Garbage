@@ -211,6 +211,20 @@ What a merged entity was, kept on the entity it was merged into.
 `id`, `kind` (`changed` or `error`), `monitor_id`,
 `monitor_run_id`, `title`, `body`, `created_at`, `read_at` (empty while unread)
 
+### `assistant_conversations`
+
+`id`, `title` (first line of the first message), `model`, `status`
+(`running`, `waiting`, `idle`, `error`), `error`, `created_at`, `updated_at`
+
+### `assistant_messages`
+
+`id` (autoincrement, gives the order), `conversation_id`, `role` (`user`,
+`assistant`, `tool`), `content`, `tool_calls_json` (assistant turns),
+`tool_call_id`, `tool_name`, `action_json` (tool rows: arguments, status,
+summary, link, interface action; user rows: the screen that was open),
+`created_at`. Tool rows are the assistant's action log. `assistant.model` is
+stored in `application_settings`.
+
 ### `application_settings`
 
 `key`, `value`, `updated_at`
@@ -241,6 +255,7 @@ Applied migration ledger used to make startup idempotent.
 | 12 | Case objective and archive, evidence custody and notes | `investigations.objective`, `investigations.archived_at`; `evidence_events` (hash-chained, kept after deletion) and `evidence_notes`; logs started for existing evidence |
 | 13 | Monitors and notifications | `monitors`, `monitor_runs`, `notifications` |
 | 14 | Search index covers case objectives | Investigation triggers recreated with `objective` in the indexed text and case rows reindexed; nothing to do without FTS5 |
+| 15 | AI assistant conversations and action log | `assistant_conversations`, `assistant_messages` |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

@@ -30,6 +30,7 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | CTI | Offline MITRE ATT&CK with case techniques and threat-actor profiles (groups ranked by techniques shared with a case, never as attribution), Sigma rules from SigmaHQ, TAXII 2.1 client, CISA KEV, NVD/EPSS/OSV, STIX 2.1 / MISP / IOC export with TLP |
 | Plugins | Local folder, validated manifest, declared permissions, approval by code SHA-256, separate process with brokered network |
 | Reports | Chosen sections, generated methodology, graph picture, custody and techniques; HTML, Markdown, JSON, CSV and browser print to PDF |
+| AI assistant | Side panel (robot button) driven by a model you pick on OpenRouter with your own key; it searches, creates cases, notes, entities and links, arranges the board and graph, opens screens and keeps files in its own folder, every action logged and deletions confirmed by you |
 | System | FTS5 global search with ranking, settings, activity log, module registry with capability gating |
 
 The **module registry** is the source of truth. Modules without a tested backend
@@ -133,6 +134,12 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
 - **Threat intel** — view the cached CISA KEV catalogue and refresh it
   explicitly. Page loads never contact CISA.
 - **Modules / Settings** — inspect capability state, storage and preferences.
+- **Assistant** — the robot button in the corner opens a side panel. Add an
+  OpenRouter key and pick a model (only models that accept tools are listed);
+  then ask in plain language. The model works only through the workstation's
+  own actions, so it has the same limits (no people search). Each action shows
+  in the conversation; deleting waits for **Permitir**. Messages and action
+  results go to OpenRouter and the chosen model.
 - **Command palette** (`Ctrl/⌘ K` or `/`) — search local records or run quick actions
   such as creating a case, registering an entity, adding evidence and switching density.
 - **Display menu** (◐) — persist theme, comfortable/compact density and reduced motion

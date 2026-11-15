@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -214,6 +214,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "Indicator engine",
         "Pattern extraction and exact-value correlation with provenance.",
         "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "ai-assistant",
+        "AI assistant",
+        "Side panel where a model chosen on OpenRouter works the workstation through its own logged actions.",
+        "Intelligence",
         "1.0.0",
         "enabled",
     ),
@@ -1248,6 +1256,34 @@ def _migrate_workspace(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_assistant(connection: sqlite3.Connection) -> None:
+    """Version 15: assistant conversations; tool messages double as the action log."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS assistant_conversations (
+               id TEXT PRIMARY KEY,
+               title TEXT NOT NULL,
+               model TEXT NOT NULL DEFAULT '',
+               status TEXT NOT NULL DEFAULT 'idle',
+               error TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL
+           );
+           CREATE TABLE IF NOT EXISTS assistant_messages (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               conversation_id TEXT NOT NULL REFERENCES assistant_conversations(id) ON DELETE CASCADE,
+               role TEXT NOT NULL,
+               content TEXT NOT NULL DEFAULT '',
+               tool_calls_json TEXT NOT NULL DEFAULT '',
+               tool_call_id TEXT NOT NULL DEFAULT '',
+               tool_name TEXT NOT NULL DEFAULT '',
+               action_json TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS assistant_messages_conversation
+               ON assistant_messages(conversation_id, id);"""
+    )
+
+
 MIGRATIONS = (
     (1, "Baseline evidence ledger schema", _migrate_ledger),
     (2, "Investigation workspace tables and columns", _migrate_workspace),
@@ -1263,6 +1299,7 @@ MIGRATIONS = (
     (12, "Case objective and archive, evidence custody and notes", _migrate_cases),
     (13, "Monitors and notifications", _migrate_monitoring),
     (14, "Search index covers case objectives", _migrate_search_objective),
+    (15, "AI assistant conversations and action log", _migrate_assistant),
 )
 
 
