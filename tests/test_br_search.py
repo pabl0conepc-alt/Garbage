@@ -128,6 +128,49 @@ class ConnectorTests(unittest.TestCase):
         self.assertIn("User-Agent", web.calls[0]["headers"])
         self.assertEqual(missing, [])  # FakeWeb answers other paths with an empty record
 
+    def test_registrobr_counts_and_confirms_company_sites(self):
+        company = {**COMPANY, "nome_fantasia": "BB", "email": "contato@bb.com.br"}
+        registrant = lambda cnpj: {"entities": [
+            {"roles": ["registrant"], "publicIds": [{"type": "cnpj", "identifier": cnpj}],
+             "entities": [{"roles": ["administrative"], "vcardArray": ["vcard", [["fn", {}, "text", "Pessoa Contato"]]]}]},
+        ]}
+        web = FakeWeb([
+            (lambda url: url.endswith("/entity/00000000000191"), {"nicbr_domainCount": 171, "nicbr_inetCount": 180, "nicbr_autnumCount": 1,
+                                                                   "legalRepresentative": "Pessoa Representante",
+                                                                   "events": [{"eventAction": "registration", "eventDate": "1998-02-09T12:00:00Z"}]}),
+            (lambda url: url.endswith("/cnpj/v1/00000000000191"), company),
+            (lambda url: url.endswith("/domain/bb.com.br"), registrant("00.000.000/0001-91")),
+            (lambda url: url.endswith("/domain/bancobrasil.com.br"), registrant("00.000.000/0001-91")),
+            (lambda url: url.endswith("/domain/banco.com.br"), registrant("11.111.111/0001-11")),
+            (lambda url: "/domain/" in url, result("https://rdap.registro.br/domain/other", {}, status=404)),
+        ])
+        with patch.object(br, "FETCH", web):
+            findings = run("registrobr-cnpj", "cnpj", "00000000000191")
+        holder = next(item for item in findings if item.result_type == "registrobr-holder")
+        self.assertEqual((holder.value, holder.data["ip_blocks"], holder.data["since"]), ("171 domínio(s) .br", 180, "1998-02-09"))
+        sites = {item.value: item.data["confirmed"] for item in findings if item.result_type == "company-domain"}
+        self.assertEqual(sites, {"bb.com.br": True, "bancobrasil.com.br": True})
+        stored = json.dumps([item.__dict__ for item in findings], ensure_ascii=False)
+        self.assertNotIn("Pessoa", stored)
+
+    def test_mei_name_hides_the_owner_cpf_and_sanctions_are_listed(self):
+        self.assertEqual(br.mask_cpf("FULANO DE TAL 52998224725"), "FULANO DE TAL 529.***.***-**")
+        self.assertEqual(br.cnpj_with_check_digits("000000000001"), "00000000000191")
+        sanction = {"tipoSancao": {"descricaoResumida": "Impedimento"}, "orgaoSancionador": {"nome": "Ministério X"},
+                    "dataInicioSancao": "01/01/2025", "dataFimSancao": "01/01/2027", "numeroProcesso": "123", "fundamentacao": [{"descricao": "Lei 14.133"}]}
+        web = FakeWeb([
+            (lambda url: "/ceis?" in url, [sanction]),
+            (lambda url: "api-de-dados" in url, []),
+        ])
+        with patch.object(br, "FETCH", web):
+            found = registry()["sancoes-cgu"].run(ConnectorContext("", "cnpj", "00000000000191", None, api_key="k" * 32))
+        self.assertEqual([(item.result_type, item.value) for item in found], [("sanction", "Impedimento · Ministério X")])
+        self.assertEqual(web.calls[0]["headers"]["chave-api-dados"], "k" * 32)
+        self.assertEqual(len(web.urls), 4)
+        with patch.object(br, "FETCH", FakeWeb([(lambda url: True, [])])):
+            clean = registry()["sancoes-cgu"].run(ConnectorContext("", "cnpj", "00000000000191", None, api_key="k" * 32))
+        self.assertEqual(clean[0].value, "nenhuma sanção encontrada")
+
     def test_company_address_becomes_a_map_point(self):
         web = FakeWeb([
             (lambda url: url.endswith("/cnpj/v1/00000000000191"), COMPANY),
@@ -198,7 +241,9 @@ class WorkflowTests(unittest.TestCase):
             outcome = run_query(self.database, value="00.000.000/0001-91")
         sources = {item["connector_id"]: item["status"] for item in outcome["sources"]}
         self.assertEqual({key: sources[key] for key in ("br-documents", "brasilapi-cnpj", "minhareceita-cnpj")}, {"br-documents": "ok", "brasilapi-cnpj": "ok", "minhareceita-cnpj": "ok"})
-        self.assertEqual(sorted({url.split("/")[2] for url in web.urls}), ["brasilapi.com.br", "minhareceita.org"])
+        # Only public company registries; the sanctions lists wait for their key.
+        self.assertEqual(sorted({url.split("/")[2] for url in web.urls}), ["brasilapi.com.br", "minhareceita.org", "rdap.registro.br"])
+        self.assertEqual(sources["sancoes-cgu"], "key-missing")
 
 
 if __name__ == "__main__":

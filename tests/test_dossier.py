@@ -144,6 +144,27 @@ class OtherTypesTests(unittest.TestCase):
         ]))
         self.assertIn("o certo seria 25", cpf["flags"][0]["text"])
 
+    def test_company_sites_sanctions_and_new_company(self):
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        company = build(run("cnpj", "00000000000191", [
+            result("brasilapi-cnpj", "organization", "EMPRESA X LTDA"),
+            result("brasilapi-cnpj", "founded", today),
+            result("registrobr-cnpj", "registrobr-holder", "3 domínio(s) .br", domains=3, ip_blocks=1, since="1998-02-09", holder="este CNPJ"),
+            result("registrobr-cnpj", "company-domain", "empresax.com.br", confirmed=True, how="Registro.br: o titular é este CNPJ"),
+            result("registrobr-cnpj", "company-domain", "empresax.com", confirmed=False, how="domínio do e-mail cadastrado na Receita"),
+            result("sancoes-cgu", "sanction", "Impedimento · Ministério X", list="CEIS (empresas inidôneas e suspensas)", start="01/01/2025"),
+        ]))
+        internet = section(company, "internet")
+        self.assertEqual(internet["rows"][0]["value"], "3 domínio(s) .br · 1 bloco(s) de IP")
+        self.assertEqual([item["value"] for item in internet["list"]["items"]], ["empresax.com.br", "empresax.com"])
+        self.assertTrue(internet["list"]["pivot"])
+        texts = [flag["text"] for flag in company["flags"]]
+        self.assertTrue(any("listas federais de sanção: CEIS" in text for text in texts))
+        self.assertTrue(any("menos de um ano" in text for text in texts))
+        self.assertEqual(section(company, "sanctions")["list"]["items"][0]["meta"], "CEIS · de 01/01/2025")
+
     def test_coverage_counts_and_failed_sources_by_name(self):
         dossier = build(run("domain", "example.org", [], sources=[
             {"connector_id": "dns-doh", "status": "ok"},
