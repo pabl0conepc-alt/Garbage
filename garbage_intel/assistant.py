@@ -75,6 +75,8 @@ Rules:
 - Correlation is not attribution: report shared infrastructure as a lead, not as proof of who is behind it.
 - Deleting asks the analyst first; if they decline, do not try another way.
 - Your files live in your own folder; use them for notes, drafts and exports.
+- Checking a site live and sending a case to MISP or OpenCTI ask the analyst first: the first contacts the site from their machine, the second shares the case.
+- For phishing: search the domain or URL (the dossier includes public phishing lists), check it live when the analyst agrees, and analyse e-mail headers they paste.
 """
 
 
@@ -170,6 +172,32 @@ TOOLS: dict[str, dict[str, Any]] = {
             ("name", "content"),
         ),
         _tool("delete_file", "Delete one of your files. Asks the analyst first.", {"name": _STR}, ("name",), confirm=True),
+        _tool(
+            "add_to_graph",
+            "Put a search result on the relationship graph: the searched artifact and, optionally, one finding from its dossier (value plus its label and section).",
+            {"run_id": _STR, "value": _STR, "label": _STR, "section": _STR},
+            ("run_id",),
+        ),
+        _tool(
+            "analyze_email",
+            "Analyse an e-mail message or its headers pasted by the analyst: hops and origin IP, SPF/DKIM/DMARC, sender inconsistencies, disguised links, attachments. Offline.",
+            {"raw": _STR},
+            ("raw",),
+        ),
+        _tool(
+            "live_check_url",
+            "Visit a URL or domain live from the analyst's machine: redirect chain, the final page's forms and loaded hosts, obfuscation, downloads, and a screenshot without JavaScript. Asks the analyst first.",
+            {"url": _STR, "screenshot": {"type": "boolean"}},
+            ("url",),
+            confirm=True,
+        ),
+        _tool(
+            "send_case",
+            "Send a case to the analyst's own MISP or OpenCTI (only when configured). Asks the analyst first.",
+            {"case_id": _STR, "platform": {"type": "string", "enum": ["misp", "opencti"]}},
+            ("case_id", "platform"),
+            confirm=True,
+        ),
         _tool(
             "open_screen",
             "Open a screen in the analyst's window. 'multisearch' with run_id opens a search result; 'board' or 'graph' with case_id opens that case.",
@@ -448,6 +476,39 @@ def _run_server_tool(database: str, name: str, arguments: dict[str, Any]) -> tup
     if name == "delete_file":
         file_name = _arg(arguments, "name", limit=100)
         return delete_file(database, file_name), {"summary": f"Excluiu {file_name}"}
+    if name == "add_to_graph":
+        from .graph_add import add_to_graph
+
+        value = _arg(arguments, "value", required=False, limit=300)
+        item = {"value": value, "label": _arg(arguments, "label", required=False, limit=120), "section": _arg(arguments, "section", required=False, limit=120)} if value else None
+        added = add_to_graph(database, run_id=_arg(arguments, "run_id", limit=36), item=item)
+        return {key: added[key] for key in ("root_id", "entity_id", "investigation_id")}, {
+            "summary": f"Pôs {value or 'o item pesquisado'} no grafo",
+            "link": f"#/graph/{added['investigation_id']}" if added["investigation_id"] else "#/graph",
+            "refresh": ["graph"],
+        }
+    if name == "analyze_email":
+        from .modules.email_analysis import analyse
+
+        raw = arguments.get("raw")
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValidationError("raw must be the message or its headers")
+        message = analyse(raw[:2_000_000].encode("utf-8", "replace"))
+        message.pop("body", None)
+        return message, {"summary": f"Analisou o e-mail “{message['subject'][:60]}”"}
+    if name == "live_check_url":
+        from .modules import live_check
+
+        checked = live_check.run(database, url=_arg(arguments, "url", limit=2000), take_screenshot=arguments.get("screenshot", True) is not False)
+        compact = {key: checked.get(key) for key in ("final_url", "final_status", "hops", "flags", "screenshot")}
+        page = checked.get("page") or {}
+        compact["page"] = {key: page.get(key) for key in ("title", "forms", "external_hosts", "obfuscation", "download", "technologies")}
+        return compact, {"summary": f"Verificou {checked['url']} ao vivo"}
+    if name == "send_case":
+        from . import cti_platforms
+
+        sent = cti_platforms.push_case(database, _arg(arguments, "platform", limit=10), _arg(arguments, "case_id", limit=36))
+        return sent, {"summary": f"Enviou o caso ao {sent['kind'].upper()}"}
     raise ValidationError(f"unknown tool: {name}")
 
 
@@ -495,6 +556,15 @@ def _confirm_text(database: str, name: str, arguments: dict[str, Any]) -> str:
             return "Excluir uma entidade que não foi encontrada?"
     if name == "delete_file":
         return f"Excluir o arquivo “{_arg(arguments, 'name', required=False, limit=100)}” da pasta do assistente?"
+    if name == "live_check_url":
+        return f"Acessar {_arg(arguments, 'url', required=False, limit=200)} ao vivo a partir deste computador? O site vai ver o seu IP."
+    if name == "send_case":
+        platform = {"misp": "MISP", "opencti": "OpenCTI"}.get(_arg(arguments, "platform", required=False, limit=10), "servidor")
+        try:
+            case = get_investigation(database, _arg(arguments, "case_id", limit=36))
+            return f"Enviar o caso “{case['name']}” ao seu {platform}?"
+        except (NotFoundError, ValidationError):
+            return f"Enviar um caso que não foi encontrado ao {platform}?"
     return f"Permitir {name}?"
 
 
@@ -786,7 +856,7 @@ def _execute(database: str, name: str, arguments: dict[str, Any], action: dict[s
     try:
         result, extra = _run_server_tool(database, name, arguments)
         action.update(status="done", **extra)
-        if name in {"create_case", "add_case_note", "create_entity", "link_entities", "delete_entity", "board_add", "board_move", "write_file", "delete_file"}:
+        if name in {"create_case", "add_case_note", "create_entity", "link_entities", "delete_entity", "board_add", "board_move", "write_file", "delete_file", "add_to_graph", "live_check_url", "send_case"}:
             with _connection(database) as connection:
                 record_activity(connection, action="assistant", target_type="assistant", target_id=name, summary=f"Assistant: {extra.get('summary', name)}")
         return _truncate(result), action

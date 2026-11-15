@@ -82,6 +82,8 @@ class RateLimiterTests(unittest.TestCase):
 
 class OrchestratorTests(RuntimeTestCase):
     def test_local_connectors_run_and_persist_provenance(self):
+        # Only the local sources: public ones depend on the network and their quotas.
+        update_settings(self.database, {"intel.allow_network": "false"})
         run = run_query(self.database, value="8.8.8.8")
         self.assertEqual(run["query_type"], "ipv4")
         self.assertEqual(run["status"], "completed")
