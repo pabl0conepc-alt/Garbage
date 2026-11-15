@@ -42,6 +42,11 @@ TLD_SWAPS = (
     "dev", "live", "store", "club", "me", "us", "cc", "com.br", "net.br", "br", "pt", "cn", "ru",
 )
 MAX_CHECKS = 160
+# Lookups in flight at once against the public resolver, and how long one may
+# take: a few names make the resolver wait on slow registries for 6 s or more,
+# and the whole check would wait for the slowest. Those count as unanswered.
+LOOKUP_WORKERS = 32
+LOOKUP_TIMEOUT_SECONDS = 4.0
 # Kinds checked first when there are more candidates than checks.
 PRIORITY = (12, 6, 1, 3, 4, 7, 9, 2, 8, 5, 10, 11)
 
@@ -162,6 +167,7 @@ def _exists(name: str) -> tuple[bool, list[str]]:
         f"{intel_connectors.DOH_URL}?name={quote(name, safe='')}&type=NS",
         hosts=intel_connectors.DOH_HOSTS,
         headers={"Accept": "application/dns-json"},
+        timeout=LOOKUP_TIMEOUT_SECONDS,
     )
     if not isinstance(data, dict):
         return False, []
@@ -179,7 +185,7 @@ def _connector(context: ConnectorContext) -> list[Finding]:
     names = [item["domain"] for item in checks]
     findings: list[Finding] = []
     failures = 0
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=LOOKUP_WORKERS) as pool:
         futures = {name: pool.submit(_exists, name) for name in names}
         for item in checks:
             try:
