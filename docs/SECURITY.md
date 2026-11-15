@@ -54,6 +54,14 @@ Out of scope:
   limitation instead of crashing the request.
 - Indicators are syntactic. The UI labels them as not reputation-checked.
 
+### Antivirus
+
+- ClamAV is optional. The bytes go to a clamd on this machine (a local socket
+  or a loopback TCP port; other hosts are refused) or to `clamscan` on its
+  standard input. Nothing is written to disk and nothing leaves the machine.
+- A detection is shown first among the findings; a clean result means only
+  that the installed signatures did not match.
+
 ### Evidence
 
 - Evidence is capped at 4 MiB.
