@@ -26,7 +26,7 @@ from .. import native
 from ..db import _connection, module_enabled, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
-from . import antivirus, document_text
+from . import antivirus, document_text, email_analysis
 from .embedded_scan import scan_signatures
 from .exif import parse_exif
 from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
@@ -76,6 +76,7 @@ _FORMAT_LABELS = {
     "xls": "Excel 97-2003 workbook",
     "ppt": "PowerPoint 97-2003 presentation",
     "msg": "Outlook message",
+    "eml": "E-mail message",
     "msi": "Windows Installer package",
     "lnk": "Windows shortcut (LNK)",
     "iso": "ISO 9660 disc image",
@@ -118,6 +119,7 @@ _MEDIA_TYPES = {
     "xls": "application/vnd.ms-excel",
     "ppt": "application/vnd.ms-powerpoint",
     "msg": "application/vnd.ms-outlook",
+    "eml": "message/rfc822",
     "msi": "application/x-msi",
     "lnk": "application/x-ms-shortcut",
     "iso": "application/x-iso9660-image",
@@ -159,6 +161,7 @@ _EXTENSIONS = {
     "xls": {"xls", "xlt", "xla"},
     "ppt": {"ppt", "pps", "pot"},
     "msg": {"msg"},
+    "eml": {"eml", "txt"},
     "msi": {"msi", "msp"},
     "lnk": {"lnk"},
     "iso": {"iso", "img"},
@@ -852,6 +855,8 @@ def _text_kind(data: bytes) -> str | None:
             return "json"
         except (json.JSONDecodeError, ValueError):
             pass
+    if email_analysis.looks_like_email(text):
+        return "eml"
     if lower.startswith("<!doctype html") or lower.startswith("<html") or "<html" in lower[:512]:
         return "html"
     if stripped.startswith("<?xml") or re.match(r"<[A-Za-z][^>]*>", stripped[:200]):
@@ -1362,7 +1367,14 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
                 "message": "Structural notes: " + "; ".join(sorted(set(flags))),
             }
         )
-    document = document_text.extract(data, kind)
+    if kind == "eml":
+        message = email_analysis.analyse(data)
+        structure["email"] = message
+        findings.extend(message["flags"])
+        extra_text.append("\n".join([message["origin_ip"], *(link["url"] for link in message["links"]), *(item["sha256"] for item in message["attachments"])]))
+        document = {"content": message["body"], "chars": len(message["body"]), "words": len(message["body"].split()), "method": "corpo do e-mail", "note": "", "truncated": False, "parts": 0}
+    else:
+        document = document_text.extract(data, kind)
     if document and document["content"]:
         extra_text.append(document["content"])
     indicators = _indicators_from_strings(strings, "\n".join(extra_text))
