@@ -26,6 +26,7 @@ from .. import native
 from ..db import _connection, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
+from . import document_text
 from .embedded_scan import scan_signatures
 from .exif import parse_exif
 from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
@@ -1361,6 +1362,9 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
                 "message": "Structural notes: " + "; ".join(sorted(set(flags))),
             }
         )
+    document = document_text.extract(data, kind)
+    if document and document["content"]:
+        extra_text.append(document["content"])
     indicators = _indicators_from_strings(strings, "\n".join(extra_text))
     hardening = describe_hardening(kind, data)
     similarity = similarity_digests(data)
@@ -1411,6 +1415,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         "imports": imports,
         "hardening": hardening,
         "findings": findings,
+        "text": document,
         "limitations": [
             "Static, read-only inspection only; no execution, emulation or sandbox detonation.",
             "Archive members are listed, never extracted to disk.",
@@ -1419,6 +1424,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             "Hashes identify these exact bytes and do not establish safety or provenance.",
             "TLSH and ssdeep measure byte-level resemblance; a close digest is not shared authorship or intent.",
             "Embedded signatures mark where another format appears to start; they are not validated or carved.",
+            "Document text is read in memory; OCR, when installed, runs Tesseract (and pdftoppm for PDFs) on a temporary copy with a time limit, and can misread.",
         ],
         "analysis_engine": "python-stdlib",
     }

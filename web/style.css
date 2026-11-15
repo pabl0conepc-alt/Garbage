@@ -8710,3 +8710,10 @@ body.assistant-open .assistant-fab { display: none; }
 .info-box-src { color: var(--text-muted); }
 .info-box-actions { display: flex; align-items: center; gap: 12px; }
 .info-box-actions .dossier-copy { opacity: 1; }
+
+/* ---- Document text (views-file.js) ----------------------------------- */
+.doc-text-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.doc-text-filter.input { flex: 1 1 220px; max-width: 360px; }
+.doc-text-count { color: var(--text-muted); font-size: var(--text-sm); }
+.doc-text { max-height: 480px; overflow: auto; margin: 0; padding: 14px 16px; border-radius: 14px; background: var(--surface-secondary); color: var(--text-primary); font-family: inherit; font-size: var(--text-base); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+.doc-text mark { background: var(--warning-soft); color: inherit; border-radius: 3px; }

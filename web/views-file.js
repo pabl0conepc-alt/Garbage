@@ -186,6 +186,67 @@
   const SHOW_PT = { normal: "normal", minimized: "minimizada", maximized: "maximizada" };
   const DRIVE_PT = { fixed: "disco fixo", removable: "removível", remote: "rede", cdrom: "CD/DVD", ramdisk: "RAM", unknown: "desconhecido", "no-root": "sem raiz" };
 
+  /* The document's readable text (or OCR), with a filter that counts and
+     marks matches, copy and download. */
+  function textPanel(text, fileName) {
+    if (!text) return null;
+    const body = el("pre", { class: "doc-text", tabindex: "0" });
+    const count = el("span", { class: "doc-text-count", role: "status" });
+    const filter = el("input", { class: "input doc-text-filter", type: "search", "aria-label": "Procurar no texto", autocomplete: "off" });
+    const draw = () => {
+      const needle = filter.value.trim();
+      if (!needle) {
+        body.replaceChildren(text.content);
+        count.textContent = `${G.formatNumber(text.words)} palavra(s)`;
+        return;
+      }
+      const lower = text.content.toLocaleLowerCase("pt-BR");
+      const target = needle.toLocaleLowerCase("pt-BR");
+      const parts = [];
+      let from = 0;
+      let hits = 0;
+      for (let at = lower.indexOf(target); at >= 0 && hits < 2000; at = lower.indexOf(target, at + target.length)) {
+        parts.push(text.content.slice(from, at), el("mark", {}, text.content.slice(at, at + target.length)));
+        from = at + target.length;
+        hits += 1;
+      }
+      parts.push(text.content.slice(from));
+      body.replaceChildren(...parts);
+      count.textContent = `${G.formatNumber(hits)} ocorrência(s)`;
+      body.querySelector("mark")?.scrollIntoView({ block: "nearest" });
+    };
+    filter.addEventListener("input", draw);
+    draw();
+    const copy = button("Copiar texto", async () => {
+      try {
+        await navigator.clipboard.writeText(text.content);
+        toast("Texto copiado.");
+      } catch {
+        toast("O navegador não permitiu copiar.", "warning");
+      }
+    });
+    const save = button("Baixar .txt", () => {
+      const link = el("a", { href: URL.createObjectURL(new Blob([text.content], { type: "text/plain;charset=utf-8" })), download: `${(fileName || "documento").replace(/\.[^.]+$/, "")}.txt` });
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+    const caption = [
+      { "OCR": "lido por OCR (pode ter erros)", "texto do Word": "texto do Word", "texto do Excel": "células do Excel", "texto do PowerPoint": "texto dos slides" }[text.method] || text.method,
+      text.truncated ? "cortado em 200 mil caracteres" : "",
+      text.note || "",
+    ].filter(Boolean).join(" · ");
+    if (!text.content) {
+      return panel({ title: "Texto do documento" }, el("p", { class: "muted-text" }, text.note || "Nenhum texto encontrado."));
+    }
+    return panel(
+      { title: "Texto do documento", caption },
+      el("div", { class: "doc-text-tools" }, filter, count, copy, save),
+      body,
+    );
+  }
+
   function macroPanel(projects) {
     const modules = projects.flatMap((project) => project.modules.map((module) => ({ ...module, storage: project.storage })));
     return panel(
@@ -728,6 +789,8 @@
       ]);
 
       const sections = [];
+      const textBlock = textPanel(analysis.text, analysis.file_name);
+      if (textBlock) sections.push(textBlock);
       if (structure.entries?.length) {
         sections.push(
           panel(

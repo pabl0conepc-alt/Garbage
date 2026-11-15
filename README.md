@@ -26,7 +26,7 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | Monitoring | Saved queries on a local schedule, differences between runs (what appeared, what disappeared) and notifications |
 | Graph and board | Relationship graph with eight layouts, multi-select, pin/hide, undo/redo, minimap, matrix and timeline views, path finding, PNG/SVG/GraphML/JSON export and GraphML/JSON import; investigation board with layers and autosave |
 | Analysis | Indicator extraction with refanging and provenance, correlation, analytics dashboard, typosquatting candidates (Rust) |
-| File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; YARA rules; TLSH/ssdeep; EXIF with GPS; perceptual hashes (pHash/dHash) and similar images |
+| File intelligence | Readable text of Word, Excel, PowerPoint, OpenDocument, EPUB, PDF, RTF and HTML, and OCR of images and scanned PDFs when Tesseract is installed (pdftoppm from Poppler for PDF pages); bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; YARA rules; TLSH/ssdeep; EXIF with GPS; perceptual hashes (pHash/dHash) and similar images |
 | GEOINT | Local world map (Natural Earth) with EXIF positions and approximate network locations, always with origin and precision |
 | CTI | Offline MITRE ATT&CK with case techniques and threat-actor profiles (groups ranked by techniques shared with a case, never as attribution), Sigma rules from SigmaHQ, TAXII 2.1 client, CISA KEV, NVD/EPSS/OSV, STIX 2.1 / MISP / IOC export with TLP |
 | Plugins | Local folder, validated manifest, declared permissions, approval by code SHA-256, separate process with brokered network |
@@ -121,7 +121,11 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
   **Cross-source matches** show observation count,
   independent source count and a corroboration strength. Matches are not
   reputation verdicts.
-- **File intelligence** — select or drop a file up to 4 MiB; results include
+- **File intelligence** — select or drop a file up to 4 MiB; documents show their
+  text in a searchable panel (copy, download as .txt) and the indicators inside
+  it. OCR is optional: install `tesseract` (with the `por` language for
+  Portuguese) and Poppler's `pdftoppm`, or point `GARBAGE_TESSERACT` /
+  `GARBAGE_PDFTOPPM` at them; results include
   hashes, format, entropy, strings, metadata, structure, findings, binary
   hardening markers and embedded indicators. An analysis can be attached to an
   open case as evidence.
