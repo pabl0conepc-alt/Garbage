@@ -20,6 +20,7 @@ from typing import Any, Iterable
 MAX_LIST = 500
 SOURCE_NAMES = {
     "abuseipdb": "AbuseIPDB", "brasilapi-cnpj": "BrasilAPI", "br-documents": "verificação offline",
+    "reverse-ip": "HackerTarget", "mnemonic-pdns": "Mnemonic", "ip-lists": "listas públicas", "dnsbl": "DNSBL",
     "hackertarget-hosts": "HackerTarget", "otx-hosts": "OTX", "subdomain-center": "subdomain.center", "dns-common-names": "nomes comuns",
     "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)", "contratos-cgu": "CGU (Portal da Transparência)",
     "certspotter": "Cert Spotter", "circl-hashlookup": "CIRCL", "cisa-kev-local": "CISA KEV",
@@ -279,6 +280,10 @@ def _domain(value: str, facts: Facts) -> dict[str, Any]:
         _section("urls", "URLs vistas", items=[
             {"value": entry["value"], "meta": _date(entry["data"].get("date", ""))} for entry in facts.all("observed-url")
         ], pivot=True),
+        _section("dns-history", "Histórico de DNS", items=[
+            {"value": entry["value"], "meta": " · ".join(part for part in (str(entry["data"].get("rrtype") or ""), f"{_date(entry['data'].get('first_seen'))} → {_date(entry['data'].get('last_seen'))}") if part)}
+            for entry in sorted(facts.all("pdns-answer"), key=lambda entry: str(entry["data"].get("last_seen") or ""), reverse=True)
+        ], pivot=True, note="Para onde o domínio já apontou: endereços e nomes, com a primeira e a última vez vistos." if facts.all("pdns-answer") else ""),
         _section("history", "Histórico", [
             _row("Primeira captura no Wayback", first_capture, sources=["wayback"]),
             _row("Capturas", (wayback or {}).get("value", "").replace("distinct captures", "capturas distintas"), sources=["wayback"]),
@@ -352,6 +357,20 @@ def _ip(value: str, facts: Facts) -> dict[str, Any]:
         flags.append({"level": "high", "text": f"Citado em {pulses['value']} relatório(s) de ameaça na AlienVault OTX."})
     if vulns:
         flags.append({"level": "medium", "text": f"{len(vulns)} vulnerabilidade(s) inferida(s) pelo Shodan para os serviços expostos."})
+    c2 = facts.first("botnet-c2")
+    drop = facts.first("drop-listed")
+    tor = facts.first("tor-exit")
+    cloud = facts.first("cloud-range")
+    blocklists = facts.all("blocklist")
+    blockcheck = facts.first("blocklist-check")
+    if c2:
+        flags.append({"level": "high", "text": f"Feodo Tracker: {c2['value']}" + (f", {c2['data'].get('status')}" if c2["data"].get("status") else "") + "."})
+    if drop:
+        flags.append({"level": "high", "text": f"Na Spamhaus DROP: {drop['value']}."})
+    if blocklists:
+        flags.append({"level": "medium", "text": f"Em {len(blocklists)} lista(s) antispam: {', '.join(entry['value'] for entry in blocklists)}."})
+    if tor:
+        flags.append({"level": "info", "text": "Nó de saída da rede Tor."})
     if (host or {}).get("data", {}).get("ports") and len(ports) > 10:
         flags.append({"level": "info", "text": f"{len(ports)} portas abertas."})
 
@@ -366,6 +385,12 @@ def _ip(value: str, facts: Facts) -> dict[str, Any]:
             _row("Nome no registro", facts.value("rdap-name"), sources=["rdap"]),
             _row("Contato de abuso", facts.value("abuse-contact"), sources=["rdap", "ripestat"]),
             _row("Anycast", "sim" if (facts.first("network-owner") or {}).get("data", {}).get("anycast") else ""),
+            _row(
+                "Nuvem ou CDN",
+                " · ".join(part for part in (cloud["value"], str(cloud["data"].get("service") or ""), str(cloud["data"].get("region") or "")) if part) if cloud else "",
+                hint=f"faixa publicada {cloud['data'].get('prefix', '')}" if cloud else "",
+                sources=["ip-lists"] if cloud else (),
+            ),
         ]),
         _section("location", "Localização aproximada da rede", [
             _row("Local", place, hint="da rede, não de uma pessoa", sources=["ipinfo"]),
@@ -388,7 +413,26 @@ def _ip(value: str, facts: Facts) -> dict[str, Any]:
             _row("GreyNoise", {"not observed": "não visto fazendo varreduras em massa"}.get((noise or {}).get("value", ""), (noise or {}).get("value", ""))),
             _row("AbuseIPDB", f"{abuse['value']}%" if abuse else ""),
             _row("AlienVault OTX", f"{pulses['value']} relatório(s)" if pulses else ""),
+            _row("Botnet (Feodo Tracker)", c2["value"] if c2 else ("não listado" if facts.first("lists-checked") else ""), sources=["ip-lists"]),
+            _row("Spamhaus DROP", drop["value"] if drop else ("não listado" if facts.first("lists-checked") else "")),
+            _row("Rede Tor", "nó de saída" if tor else ("não é saída Tor" if facts.first("lists-checked") else "")),
+            _row(
+                "Listas antispam",
+                (", ".join(entry["value"] for entry in blocklists) or "nenhuma") if blockcheck else "",
+                hint=" · ".join(part for part in (
+                    f"limpo em {len(blockcheck['data'].get('clean') or [])}" if blockcheck else "",
+                    f"sem resposta: {', '.join(blockcheck['data'].get('unanswered') or [])}" if blockcheck and blockcheck["data"].get("unanswered") else "",
+                ) if part),
+                sources=["dnsbl"] if blockcheck else (),
+            ),
         ]),
+        _section("cohosted", "Domínios no mesmo IP", items=[
+            {"value": entry["value"], "meta": ""} for entry in facts.all("cohosted-domain")
+        ], pivot=True, note="Em IPs de CDN ou hospedagem compartilhada, milhares de sites sem relação dividem o mesmo endereço." if facts.all("cohosted-domain") else ""),
+        _section("pdns", "Histórico de DNS", items=[
+            {"value": entry["value"], "meta": f"{_date(entry['data'].get('first_seen'))} → {_date(entry['data'].get('last_seen'))}"}
+            for entry in sorted(facts.all("pdns-name"), key=lambda entry: str(entry["data"].get("last_seen") or ""), reverse=True)
+        ], pivot=True, note="Nomes que já apontaram para este IP, com a primeira e a última vez que foram vistos." if facts.all("pdns-name") else ""),
     ]
     facts_line = [
         {"label": "Dono", "value": re.sub(r"^AS\d+\s+", "", owner)} if owner else None,
