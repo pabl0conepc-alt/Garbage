@@ -259,6 +259,7 @@
       button("Ajustar", () => fit(), { title: "Ajustar grafo à tela (F)" }),
       button("Nova entidade", () => newEntity(null), { title: "Nova entidade (N ou duplo clique no vazio)" }),
       button("Ligar", () => linkSelected(), { title: "Ligar as duas caixas selecionadas (L)" }),
+      button("Expandir infraestrutura", () => autoPivot(1), { title: "Pivô automático da caixa selecionada: IPs, servidores, AS e DNS passivo (X; Shift+X vai dois níveis)" }),
       undoButton,
       redoButton,
       exportMenu,
@@ -339,6 +340,27 @@
           await loadGraph({ keepPositions: true });
         },
       });
+    }
+
+    /* Automatic infrastructure pivot: DNS, AS, reverse name and recent
+       passive DNS become linked cards around the chosen domain or IP. */
+    async function autoPivot(depth = 1) {
+      const node = nodes.find((item) => item.id === (selectedId || [...selection][0]));
+      if (!node || !["domain", "ipv4", "ipv6"].includes(node.entity_type)) {
+        toast("Selecione a caixa de um domínio ou IP e aperte X.", "warning");
+        return;
+      }
+      toast(`Expandindo ${node.name}…`);
+      try {
+        const result = await api("/api/graph/pivot", {
+          method: "POST",
+          body: JSON.stringify({ entity_id: node.id, depth, investigation_id: investigationId || null }),
+        });
+        toast(`${result.created} caixa(s) nova(s), ${result.reused} já existente(s), ${result.relationships} ligação(ões)${result.skipped ? `; ${result.skipped} deixada(s) de fora pelo limite` : ""}.`);
+        await loadGraph({ keepPositions: true });
+      } catch (error) {
+        toast(error.message, "error");
+      }
     }
 
     async function linkSelected() {
@@ -2102,6 +2124,9 @@
       } else if (!modifier && key === "l") {
         event.preventDefault();
         linkSelected();
+      } else if (!modifier && key === "x") {
+        event.preventDefault();
+        autoPivot(event.shiftKey ? 2 : 1);
       } else if (!modifier && key === "d") {
         event.preventDefault();
         toggleDockPin();
@@ -2170,6 +2195,7 @@
       ["Duplo clique no vazio · N", "Nova entidade ali"],
       ["Duplo clique na caixa", "Pesquisar a partir dela"],
       ["L", "Ligar as duas selecionadas"],
+      ["X · Shift+X", "Expandir a infraestrutura (1 ou 2 níveis)"],
       ["E", "Abrir/fechar as selecionadas (ou todas)"],
       ["P · H", "Fixar · ocultar"],
       ["F · + · −", "Ajustar · zoom"],
