@@ -61,6 +61,10 @@
 
   /* New findings carry details inside the sentence; rebuild them by code. */
   const FINDING_PT = {
+    "antivirus-detection": (m) => {
+      const name = m.match(/^ClamAV detected (.+?)\. Treat/);
+      return `O ClamAV detectou ${name ? name[1] : "uma ameaça"}. Trate o arquivo como malicioso e não o abra fora de um ambiente isolado.`;
+    },
     "exif-gps": (m) => {
       const coords = m.match(/\(([-\d.]+), ([-\d.]+)\)/);
       return `A imagem traz coordenadas GPS (${coords ? `${coords[1]}, ${coords[2]}` : "?"}) gravadas pelo dispositivo. Podem estar desatualizadas, imprecisas ou editadas: trate como pista, não como a origem do arquivo.`;
@@ -188,6 +192,15 @@
 
   /* The document's readable text (or OCR), with a filter that counts and
      marks matches, copy and download. */
+  function antivirusLine(result) {
+    if (!result) return null;
+    const engine = result.engine ? String(result.engine).split("/")[0] : "ClamAV";
+    if (result.status === "infected") return el("span", {}, badge("Ameaça", "warning"), " ", el("code", {}, result.signature), el("span", { class: "muted-text" }, ` · ${engine}`));
+    if (result.status === "clean") return el("span", {}, `Nada detectado · ${engine}`);
+    if (result.status === "error") return el("span", { class: "muted-text" }, `A verificação falhou: ${result.error}`);
+    return el("span", { class: "muted-text" }, "ClamAV não instalado: instale o clamav (e rode o freshclam) para verificar arquivos");
+  }
+
   function textPanel(text, fileName) {
     if (!text) return null;
     const body = el("pre", { class: "doc-text", tabindex: "0" });
@@ -784,6 +797,7 @@
         ],
         ["pHash (visual)", analysis.perceptual ? el("code", { class: "hash" }, analysis.perceptual.phash) : null],
         ["dHash (visual)", analysis.perceptual ? el("code", { class: "hash" }, analysis.perceptual.dhash) : null],
+        ["Antivírus", antivirusLine(analysis.antivirus)],
         ["Assinatura (magic bytes)", el("code", {}, analysis.magic_hex)],
         ["Entropia", `${analysis.entropy} / 8`],
       ]);

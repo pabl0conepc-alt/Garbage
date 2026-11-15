@@ -218,6 +218,14 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "enabled",
     ),
     (
+        "antivirus",
+        "Antivirus scan",
+        "ClamAV scan of analysed files when ClamAV is installed (clamd socket or clamscan); local, nothing leaves the machine.",
+        "Evidence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
         "ai-assistant",
         "AI assistant",
         "Side panel where a model chosen on OpenRouter works the workstation through its own logged actions.",

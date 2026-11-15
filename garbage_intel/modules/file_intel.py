@@ -23,10 +23,10 @@ from typing import Any
 from xml.etree import ElementTree
 
 from .. import native
-from ..db import _connection, new_id, record_activity, utc_now
+from ..db import _connection, module_enabled, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
-from . import document_text
+from . import antivirus, document_text
 from .embedded_scan import scan_signatures
 from .exif import parse_exif
 from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
@@ -1516,6 +1516,20 @@ def analyze_file(
                     "code": "yara-error",
                     "message": "Some rule sets did not finish: " + ", ".join(failures[:5]) + ".",
                 }
+            )
+    with _connection(database) as connection:
+        scan_wanted = module_enabled(connection, "antivirus")
+    if scan_wanted:
+        verdict = antivirus.scan(data)
+        analysis["antivirus"] = verdict
+        if verdict["status"] == "infected":
+            analysis["findings"].insert(
+                0,
+                {
+                    "level": "warning",
+                    "code": "antivirus-detection",
+                    "message": f"ClamAV detected {verdict['signature']}. Treat the file as malicious; do not open it outside an isolated environment.",
+                },
             )
     if investigation_id:
         investigation_id = clean_text(
