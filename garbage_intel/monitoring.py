@@ -6,7 +6,8 @@ normal orchestrator, so the network, target-contact and key gates, cache,
 rate limits and provenance all apply. Each run is compared with the
 previous one by (source, result type, value): what appeared and what
 disappeared are stored with the run, and a change creates an in-app
-notification.
+notification and, when one is set, a webhook message (Discord, Slack or
+plain JSON).
 
 The scheduler only runs while the GARBAGE server is running; a missed slot
 runs once when the server is back, not once per missed interval.
@@ -15,11 +16,13 @@ runs once when the server is back, not once per missed interval.
 from __future__ import annotations
 
 import json
+import re
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .db import _connection, new_id, record_activity, require_module, utc_now
+from . import net
+from .db import _connection, new_id, record_activity, require_module, setting_value, utc_now
 from .errors import ConflictError, NotFoundError, ValidationError
 from .intel import connectors, detect_artifact, get_run, run_query
 from .validation import clean_text
@@ -238,6 +241,12 @@ def _run_monitor(database: str, monitor_id: str, trigger: str) -> dict[str, Any]
                 "INSERT INTO notifications (id, kind, monitor_id, monitor_run_id, title, body, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?, '')",
                 (new_id(), status, monitor_id, record["id"], title[:200], error or ", ".join(item["value"] for item in added[:5])[:500], finished),
             )
+    if status in ("changed", "error"):
+        notify_webhook(database, {
+            "event": status, "monitor": monitor["name"], "value": monitor["query_value"],
+            "added": [item["value"] for item in added[:20]], "removed": [item["value"] for item in removed[:20]],
+            "error": error, "time": finished,
+        })
     return record
 
 
@@ -338,3 +347,103 @@ class Scheduler:
 
 
 SCHEDULER = Scheduler()
+
+
+# ---------------------------------------------------------------------------
+# Webhooks
+
+WEBHOOK_FORMATS = ("discord", "slack", "json")
+WEBHOOK_SEND: Any = None  # tests replace the background sender
+
+
+def _save(connection: Any, key: str, value: str) -> None:
+    connection.execute(
+        """INSERT INTO application_settings (key, value, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at""",
+        (key, value, utc_now()),
+    )
+
+
+def webhook(database: str) -> dict[str, Any]:
+    """The configured webhook; the URL carries a token, so only its host shows."""
+    with _connection(database) as connection:
+        url = setting_value(connection, "monitoring.webhook_url", "")
+        kind = setting_value(connection, "monitoring.webhook_format", "json") or "json"
+        last = setting_value(connection, "monitoring.webhook_last", "")
+    host = re.sub(r"^https://([^/]+).*$", r"\1", url) if url else ""
+    return {"configured": bool(url), "host": host, "hint": f"…{url[-4:]}" if len(url) > 12 else "", "format": kind, "last": json.loads(last) if last else None}
+
+
+def set_webhook(database: str, *, url: object, kind: object = "json") -> dict[str, Any]:
+    if not isinstance(url, str) or not url.strip():
+        raise ValidationError("url is required")
+    url = url.strip()
+    try:
+        net.validate_url(url)
+    except net.NetworkPolicyError as exc:
+        raise ValidationError(f"webhook address refused: {exc}") from exc
+    if kind not in WEBHOOK_FORMATS:
+        raise ValidationError(f"format must be one of: {', '.join(WEBHOOK_FORMATS)}")
+    with _connection(database) as connection:
+        _save(connection, "monitoring.webhook_url", url)
+        _save(connection, "monitoring.webhook_format", str(kind))
+        record_activity(connection, action="settings", target_type="monitoring", target_id="webhook", summary=f"Monitor webhook set ({kind})")
+    return webhook(database)
+
+
+def delete_webhook(database: str) -> dict[str, Any]:
+    with _connection(database) as connection:
+        connection.execute("DELETE FROM application_settings WHERE key IN ('monitoring.webhook_url', 'monitoring.webhook_format', 'monitoring.webhook_last')")
+    return {"deleted": True}
+
+
+def _message(kind: str, event: dict[str, Any]) -> dict[str, Any]:
+    if event["event"] == "test":
+        text = "GARBAGE: teste de aviso do monitoramento."
+    elif event["event"] == "error":
+        text = f"GARBAGE · {event['monitor']} ({event['value']}): a verificação falhou — {event.get('error') or 'erro'}"
+    else:
+        parts = [f"GARBAGE · {event['monitor']} ({event['value']}) mudou"]
+        if event["added"]:
+            parts.append("Novos: " + ", ".join(event["added"][:10]))
+        if event["removed"]:
+            parts.append("Sumiram: " + ", ".join(event["removed"][:10]))
+        text = "\n".join(parts)
+    if kind == "discord":
+        return {"content": text[:1900], "allowed_mentions": {"parse": []}}
+    if kind == "slack":
+        return {"text": text[:3000]}
+    return {**event, "text": text}
+
+
+def _deliver(database: str, url: str, kind: str, event: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps(_message(kind, event), ensure_ascii=False).encode("utf-8")
+    host = re.sub(r"^https://([^/:]+).*$", r"\1", url)
+    try:
+        result = net.fetch(url, method="POST", headers={"Content-Type": "application/json"}, body=body, allowed_hosts=(host,), max_bytes=64 * 1024, timeout=15.0)
+        outcome = {"ok": result.status < 400, "status": result.status, "time": utc_now()}
+    except (net.NetworkError, net.NetworkPolicyError) as exc:
+        outcome = {"ok": False, "error": str(exc).replace(url, "***")[:200], "time": utc_now()}
+    with _connection(database) as connection:
+        _save(connection, "monitoring.webhook_last", json.dumps(outcome))
+    return outcome
+
+
+def notify_webhook(database: str, event: dict[str, Any], *, wait: bool = False) -> dict[str, Any] | None:
+    with _connection(database) as connection:
+        url = setting_value(connection, "monitoring.webhook_url", "")
+        kind = setting_value(connection, "monitoring.webhook_format", "json") or "json"
+    if not url:
+        return None
+    if wait:
+        return _deliver(database, url, kind, event)
+    sender = WEBHOOK_SEND or (lambda work: threading.Thread(target=work, name="webhook", daemon=True).start())
+    sender(lambda: _deliver(database, url, kind, event))
+    return None
+
+
+def test_webhook(database: str) -> dict[str, Any]:
+    outcome = notify_webhook(database, {"event": "test", "monitor": "", "value": "", "added": [], "removed": [], "time": utc_now()}, wait=True)
+    if outcome is None:
+        raise ValidationError("set a webhook first")
+    return outcome

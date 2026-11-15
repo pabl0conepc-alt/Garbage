@@ -229,6 +229,58 @@
       );
     }
 
+    const webhookHost = el("div");
+
+    async function drawWebhook() {
+      let hook;
+      try {
+        hook = await api("/api/monitors/webhook");
+      } catch (error) {
+        webhookHost.replaceChildren(inlineError(error.message));
+        return;
+      }
+      const url = el("input", { class: "input", type: "password", id: "webhook-url", autocomplete: "off", placeholder: hook.configured ? `${hook.host} ${hook.hint}` : "https://discord.com/api/webhooks/…" });
+      const format = el("select", { class: "input compact-select", id: "webhook-format", "aria-label": "Formato" },
+        ...[["discord", "Discord"], ["slack", "Slack"], ["json", "JSON (outro sistema)"]].map(([value, label]) => el("option", { value, selected: value === hook.format }, label)));
+      const save = button("Salvar", async () => {
+        if (!url.value.trim()) {
+          toast("Cole o endereço do webhook.", "warning");
+          return;
+        }
+        try {
+          await api("/api/monitors/webhook", { method: "PUT", body: JSON.stringify({ url: url.value.trim(), format: format.value }) });
+          toast("Webhook salvo.");
+          drawWebhook();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }, { variant: "button-primary" });
+      const test = button("Enviar teste", async () => {
+        try {
+          const result = await api("/api/monitors/webhook/test", { method: "POST", body: "{}" });
+          toast(result.ok ? "Teste enviado." : `O webhook não aceitou: ${result.error || `HTTP ${result.status}`}`, result.ok ? "success" : "error");
+          drawWebhook();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }, { disabled: !hook.configured });
+      const remove = button("Remover", async () => {
+        await api("/api/monitors/webhook", { method: "DELETE" });
+        drawWebhook();
+      }, { disabled: !hook.configured });
+      const last = hook.last
+        ? el("p", { class: "run-meta" }, `Último envio ${relativeTime(hook.last.time)}: ${hook.last.ok ? "aceito" : `falhou (${hook.last.error || `HTTP ${hook.last.status}`})`}.`)
+        : null;
+      webhookHost.replaceChildren(
+        panel(
+          { title: "Avisos por webhook", caption: hook.configured ? `Enviando para ${hook.host}` : "Receba as mudanças no Discord, no Slack ou em outro sistema" },
+          el("div", { class: "graph-toolbar" }, url, format, save, test, remove),
+          last,
+          el("p", { class: "tool-limit" }, "Quando um monitoramento muda ou falha, os valores novos e os que sumiram vão para esse endereço. O endereço do webhook funciona como senha: ele não volta para a tela."),
+        ),
+      );
+    }
+
     root.replaceChildren(
       pageHeader({
         eyebrow: "INTELIGÊNCIA",
@@ -238,9 +290,11 @@
       listHost,
       historyHost,
       formHost,
+      webhookHost,
     );
     await loadList();
     drawForm();
+    drawWebhook();
   }
 
   /* Notification bell -------------------------------------------------- */
