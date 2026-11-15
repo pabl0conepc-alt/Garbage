@@ -662,6 +662,10 @@ notifications. Only one run of the same monitor happens at a time.
 | GET | `/api/monitors/{id}/runs` | Last 30 runs, newest first, each with `trigger` (`manual` or `schedule`), counts, differences (up to 500 items each), per-source status and `intel_run_id` |
 | GET | `/api/notifications?unread=1&limit=` | Notifications, newest first, and the `unread` total |
 | POST | `/api/notifications/read` | `{ids: [ids] | "all"}` marks them read |
+| GET | `/api/monitors/webhook` | `configured`, `host`, `hint`, `format` (`discord`, `slack`, `json`), `last` delivery; the URL itself is never returned |
+| PUT | `/api/monitors/webhook` | `{url, format}`; https only, public hosts |
+| DELETE | `/api/monitors/webhook` | Removes it |
+| POST | `/api/monitors/webhook/test` | Sends a test message and returns the outcome |
 
 ## Transforms
 

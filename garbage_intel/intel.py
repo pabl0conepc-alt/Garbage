@@ -1058,6 +1058,7 @@ from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402
 from .modules import intel_host_connectors as _intel_host_connectors  # noqa: E402,F401
 from .modules import intel_ip_connectors as _intel_ip_connectors  # noqa: E402,F401
 from .modules import intel_list_connectors as _intel_list_connectors  # noqa: E402,F401
+from .modules import intel_ransomware_connectors as _intel_ransomware_connectors  # noqa: E402,F401
 from . import cti_platforms as _cti_platforms  # noqa: E402,F401
 from .modules import typosquat as _typosquat  # noqa: E402,F401
 from .modules import intel_br_connectors as _intel_br_connectors  # noqa: E402,F401

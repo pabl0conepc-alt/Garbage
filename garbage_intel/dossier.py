@@ -20,7 +20,7 @@ from typing import Any, Iterable
 MAX_LIST = 500
 SOURCE_NAMES = {
     "abuseipdb": "AbuseIPDB", "brasilapi-cnpj": "BrasilAPI", "br-documents": "verificação offline",
-    "misp": "MISP", "opencti": "OpenCTI", "phishing-lists": "listas de phishing",
+    "misp": "MISP", "opencti": "OpenCTI", "ransomware-live": "ransomware.live", "phishing-lists": "listas de phishing",
     "reverse-ip": "HackerTarget", "mnemonic-pdns": "Mnemonic", "ip-lists": "listas públicas", "dnsbl": "DNSBL",
     "hackertarget-hosts": "HackerTarget", "otx-hosts": "OTX", "subdomain-center": "subdomain.center", "dns-common-names": "nomes comuns",
     "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)", "contratos-cgu": "CGU (Portal da Transparência)",
@@ -1106,6 +1106,34 @@ def _cve(value: str, facts: Facts) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _ransomware(body: dict[str, Any], facts: Facts) -> None:
+    """Ransomware leak-site posts naming the organisation (group claims)."""
+    victims = facts.all("ransomware-victim")
+    mentions = facts.all("ransomware-mention")
+    check = facts.first("ransomware-check")
+    if not (victims or mentions or check):
+        return
+
+    def item(entry: dict[str, Any]) -> dict[str, str]:
+        data = entry["data"]
+        return {"value": entry["value"], "meta": " · ".join(part for part in (
+            str(data.get("group") or ""), _date(data.get("attack_date", "")), str(data.get("country") or ""), str(data.get("match") or "")) if part)}
+
+    section = _section(
+        "ransomware",
+        "Sites de vazamento de ransomware",
+        [_row("Resultado", f"{len(victims)} post(s) com esta organização" if victims else "nenhum post com esta organização",
+              hint=check["value"] if check else "", sources=["ransomware-live"])],
+        items=[item(entry) for entry in victims] + [item(entry) for entry in mentions[:10]],
+        note="Cada post é a alegação do grupo, não a confirmação de um ataque. Menções na descrição de outra vítima costumam ser clientes ou parceiros dela.",
+    )
+    if section:
+        body.setdefault("sections", []).append(section)
+    if victims:
+        groups = sorted({entry["data"].get("group", "") for entry in victims if entry["data"].get("group")})
+        body.setdefault("flags", []).insert(0, {"level": "high", "text": f"Aparece como vítima em site de ransomware ({', '.join(groups)})."})
+
+
 def _phishing(body: dict[str, Any], facts: Facts) -> None:
     """Public phishing lists that name the value or names under it."""
     listed = facts.all("phishing-listed")
@@ -1185,6 +1213,7 @@ def build(run: dict[str, Any], labels: dict[str, str] | None = None) -> dict[str
     body.setdefault("subtitle", "")
     _own_intel(body, facts)
     _phishing(body, facts)
+    _ransomware(body, facts)
     sources = run.get("sources") or []
     coverage = {
         "answered": sum(1 for item in sources if item["status"] == "ok"),

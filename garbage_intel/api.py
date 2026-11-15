@@ -1489,6 +1489,30 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     # --- MISP and OpenCTI -------------------------------------------------------
 
+    def api_monitor_webhook(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.webhook(self.database_path))
+
+    def api_monitor_webhook_put(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.set_webhook(self.database_path, url=payload.get("url"), kind=payload.get("format", "json")))
+
+    def api_monitor_webhook_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.delete_webhook(self.database_path))
+
+    def api_monitor_webhook_test(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.test_webhook(self.database_path))
+
     def api_cti_platforms(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -2138,6 +2162,10 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("POST", re.compile(r"^/api/graph/add$"), "api_graph_add", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/plugins$"), "api_plugins", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/monitors/webhook$"), "api_monitor_webhook", MAX_BODY_BYTES),
+    ("PUT", re.compile(r"^/api/monitors/webhook$"), "api_monitor_webhook_put", MAX_BODY_BYTES),
+    ("DELETE", re.compile(r"^/api/monitors/webhook$"), "api_monitor_webhook_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/monitors/webhook/test$"), "api_monitor_webhook_test", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/monitors$"), "api_monitors", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/monitors$"), "api_monitor_create", MAX_BODY_BYTES),
     ("PATCH", re.compile(rf"^/api/monitors/{_ID_PATTERN}$"), "api_monitor_patch", MAX_BODY_BYTES),
