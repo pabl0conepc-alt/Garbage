@@ -51,7 +51,8 @@ G.NAV = [
     label: "Pesquisa",
     icon: "radar",
     items: [
-      { view: "multisearch", label: "Pesquisa multifonte", tab: "Multifonte", icon: "radar", module: "intel-orchestrator" },
+      { view: "multisearch", label: "Pesquisa multifonte", tab: "Pesquisa", icon: "radar", module: "intel-orchestrator" },
+      { view: "graph", label: "Grafo de relacionamentos", tab: "Grafo", icon: "graph", module: "relationship-graph" },
       { view: "monitors", label: "Monitoramento", tab: "Monitoramento", icon: "pulse", module: "monitoring" },
       { view: "indicators", label: "Pesquisa de inteligência", tab: "Indicadores", icon: "indicators", module: "indicator-engine" },
     ],
@@ -70,9 +71,8 @@ G.NAV = [
   {
     key: "analysis",
     label: "Análise",
-    icon: "graph",
+    icon: "chart",
     items: [
-      { view: "graph", label: "Grafo de relacionamentos", tab: "Grafo", icon: "graph", module: "relationship-graph" },
       { view: "board", label: "Quadro de investigação", tab: "Quadro", icon: "board", module: "investigation-board" },
       { view: "analytics", label: "Painel analítico", tab: "Painel", icon: "chart", module: "analytics" },
       { view: "resolution", label: "Resolução de entidades", tab: "Resolução", icon: "merge", module: "entity-resolution" },

@@ -394,23 +394,60 @@
     );
   }
 
-  function dossierRow(row, section, ctx) {
-    const key = `row-${section.id}-${row.label}`;
-    return el(
+  /* Every finding is a small box: closed it shows what it is and its
+     value; a click opens the details (hint, sources, actions). The "+"
+     beside it puts it on the graph and opens the graph on it. */
+  function infoBox({ key, label, value, shown = value, meta, hint, sources, pivotValue, section, ctx, attack = false }) {
+    const open = ctx.ui.open.has(key);
+    const details = el(
       "div",
-      { class: "dossier-row" },
-      el("dt", {}, row.label),
+      { class: "info-box-details", hidden: !open },
+      hint ? el("p", { class: "info-box-hint" }, hint) : null,
+      meta ? el("p", { class: "info-box-hint" }, meta) : null,
+      sources?.length ? el("p", { class: "info-box-src" }, `${sources.length > 1 ? "Fontes" : "Fonte"}: ${sources.join(", ")}`) : null,
       el(
-        "dd",
-        {},
-        row.pivot ? pivotControl(row.value, ctx, key) : el("span", { class: "dossier-value" }, row.value),
-        row.hint ? el("span", { class: "dossier-hint" }, row.hint) : null,
-        row.sources?.length
-          ? el("span", { class: "dossier-src" }, `${row.sources.length > 1 ? "fontes" : "fonte"}: ${row.sources.join(", ")}`)
-          : null,
-        row.pivot ? copyButton(row.value, `${key}-copy`) : null,
+        "div",
+        { class: "info-box-actions" },
+        pivotValue ? pivotControl(pivotValue, { ...ctx, attack }, `${key}-pivot`, "Pesquisar") : null,
+        copyButton(value, `${key}-copy`),
       ),
     );
+    const head = el(
+      "button",
+      { type: "button", class: "info-box-head", "aria-expanded": String(open), "data-focus-key": key },
+      label ? el("span", { class: "info-box-label" }, label) : null,
+      el("span", { class: "info-box-value" }, shown),
+    );
+    const box = el("div", { class: `info-box${open ? " is-open" : ""}` });
+    head.addEventListener("click", () => {
+      const next = !ctx.ui.open.has(key);
+      if (next) ctx.ui.open.add(key);
+      else ctx.ui.open.delete(key);
+      box.classList.toggle("is-open", next);
+      head.setAttribute("aria-expanded", String(next));
+      details.hidden = !next;
+    });
+    const add = el(
+      "button",
+      { type: "button", class: "info-box-add", "aria-label": `Adicionar ${shown} ao grafo`, title: "Adicionar ao grafo", "data-focus-key": `${key}-add` },
+      G.icon("plus", { size: 16 }),
+    );
+    add.addEventListener("click", () => ctx.add?.({ label, value, pivot_value: pivotValue || "", hint, meta, sources, section: section.title }));
+    box.append(head, add, details);
+    return box;
+  }
+
+  function dossierRow(row, section, ctx) {
+    return infoBox({
+      key: `row-${section.id}-${row.label}`,
+      label: row.label,
+      value: row.value,
+      hint: row.hint,
+      sources: row.sources,
+      pivotValue: row.pivot ? row.value : "",
+      section,
+      ctx,
+    });
   }
 
   function dossierList(section, ctx) {
@@ -425,18 +462,16 @@
 
     const item = (entry) => {
       const value = pivotable ? cleanValue({ result_type: section.id, value: entry.value }) : entry.value;
-      const key = `item-${section.id}-${entry.value}`;
-      return el(
-        "li",
-        { class: "dossier-item" },
-        pivotable && value
-          ? pivotControl(value, { ...ctx, attack }, key, entry.value)
-          : el("span", { class: "dossier-value" }, entry.value),
-        entry.meta
-          ? el("span", { class: "dossier-item-meta" }, section.id === "lookalikes" ? LOOKALIKE_KIND[entry.meta] || entry.meta : entry.meta)
-          : null,
-        copyButton(entry.value, `${key}-copy`),
-      );
+      const box = infoBox({
+        key: `item-${section.id}-${entry.value}`,
+        value: entry.value,
+        meta: entry.meta ? (section.id === "lookalikes" ? LOOKALIKE_KIND[entry.meta] || entry.meta : entry.meta) : "",
+        pivotValue: pivotable && value ? value : "",
+        section,
+        ctx,
+        attack,
+      });
+      return el("li", { class: "dossier-item-box" }, box);
     };
 
     const draw = () => {
@@ -447,7 +482,7 @@
       const expanded = ui.expanded.has(section.id);
       const shown = needle || expanded ? matching : matching.slice(0, LIST_PREVIEW);
       ul.replaceChildren(...shown.map(item));
-      if (!shown.length) ul.append(el("li", { class: "dossier-item is-empty" }, "Nada corresponde ao filtro."));
+      if (!shown.length) ul.append(el("li", { class: "dossier-item-box is-empty" }, "Nada corresponde ao filtro."));
       const parts = [];
       if (needle) parts.push(el("span", { class: "dossier-muted" }, `${G.formatNumber(matching.length)} de ${G.formatNumber(items.length)}`));
       else if (long) {
@@ -525,7 +560,7 @@
         section.title,
         section.list && section.list.total > 1 ? el("span", { class: "dossier-count" }, G.formatNumber(section.list.total)) : null,
       ),
-      section.rows?.length ? el("dl", { class: "dossier-rows" }, ...section.rows.map((row) => dossierRow(row, section, ctx))) : null,
+      section.rows?.length ? el("div", { class: "info-grid" }, ...section.rows.map((row) => dossierRow(row, section, ctx))) : null,
       section.list && listed ? dossierList(section, ctx) : null,
       section.note ? el("p", { class: "dossier-note" }, section.note) : null,
     );
@@ -900,7 +935,7 @@
   /* ---------------------------------------------------------------- */
 
   function freshUi() {
-    return { expanded: new Set(), filters: {}, rawExpanded: new Set(), sourcesOpen: false, rawOpen: false };
+    return { expanded: new Set(), open: new Set(), filters: {}, rawExpanded: new Set(), sourcesOpen: false, rawOpen: false };
   }
 
   /* Coverage computed on the client when a run carries no dossier. */
@@ -1038,6 +1073,21 @@
         ),
     };
 
+    async function addToGraph(run, item = null) {
+      try {
+        const added = await api("/api/graph/add", {
+          method: "POST",
+          body: JSON.stringify({ run_id: run.id, item, investigation_id: caseSelect.value || run.investigation_id || null }),
+        });
+        G.state.graphFocus = added.entity_id;
+        G.state.graphRoot = added.root_id;
+        toast(item ? `${item.value} foi para o grafo.` : `${run.query_value} foi para o grafo.`);
+        G.go("graph", added.investigation_id || undefined);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
     async function recordRun(run) {
       const investigationId = caseSelect.value || run.investigation_id;
       if (!investigationId) {
@@ -1077,6 +1127,7 @@
           el(
             "div",
             { class: "dossier-actions" },
+            button("Adicionar ao grafo", () => addToGraph(run), { variant: "button-primary" }),
             button("Exportar JSON", () => downloadJson(`garbage-intel-${shortId(run.id)}.json`, run)),
             button("Registrar no caso", () => recordRun(run), {
               variant: caseId ? "button-primary" : "button-secondary",
@@ -1282,7 +1333,7 @@
     function showRun(run) {
       const dossier = run.dossier || fallbackDossier(run);
       const sections = dossier.sections || [];
-      const blocks = sections.map((section) => dossierSection(section, { ui, pivot: handlers.pivot }));
+      const blocks = sections.map((section) => dossierSection(section, { ui, pivot: handlers.pivot, add: (item) => addToGraph(run, item) }));
       if (dossier.map && Number.isFinite(Number(dossier.map.lat)) && Number.isFinite(Number(dossier.map.lon))) {
         const anchor = sections.findIndex((section) => ["location", "place", "network", "company", "contact"].includes(section.id));
         const at = sections.findIndex((section) => ["location", "place"].includes(section.id));
