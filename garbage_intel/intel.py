@@ -1055,5 +1055,6 @@ from .modules import intel_target_connectors as _intel_target_connectors  # noqa
 from .modules import intel_open_connectors as _intel_open_connectors  # noqa: E402,F401
 from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: E402,F401
 from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402,F401
+from .modules import intel_host_connectors as _intel_host_connectors  # noqa: E402,F401
 from .modules import typosquat as _typosquat  # noqa: E402,F401
 from .modules import intel_br_connectors as _intel_br_connectors  # noqa: E402,F401

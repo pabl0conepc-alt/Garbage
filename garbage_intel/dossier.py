@@ -20,6 +20,7 @@ from typing import Any, Iterable
 MAX_LIST = 500
 SOURCE_NAMES = {
     "abuseipdb": "AbuseIPDB", "brasilapi-cnpj": "BrasilAPI", "br-documents": "verificação offline",
+    "hackertarget-hosts": "HackerTarget", "otx-hosts": "OTX", "subdomain-center": "subdomain.center", "dns-common-names": "nomes comuns",
     "registrobr-cnpj": "Registro.br", "sancoes-cgu": "CGU (Portal da Transparência)", "contratos-cgu": "CGU (Portal da Transparência)",
     "certspotter": "Cert Spotter", "circl-hashlookup": "CIRCL", "cisa-kev-local": "CISA KEV",
     "crtsh": "crt.sh", "cymru-asn": "Team Cymru", "dns-doh": "DNS", "first-epss": "EPSS",
@@ -178,8 +179,9 @@ def _domain(value: str, facts: Facts) -> dict[str, Any]:
         name = entry["value"].lower().lstrip("*.").rstrip(".")
         if not _belongs(name, domain) or name == domain:
             continue
-        item = subdomains.setdefault(name, {"value": name, "sources": set(), "first_seen": "", "last_seen": ""})
+        item = subdomains.setdefault(name, {"value": name, "sources": set(), "first_seen": "", "last_seen": "", "ip": ""})
         item["sources"].update(entry["sources"])
+        item["ip"] = item["ip"] or str(entry["data"].get("ip") or "")
         for key in ("first_seen", "last_seen"):
             seen = str(entry["data"].get(key) or "")
             if seen and (not item[key] or (seen < item[key] if key == "first_seen" else seen > item[key])):
@@ -188,6 +190,7 @@ def _domain(value: str, facts: Facts) -> dict[str, Any]:
         {
             "value": item["value"],
             "meta": " · ".join(part for part in (
+                item["ip"],
                 f"visto até {_date(item['last_seen'])}" if item["last_seen"] else "",
                 ", ".join(source_name(source) for source in sorted(item["sources"])),
             ) if part),
@@ -272,7 +275,10 @@ def _domain(value: str, facts: Facts) -> dict[str, Any]:
             _row("Chave", facts.value("cert-key")),
         ]),
         _section("subdomains", "Subdomínios", items=sub_items, total=len(sub_items), pivot=True,
-                 note="Nomes que aparecem em certificados públicos e registros DNS. Existir num certificado não garante que esteja no ar."),
+                 note="Nomes vistos em certificados públicos, registros DNS e bases passivas (HackerTarget, OTX, subdomain.center). O IP mostrado é o que a fonte viu; nem todo nome está no ar hoje."),
+        _section("urls", "URLs vistas", items=[
+            {"value": entry["value"], "meta": _date(entry["data"].get("date", ""))} for entry in facts.all("observed-url")
+        ], pivot=True),
         _section("history", "Histórico", [
             _row("Primeira captura no Wayback", first_capture, sources=["wayback"]),
             _row("Capturas", (wayback or {}).get("value", "").replace("distinct captures", "capturas distintas"), sources=["wayback"]),
