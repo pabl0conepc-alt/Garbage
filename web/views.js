@@ -409,6 +409,8 @@
     entities = null,
     relationship = null,
     onSaved = null,
+    sourceId = "",
+    targetId = "",
   } = {}) {
     const isEdit = Boolean(relationship?.id);
     let entityOptions = entities;
@@ -428,12 +430,14 @@
           label: "Entidade de origem",
           type: "select",
           options: entityOptions.map((entity) => [entity.id, entity.name]),
+          value: sourceId || undefined,
         },
         {
           name: "target_entity_id",
           label: "Entidade de destino",
           type: "select",
           options: entityOptions.map((entity) => [entity.id, entity.name]),
+          value: targetId || undefined,
         },
       );
     }

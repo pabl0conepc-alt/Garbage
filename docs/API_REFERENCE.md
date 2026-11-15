@@ -528,6 +528,14 @@ community_size}}}`, computed on the simple undirected graph (duplicates and
 self-loops ignored). `GET /api/graph/path?from=&to=&investigation_id=` returns
 the shortest chain of recorded relationships.
 
+`POST /api/graph/add` with `{run_id, item?: {value, label?, pivot_value?,
+hint?, meta?, sources?, section?}, investigation_id?}` (201) is the search
+screen's "+": the run's artifact becomes (or reuses) an entity, and the item
+becomes one too, typed when its value is a domain, IP, URL, e-mail or hash and
+`other` otherwise (its description keeps the label, hint and sources), joined
+by a `related-to` relationship described by the section. Both are linked to
+the case. Returns `root_id`, `entity_id`, `investigation_id`, `created`.
+
 `POST /api/graph/import` with `{content, format: "graphml"|"json", file_name?,
 investigation_id?, commit?}` previews (default, `200`) or commits (`201`) a
 graph built elsewhere. JSON may be this app's export, Cytoscape (`elements`),

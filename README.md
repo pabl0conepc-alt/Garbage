@@ -129,8 +129,14 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
 - **Sources** — record where material came from and how it was obtained.
 - **Boards** — arrange entity-backed cards and notes, connect them, group them
   into layers and export the board as SVG.
-- **Graph** — inspect recorded relationships; layout is client-side and derived
-  only from stored entities and edges.
+- **Graph** — a tab next to Search that fills the screen. Entities are cards
+  (icon, kind, name) that open on click to show what is recorded; edges are
+  curves between cards. A dock on the right appears on hover: graph types
+  (keys 1–8), settings, actions, the selected entity and the shortcut list
+  (N or double-click: new entity, L: link two cards, E: open cards, F: fit,
+  D: keep the dock open). Every finding on the search screen is a box with a
+  **+** that puts it on the graph, linked to the searched artifact, and opens
+  the graph on it.
 - **Threat intel** — view the cached CISA KEV catalogue and refresh it
   explicitly. Page loads never contact CISA.
 - **Modules / Settings** — inspect capability state, storage and preferences.

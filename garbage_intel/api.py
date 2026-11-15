@@ -59,6 +59,7 @@ from .modules import sigma, taxii
 from . import assistant, cases, custody, monitoring, plugins
 from .report_sections import parse_sections
 from .graph_io import import_graph
+from .graph_add import add_to_graph
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
 from .transforms import entity_history, list_transforms, run_transforms
 from .intel_keys import delete_key, list_keys, set_key
@@ -1865,6 +1866,15 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("geoint")
         self._json(200, geo_points(self.database_path, investigation_id=_query_text(query, "investigation_id", "") or None))
 
+    def api_graph_add(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("relationship-graph")
+        unknown = set(payload) - {"run_id", "item", "investigation_id"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(201, add_to_graph(self.database_path, run_id=payload.get("run_id"), item=payload.get("item"), investigation_id=payload.get("investigation_id")))
+
     def api_graph_import(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
@@ -2037,6 +2047,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ),
     ("GET", re.compile(r"^/api/graph$"), "api_graph", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
+    ("POST", re.compile(r"^/api/graph/add$"), "api_graph_add", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/plugins$"), "api_plugins", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/monitors$"), "api_monitors", MAX_BODY_BYTES),
