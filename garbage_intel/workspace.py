@@ -176,6 +176,17 @@ def _coerce_setting(entry: dict[str, Any], value: object) -> str:
         if value and (not value.startswith("https://") or len(value) > 500 or any(c.isspace() for c in value)):
             raise ValidationError(f"{key} must be empty or an https:// URL of at most 500 characters")
         return value
+    if entry["type"] in ("text", "endpoint"):
+        if not isinstance(value, str):
+            raise ValidationError(f"{key} must be a string")
+        value = value.strip()
+        if len(value) > 500 or any(c in value for c in "\r\n\t"):
+            raise ValidationError(f"{key} must be a single line of at most 500 characters")
+        if entry["type"] == "endpoint" and value:
+            from .llm import validate_endpoint
+
+            value = validate_endpoint(value)
+        return value
     raise ValidationError(f"unsupported setting type for {key}")
 
 

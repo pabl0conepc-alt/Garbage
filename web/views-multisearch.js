@@ -212,6 +212,7 @@
     nvd: "Opcional: aumenta o limite de 5 para 50 consultas a cada 30 s.",
     ipinfo: "Opcional: sem token, o limite anônimo é menor.",
     discord: "Obrigatório para o perfil de usuário. Crie um bot no Developer Portal e cole o token dele.",
+    ai: "Para o Investigador IA em endpoints com chave (OpenRouter, OpenAI, Anthropic…). Servidores locais como Ollama não precisam.",
     hibp: "Obrigatória e paga. Mostra só em quais vazamentos o e-mail apareceu.",
   };
 

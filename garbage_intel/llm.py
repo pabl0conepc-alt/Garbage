@@ -1,0 +1,153 @@
+"""Language-model client for the AI investigator (catalogue block 7).
+
+Three settings choose the model: ``ai.provider`` (disabled,
+openai-compatible or anthropic), ``ai.base_url`` and ``ai.model``. The key, if
+the endpoint needs one, is the ``ai`` provider in the local key store.
+
+- openai-compatible covers local servers (Ollama, LM Studio, llama.cpp,
+  vLLM, LocalAI) and hosted ones (OpenRouter, OpenAI, Groq, Together, ...):
+  POST {base_url}/chat/completions.
+- anthropic calls the Messages API: POST {base_url}/v1/messages.
+
+An endpoint on this machine or the local network may use http:// on any
+port and is reached directly; any other endpoint must be public https://
+and goes through the same guarded fetcher as the connectors. Raw HTTP is used
+because GARBAGE ships without third-party packages.
+"""
+
+from __future__ import annotations
+
+import http.client
+import ipaddress
+import json
+import socket
+from typing import Any
+from urllib.parse import urlsplit
+
+from . import net
+from .db import _connection, setting_value
+from .errors import ValidationError
+from .intel_keys import get_secret
+
+PROVIDERS = ("disabled", "openai-compatible", "anthropic")
+DEFAULT_BASE = {"openai-compatible": "http://localhost:11434/v1", "anthropic": "https://api.anthropic.com"}
+ANTHROPIC_VERSION = "2026-10-21"
+TIMEOUT_SECONDS = 300.0
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+FETCH = net.fetch
+
+
+class LLMError(ValueError):
+    pass
+
+
+def is_local_endpoint(url: str) -> bool:
+    """True for loopback or private-network hosts (the operator's own machine or LAN)."""
+    host = (urlsplit(url).hostname or "").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        addresses = [ipaddress.ip_address(host)]
+    except ValueError:
+        try:
+            addresses = [ipaddress.ip_address(info[4][0].split("%")[0]) for info in socket.getaddrinfo(host, None)]
+        except socket.gaierror:
+            return False
+    return bool(addresses) and all(address.is_loopback or address.is_private or address.is_link_local for address in addresses)
+
+
+def validate_endpoint(url: str) -> str:
+    url = url.strip().rstrip("/")
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password:
+        raise ValidationError("ai.base_url must be an http(s) URL without credentials")
+    if parts.scheme == "http" and not is_local_endpoint(url):
+        raise ValidationError("ai.base_url may use http:// only for this machine or the local network; use https:// otherwise")
+    return url
+
+
+def config(database: str) -> dict[str, Any]:
+    with _connection(database) as connection:
+        provider = setting_value(connection, "ai.provider", "disabled") or "disabled"
+        base_url = setting_value(connection, "ai.base_url", "") or DEFAULT_BASE.get(provider, "")
+        model = setting_value(connection, "ai.model", "")
+    return {
+        "provider": provider,
+        "base_url": base_url.rstrip("/"),
+        "model": model,
+        "has_key": bool(get_secret(database, "ai")),
+        "local": bool(base_url) and is_local_endpoint(base_url),
+    }
+
+
+def _post(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json", "Accept": "application/json", **headers}
+    if is_local_endpoint(url):
+        parts = urlsplit(url)
+        connection_class = http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
+        connection = connection_class(parts.hostname, parts.port, timeout=TIMEOUT_SECONDS)
+        try:
+            target = parts.path + (f"?{parts.query}" if parts.query else "")
+            connection.request("POST", target, body=body, headers=headers)
+            response = connection.getresponse()
+            status, raw = response.status, response.read(MAX_RESPONSE_BYTES + 1)
+        except OSError as exc:
+            raise LLMError(f"could not reach the local model server: {exc}") from exc
+        finally:
+            connection.close()
+    else:
+        try:
+            result = FETCH(url, method="POST", headers=headers, body=body, max_bytes=MAX_RESPONSE_BYTES, timeout=TIMEOUT_SECONDS)
+        except (net.NetworkError, net.NetworkPolicyError) as exc:
+            raise LLMError(str(exc)) from exc
+        status, raw = result.status, result.body
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise LLMError(f"the model server answered HTTP {status} with a non-JSON body") from exc
+    if status >= 400:
+        detail = data.get("error") if isinstance(data, dict) else None
+        message = detail.get("message") if isinstance(detail, dict) else detail
+        raise LLMError(f"the model server answered HTTP {status}: {str(message or data)[:300]}")
+    return data
+
+
+def chat(database: str, system: str, messages: list[dict[str, str]], *, max_tokens: int = 4096) -> str:
+    """Send a conversation and return the assistant's text."""
+    settings = config(database)
+    provider, model = settings["provider"], settings["model"]
+    if provider == "disabled":
+        raise LLMError("no model is configured: choose a provider in Settings")
+    if not model:
+        raise LLMError("ai.model is empty: set the model name in Settings")
+    key = get_secret(database, "ai") or ""
+    base = validate_endpoint(settings["base_url"])
+    if provider == "anthropic":
+        if not key:
+            raise LLMError("the Anthropic API needs a key: save it under API keys → AI model")
+        data = _post(
+            f"{base}/v1/messages",
+            {"x-api-key": key, "anthropic-version": ANTHROPIC_VERSION},
+            {"model": model, "max_tokens": max_tokens, "system": system, "messages": messages},
+        )
+        if data.get("stop_reason") == "refusal":
+            raise LLMError("the model declined this request")
+        text = "".join(block.get("text", "") for block in data.get("content", []) if isinstance(block, dict) and block.get("type") == "text")
+    else:
+        headers = {"Authorization": f"Bearer {key}"} if key else {}
+        if "openrouter.ai" in base:
+            headers.update({"HTTP-Referer": "https://github.com/pabl0conepc-alt/Garbage", "X-Title": "GARBAGE"})
+        data = _post(
+            f"{base}/chat/completions",
+            headers,
+            {"model": model, "max_tokens": max_tokens, "messages": [{"role": "system", "content": system}, *messages]},
+        )
+        choices = data.get("choices") or []
+        message = choices[0].get("message", {}) if choices and isinstance(choices[0], dict) else {}
+        text = message.get("content") or ""
+        if isinstance(text, list):  # some servers return content parts
+            text = "".join(part.get("text", "") for part in text if isinstance(part, dict))
+    if not text.strip():
+        raise LLMError("the model returned an empty answer")
+    return text

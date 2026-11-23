@@ -68,7 +68,7 @@ from .intel import (
     run_query,
 )
 from .modules.email_headers import analyze_headers
-from . import geo, preservation, watchlist
+from . import ai_agent, geo, preservation, watchlist
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -151,6 +151,7 @@ _STATIC_FILES = {
     "views-transforms.js": "text/javascript; charset=utf-8",
     "views-watchlist.js": "text/javascript; charset=utf-8",
     "views-geo.js": "text/javascript; charset=utf-8",
+    "views-ai.js": "text/javascript; charset=utf-8",
     "graph-tools.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
@@ -1086,6 +1087,19 @@ class RequestHandler(BaseHTTPRequestHandler):
     def api_geo_point_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         geo.delete_point(self.database_path, match.group(1))
         self._json(200, {"deleted": match.group(1)})
+
+    def api_ai_sessions_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, ai_agent.list_sessions(self.database_path))
+
+    def api_ai_sessions_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(201, ai_agent.start_session(self.database_path, payload))
+
+    def api_ai_session_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, ai_agent.get_session(self.database_path, match.group(1)))
+
+    def api_ai_test(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, ai_agent.test_connection(self.database_path))
 
     def api_evidence_preview(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
@@ -2160,6 +2174,10 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/capture$"), "api_evidence_capture", MAX_BODY_BYTES),
     ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/evidence-package$"), "api_evidence_package", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/evidence/verify-all$"), "api_evidence_verify_all", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/ai/sessions$"), "api_ai_sessions_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/ai/sessions$"), "api_ai_sessions_post", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/ai/sessions/{_ID_PATTERN}$"), "api_ai_session_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/ai/test$"), "api_ai_test", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/geo$"), "api_geo_get", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/geo/export$"), "api_geo_export", MAX_BODY_BYTES),
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/geo-points$"), "api_geo_point_post", MAX_BODY_BYTES),

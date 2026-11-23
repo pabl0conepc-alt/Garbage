@@ -5563,3 +5563,9 @@ dialog:focus-visible,
 .geo-dot.origin-photo { fill: var(--warning); }
 .geo-dot.origin-network { fill: var(--info); stroke-dasharray: 2 2; }
 .geo-dot.origin-manual { fill: var(--success); }
+
+/* AI investigator */
+.ai-form { display: flex; flex-direction: column; gap: 8px; }
+.ai-report h3 { margin: 14px 0 6px; font-size: 1rem; }
+.ai-report p { margin: 4px 0; white-space: pre-wrap; }
+.ai-report .ai-bullet { padding-left: 12px; }

@@ -48,6 +48,7 @@ G.NAV = [
     items: [
       { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
       { view: "watchlist", label: "Monitoramento", icon: "activity", module: "intel-orchestrator" },
+      { view: "ai", label: "Investigador IA", icon: "radar", module: "intel-orchestrator" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
@@ -900,6 +901,9 @@ const SETTING_TEXT = {
   "report.include_limitations": ["Incluir limitações nos relatórios", "Acrescenta limitações analíticas explícitas aos relatórios gerados."],
   "intel.allow_network": ["Permitir que conectores de inteligência usem a rede", "Quando desativado, conectores que acessam serviços externos são ignorados; os conectores locais continuam funcionando."],
   "intel.allow_target_contact": ["Permitir contato com o alvo", "Quando desativado, conectores que enviam uma requisição ou handshake TLS aos servidores do próprio artefato são ignorados. Também exige rede."],
+  "ai.provider": ["Provedor do modelo de IA", "Modelo usado pelo Investigador IA. openai-compatible serve para Ollama, LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI e similares; anthropic usa a API Messages."],
+  "ai.base_url": ["Endpoint da IA", "URL base, por exemplo http://localhost:11434/v1 (Ollama), http://localhost:1234/v1 (LM Studio), https://openrouter.ai/api/v1, https://api.openai.com/v1 ou https://api.anthropic.com. Vazio usa o padrão do provedor. http:// só para esta máquina ou a rede local."],
+  "ai.model": ["Nome do modelo de IA", "ID do modelo como o endpoint o chama, por exemplo llama3.1:8b, qwen2.5:14b, openai/gpt-4o-mini, anthropic/claude-sonnet-5-5 (OpenRouter) ou claude-opus-5-5."],
   "intel.webhook_url": ["Webhook de consultas concluídas", "URL HTTPS que recebe um resumo quando uma consulta multifonte termina (webhooks do Discord funcionam direto). Vazio desativa; exige acesso à rede."],
   "intel.max_workers": ["Conectores em paralelo", "Número máximo de conectores consultados ao mesmo tempo para um artefato."],
   "report.include_raw_observations": ["Incluir observações completas", "Inclui o texto completo das observações nos relatórios HTML gerados."],
