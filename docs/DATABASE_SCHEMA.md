@@ -194,6 +194,42 @@ One row per transform per run; the entity's enrichment history.
 
 What a merged entity was, kept on the entity it was merged into.
 
+### `monitors`
+
+`id`, `name`, `query_type`, `query_value`, `connectors_json`,
+`interval_minutes`, `investigation_id`, `enabled`, `created_at`, `updated_at`,
+`next_run_at`, `last_run_at`, `last_status`
+
+### `monitor_runs`
+
+`id`, `monitor_id`, `intel_run_id`, `trigger`, `status`, `added_count`,
+`removed_count`, `diff_json` (added, removed, per-source status), `error`,
+`started_at`, `finished_at`
+
+### `notifications`
+
+`id`, `kind` (`changed` or `error`), `monitor_id`,
+`monitor_run_id`, `title`, `body`, `created_at`, `read_at` (empty while unread)
+
+### `assistant_conversations`
+
+`id`, `title` (first line of the first message), `model`, `status`
+(`running`, `waiting`, `idle`, `error`), `error`, `created_at`, `updated_at`
+
+### `assistant_messages`
+
+`id` (autoincrement, gives the order), `conversation_id`, `role` (`user`,
+`assistant`, `tool`), `content`, `tool_calls_json` (assistant turns),
+`tool_call_id`, `tool_name`, `action_json` (tool rows: arguments, status,
+summary, link, interface action; user rows: the screen that was open),
+`created_at`. Tool rows are the assistant's action log. `assistant.model` is
+stored in `application_settings`.
+
+### `cti_pushes`
+
+`platform` (`misp` or `opencti`), `investigation_id`, `remote_id`, `link`,
+`object_count`, `pushed_at`; one row per platform and case, the last send.
+
 ### `application_settings`
 
 `key`, `value`, `updated_at`
@@ -219,6 +255,14 @@ Applied migration ledger used to make startup idempotent.
 | 7 | Offline MITRE ATT&CK and case techniques | `attack_meta`, `attack_tactics`, `attack_techniques`, `attack_objects`, `attack_relations`, `case_techniques` |
 | 8 | Transforms, entity resolution and module registry corrections | `transform_runs`, `resolution_decisions`, `entity_aliases`; `nvd-connector` and `external-osint-connectors` set to enabled where still `planned` |
 | 9 | Full-text search index | `search_index` (FTS5, `unicode61 remove_diacritics 2`) over investigations, entities, sources, evidence, observations and file analyses, kept current by triggers; skipped where SQLite has no FTS5 |
+| 10 | TAXII feeds and Sigma rules | `taxii_servers`, `taxii_objects`, `taxii_pulls`, `sigma_rules`, `sigma_meta` |
+| 11 | Local plugin approvals | `plugin_registry` (enabled flag, approved code SHA-256 and manifest, time) |
+| 12 | Case objective and archive, evidence custody and notes | `investigations.objective`, `investigations.archived_at`; `evidence_events` (hash-chained, kept after deletion) and `evidence_notes`; logs started for existing evidence |
+| 13 | Monitors and notifications | `monitors`, `monitor_runs`, `notifications` |
+| 14 | Search index covers case objectives | Investigation triggers recreated with `objective` in the indexed text and case rows reindexed; nothing to do without FTS5 |
+| 15 | AI assistant conversations and action log | `assistant_conversations`, `assistant_messages` |
+| 16 | Cases sent to MISP and OpenCTI | `cti_pushes` (platform, case, remote id, link, object count, time) |
+| 17 | Live URL checks with screenshots | `live_checks` (url, final url, result JSON, PNG screenshot, case, time) |
 
 Version 1 databases are upgraded in place. The application file format used by
 the evidence folder is unchanged.

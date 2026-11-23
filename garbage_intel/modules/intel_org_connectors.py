@@ -223,7 +223,15 @@ def _security_txt_connector(context: ConnectorContext) -> list[Finding]:
     host = _host(context)
     if not host:
         return []
-    page = FETCH(f"https://{host}/.well-known/security.txt", max_bytes=MAX_SECURITY_TXT, timeout=15.0)
+    url = f"https://{host}/.well-known/security.txt"
+    try:
+        page = FETCH(url, max_bytes=MAX_SECURITY_TXT, timeout=15.0)
+    except NetworkError as exc:
+        # A large answer at this path is the site's own page served for any
+        # address, not a security.txt: report "not published", not a failure.
+        if "exceeds" not in str(exc):
+            raise
+        return [Finding("security-txt", "not published", {"reason": "the server answered with a large page instead of a security.txt"}, url, "")]
     source, digest = page.final_url, page.sha256
     content_type = page.headers.get("content-type", "")
     text = page.body.decode("utf-8", "replace")

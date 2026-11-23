@@ -23,6 +23,7 @@ from .db import (
     record_activity,
     utc_now,
 )
+from . import custody
 from .errors import ConflictError, NotFoundError, ValidationError
 from .modules.imaging import inspect_image, sha256_hex
 from .validation import choice, clean_text, safe_reference, search_pattern
@@ -209,6 +210,18 @@ def add_evidence(
                 investigation_id=investigation_id,
                 summary=f"Evidence added: {clean_title}",
             )
+            custody.record(
+                connection,
+                evidence_id=evidence_id,
+                investigation_id=investigation_id,
+                action="recorded",
+                sha256=digest_value,
+                detail=(
+                    f"Recorded {kind} '{clean_title}'"
+                    + (f" from file {clean_name}, {len(data)} bytes" if data is not None else "")
+                    + f"; acquired {acquired}" + (f"; reference {reference}" if reference else "")
+                ),
+            )
         except sqlite3.Error:
             if stored_name:
                 try:
@@ -309,6 +322,15 @@ def verify_evidence(database: str, evidence_id: str) -> dict[str, Any]:
             "UPDATE evidence SET integrity_status = ? WHERE id = ?",
             (status, evidence_id),
         )
+        investigation = connection.execute("SELECT investigation_id FROM evidence WHERE id = ?", (evidence_id,)).fetchone()
+        custody.record(
+            connection,
+            evidence_id=evidence_id,
+            investigation_id=investigation["investigation_id"],
+            action="verified",
+            sha256=row["sha256"],
+            detail=f"Integrity check: {status}" + (f"; computed {computed}" if computed else "; stored file not found"),
+        )
         record_activity(
             connection,
             action="verify",
@@ -326,11 +348,13 @@ def verify_evidence(database: str, evidence_id: str) -> dict[str, Any]:
 
 
 def read_evidence_file(
-    database: str, evidence_id: str
+    database: str, evidence_id: str, *, purpose: str = ""
 ) -> tuple[bytes, str, str, bool]:
+    """The stored file; with ``purpose`` the access joins the custody log."""
     with _connection(database) as connection:
         row = connection.execute(
-            """SELECT stored_name, media_type, original_name, image_format
+            """SELECT stored_name, media_type, original_name, image_format,
+                      investigation_id, sha256
                FROM evidence WHERE id = ?""",
             (evidence_id,),
         ).fetchone()
@@ -339,6 +363,16 @@ def read_evidence_file(
     if not row["stored_name"]:
         raise ConflictError("evidence has no stored file")
     data = _read_stored_file(database, row["stored_name"])
+    if purpose:
+        with _connection(database) as connection:
+            custody.record(
+                connection,
+                evidence_id=evidence_id,
+                investigation_id=row["investigation_id"],
+                action="accessed",
+                sha256=row["sha256"],
+                detail=f"File {purpose} through the local interface ({len(data)} bytes, sha256 {sha256_hex(data)})",
+            )
     return (
         data,
         row["media_type"] or "application/octet-stream",
@@ -350,11 +384,19 @@ def read_evidence_file(
 def delete_evidence(database: str, evidence_id: str) -> dict[str, Any]:
     with _connection(database) as connection:
         row = connection.execute(
-            "SELECT id, title, stored_name FROM evidence WHERE id = ?",
+            "SELECT id, title, stored_name, investigation_id, sha256 FROM evidence WHERE id = ?",
             (evidence_id,),
         ).fetchone()
         if row is None:
             raise NotFoundError(f"evidence not found: {evidence_id}")
+        custody.record(
+            connection,
+            evidence_id=evidence_id,
+            investigation_id=row["investigation_id"],
+            action="deleted",
+            sha256=row["sha256"],
+            detail=f"Evidence record '{row['title']}' and its stored file deleted",
+        )
         connection.execute("DELETE FROM evidence WHERE id = ?", (evidence_id,))
         record_activity(
             connection,

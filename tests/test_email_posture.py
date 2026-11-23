@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from garbage_intel.intel import ConnectorContext, _run_one, connectors
 from garbage_intel.modules import intel_connectors
-from garbage_intel.modules.email_headers import analyze_headers
+from garbage_intel.modules.email_analysis import analyse
 from garbage_intel.net import FetchResult
 
 BY_ID = {connector.connector_id: connector for connector in connectors()}
@@ -99,10 +99,10 @@ class PostureTests(unittest.TestCase):
 
 HEADERS = """Delivered-To: victim@example.org
 Received: by 2002:a05:6a10:1234 with SMTP id abc; Mon, 4 Nov 2024 10:00:09 -0800 (PST)
-Received: from mail.evil.test (mail.evil.test [203.0.113.7])
+Received: from mail.evil.test (mail.evil.test [45.33.32.156])
         by mx.google.com with ESMTPS id x; Mon, 4 Nov 2024 10:00:05 -0800 (PST)
 Authentication-Results: mx.google.com;
-       spf=fail (google.com: domain of bounce@evil.test does not designate 203.0.113.7) smtp.mailfrom=bounce@evil.test;
+       spf=fail (google.com: domain of bounce@evil.test does not designate 45.33.32.156) smtp.mailfrom=bounce@evil.test;
        dmarc=fail (p=REJECT sp=REJECT dis=QUARANTINE) header.from=bank.example
 Return-Path: <bounce@evil.test>
 From: "security@bank.example" <alerts@bank.example>
@@ -117,38 +117,34 @@ Click http://evil.test/login now
 
 
 class HeaderTests(unittest.TestCase):
+    """Checks ported from the earlier header analyser into email_analysis."""
+
     def test_spoofed_message(self):
-        result = analyze_headers(HEADERS)
-        codes = {item["code"] for item in result["signals"]}
-        self.assertTrue({"spf-fail", "dmarc-fail", "unaligned", "reply-to-mismatch", "no-dkim"} <= codes)
-        self.assertNotIn("display-name-spoof", codes)  # name is an address in the same domain
+        result = analyse(HEADERS.encode())
+        codes = {item["code"] for item in result["flags"]}
+        self.assertTrue({"spf-fail", "dmarc-fail", "unaligned", "reply-to-mismatch"} <= codes)
         self.assertEqual(result["risk"], "high")
-        self.assertEqual(result["origin_ip"], "203.0.113.7")
-        self.assertEqual(result["hops"][0]["from"], "mail.evil.test")
-        self.assertEqual(result["hops"][1]["delay_seconds"], 4)
-        self.assertEqual(result["authentication"]["smtp_mailfrom_domain"], "evil.test")
-        # The body after the blank line is not parsed.
-        self.assertNotIn("http://evil.test/login", [item["value"] for item in result["indicators"]])
+        self.assertEqual(result["origin_ip"], "45.33.32.156")
+        self.assertEqual(result["smtp_mailfrom"], "evil.test")
 
     def test_aligned_message(self):
         good = (
             "From: News <news@shop.example>\n"
             "Authentication-Results: mx; spf=pass smtp.mailfrom=bounces.shop.example; dkim=pass header.d=shop.example; dmarc=pass\n"
             "DKIM-Signature: v=1; a=rsa-sha256; d=shop.example; s=s1; b=abc\n"
-            "Subject: Hello\n"
+            "Subject: Hello\n\nbody\n"
         )
-        result = analyze_headers(good)
-        self.assertEqual(result["authentication"]["alignment"], {"spf": True, "dkim": True})
+        result = analyse(good.encode())
+        self.assertNotIn("unaligned", {item["code"] for item in result["flags"]})
         self.assertEqual(result["risk"], "low")
 
-    def test_display_name_spoof_and_bad_input(self):
-        result = analyze_headers('From: "ceo@company.example" <x@freemail.test>\nSubject: hi\n')
-        self.assertIn("display-name-spoof", {item["code"] for item in result["signals"]})
-        for bad in ("", "   ", None):
-            with self.assertRaises(ValueError):
-                analyze_headers(bad)
-        with self.assertRaises(ValueError):
-            analyze_headers("x" * (300 * 1024))
+    def test_clock_skew(self):
+        skewed = (
+            "Received: by b.example; Mon, 4 Nov 2024 09:00:00 +0000\n"
+            "Received: from a.example (a.example [203.0.113.9]) by b.example; Mon, 4 Nov 2024 10:00:00 +0000\n"
+            "From: x@a.example\nSubject: t\n\nb\n"
+        )
+        self.assertIn("time-travel", {item["code"] for item in analyse(skewed.encode())["flags"]})
 
 
 if __name__ == "__main__":

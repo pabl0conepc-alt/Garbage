@@ -53,6 +53,37 @@ Case membership:
 | POST/DELETE | `/api/investigations/{id}/entities[/{entityId}]` |
 | POST/DELETE | `/api/investigations/{id}/sources[/{sourceId}]` |
 
+### Case lifecycle and packages
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST, PATCH | `/api/investigations`, `/api/investigations/{id}` | Also accept `objective` (up to 2,000 characters) |
+| POST | `/api/investigations/{id}/archive` | `{archived: true|false}`; archived cases carry `archived_at` and leave the active lists; nothing is deleted |
+| POST | `/api/investigations/{id}/duplicate` | `{name?}`: new open case with the objective, entities, case relationships, sources and techniques; observations and evidence stay with the original |
+| GET | `/api/investigations/{id}/package?files=1` | Download a `garbage-case` v1 package: case, status history, observations, entities, relationships, sources, evidence with custody log, notes and (unless `files=0`) file contents up to 48 MiB, techniques and file analyses, plus a SHA-256 over the canonical content |
+| POST | `/api/cases/import` | `{package, commit?, name?}`: preview (default) or import into a new case. A changed package (digest mismatch) is refused; each evidence file is re-hashed and refused when it does not match; entities are reused by type and identifier |
+
+### Evidence custody and notes
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/evidence/{id}/custody` | Hash-chained events (`recorded`, `verified`, `accessed`, `annotated`, `exported`, `imported`, `imported-history`, `deleted`) with `intact`, `broken_at` and the head hash; still readable after the evidence is deleted |
+| GET, POST | `/api/evidence/{id}/notes` | List or add an analyst note (`{body}`), which also enters the custody log |
+
+Downloads and previews are logged as `accessed`. Evidence recorded before
+schema 12 starts its log with a backfilled `recorded` event.
+
+### Report sections
+
+`GET /api/investigations/{id}/export?format=html|json|markdown&sections=...`
+and `/reports/{id}?sections=...` take a comma list of `summary`,
+`methodology`, `entities`, `relationships`, `graph`, `evidence`, `custody`,
+`sources`, `observations`, `indicators`, `correlations`, `techniques`,
+`limitations`. Without it the original set is used. `methodology` is
+generated from the case records (sources queried with outcomes, transforms,
+file analyses, collection bases, verification states, imports); `graph` is a
+static SVG laid out per connected component.
+
 ## Entities and relationships
 
 | Method | Path | Purpose |
@@ -69,7 +100,7 @@ Case membership:
 | GET | `/api/relationships/types` | Supported types |
 | PATCH | `/api/relationships/{id}` | Update relationship |
 | DELETE | `/api/relationships/{id}` | Delete relationship |
-| GET | `/api/graph?investigation_id=` | Graph payload with nodes, edges and structural metrics |
+| GET | `/api/graph?investigation_id=` | Graph payload with nodes, edges and structural metrics. Up to 5,000 nodes and 15,000 edges; past that the most connected entities are kept and `truncated` gives `nodes_total`, `edges_total`, `nodes_shown`, `edges_shown` (otherwise `null`) |
 
 Entity fields include `entity_type`, `name`, `identifier`, `description`,
 `source_reference`, `collection_basis`, `confidence` and
@@ -197,6 +228,100 @@ process with a 20 s deadline. The engine supports a documented subset of the
 YARA language (no modules, no `base64`, jumps need an upper bound up to 65,536);
 rule errors return `400` with the line number in the message.
 
+### Images: EXIF and perceptual hashes
+
+Image analyses (`png`, `jpeg`, `gif`, `webp`, `bmp`) carry `metadata.exif`
+when the file has an EXIF block (JPEG APP1, PNG `eXIf`, WebP `EXIF`, TIFF):
+make, model, lens, software, capture and modification times, orientation and
+`gps` (`latitude`, `longitude`, `altitude_m`, `gps_time_utc`,
+`horizontal_error_m`, `datum`, or `valid: false`). The author and body serial
+number are reported only as present, never copied. Valid GPS adds an
+`exif-gps` finding.
+
+`POST /api/intelligence/files` accepts `perceptual: {phash, dhash}` (16 hex
+digits each). The interface computes them in the browser from the decoded
+image (as displayed, EXIF orientation applied) with the imagehash library's
+definitions; the server stores them for images and ignores them otherwise.
+`/similar` adds `phash_distance` and `dhash_distance` (bits out of 64) and
+keeps a candidate when pHash is within 10 bits.
+
+## Plugins
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/plugins` | Plugins directory, every folder with manifest or error, code SHA-256 and state (`invalid`, `disabled`, `enabled`, `changed`) |
+| POST | `/api/plugins/rescan` | Re-read the folder and load approved, unchanged plugins |
+| POST | `/api/plugins/{id}/enable` | `{sha256}`: approve exactly the listed code and permissions and load the plugin (`409` if it changed since listing) |
+| POST | `/api/plugins/{id}/disable` | Unload and withdraw approval |
+
+See `MODULE_DEVELOPMENT.md` section 8 for the manifest, the `run(ctx)`
+contract and the isolation model.
+
+## TAXII 2.1 feeds
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET, POST | `/api/taxii/servers` | List or add a server (`name`, `discovery_url` https, optional `username` and `password` for HTTP Basic; the password is never returned) |
+| DELETE | `/api/taxii/servers/{id}` | Remove the server and its stored objects |
+| GET | `/api/taxii/servers/{id}/discover` | Discovery document: title, `default` root and `api_roots` (absolute) |
+| GET | `/api/taxii/servers/{id}/collections?api_root=` | Collections of one root (the root must be on the server's host) |
+| POST | `/api/taxii/servers/{id}/pull` | `{api_root, collection_id, max_objects (1-20000), object_types?, added_after?}`: pages of 500 through `next`; returns counts by type and `status` `completed` or `partial` (an error after some pages) |
+| GET | `/api/taxii/objects?server_id&collection_id&type&q&limit&offset` | Stored objects and counts by type |
+| GET | `/api/taxii/object?server_id&collection_id&object_id` | One stored STIX object as received |
+| POST | `/api/taxii/objects/to-case` | `{investigation_id, server_id, collection_id, object_ids}`: equality comparisons of the selected indicators' STIX patterns (domain, IP, URL, email, file hashes) become one observation in the case |
+
+Requests go through the SSRF-safe fetcher, limited to the server's host, with
+`Accept: application/taxii+json;version=2.1`; 502, 503 and 504 are retried
+twice. MITRE's public server (`https://attack-taxii.mitre.org/taxii2/`) is
+offered as a one-click example.
+
+## Sigma rules
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/sigma` | Loaded release, rule count, counts by level and licence |
+| POST | `/api/sigma/refresh` | Download the latest SigmaHQ `sigma_core.zip` (hosts pinned to GitHub release assets) and replace the stored set |
+| GET | `/api/sigma/rules?technique&q&level&product&limit` | Search; `technique` matches sub-techniques too (`T1059` finds `T1059.001`) |
+| GET | `/api/sigma/rules/{id}` | One rule with its full YAML |
+
+`GET /api/attack/techniques/{id}` adds `sigma` (total and up to 15 rules)
+when the set is loaded. Rules are SigmaHQ's under the Detection Rule License
+1.1; the interface credits them on every rule. GARBAGE does not convert or
+run them.
+
+## Threat actors
+
+Profiles come from the offline ATT&CK data (groups, their "uses" and the
+"mitigates" mappings). Group-to-software links are kept from this version on;
+an ATT&CK set downloaded earlier needs a refresh to show software
+(`software_known` is false until then).
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/attack/groups?q&limit` | Groups with aliases, `technique_count` and `software_count`, most techniques first; `q` matches ID, name or alias |
+| GET | `/api/attack/groups/{G0000}` | Profile: description, aliases, techniques by tactic with local Sigma rule counts, software, the 15 mitigations covering most of its techniques (directly or via the parent technique), Sigma coverage and the cases that link its techniques |
+| GET | `/api/investigations/{id}/actors?limit` | Groups ranked by the case's techniques they cover. Each technique weighs by rarity (`log((groups+1)/(users+1))+1`); a match only through the family (parent or sub-technique) counts half; `score` is the covered share of the case's weight. `weak` is true below 5 case techniques. Always returns `caveat`: overlap is not attribution |
+
+## Typosquatting
+
+The `typosquat` connector (domain, network) generates candidates for the
+registrable label (omission, repetition, transposition, QWERTY neighbour
+replacement and insertion, ASCII homoglyphs, hyphenation, vowel swap, bit
+flips, addition, subdomain dot) plus TLD swaps, one entry per spelling, and
+asks Cloudflare's DNS-over-HTTPS resolver for NS records of up to 160 of
+them (TLD swaps and homoglyphs first). NOERROR counts as existing, NXDOMAIN
+as not. The candidates themselves are never contacted. Generation runs in
+Rust (`gi_typosquat`) when built, with an identical Python reference.
+
+## GEOINT
+
+`GET /api/geoint?investigation_id=` returns `points` of two kinds: `photo`
+(EXIF GPS of analysed images, `precision: device`) and `network` (newest
+`geolocation` finding per artifact from IPinfo, `precision:
+network-approximate`), with their source, time and case. Nothing is geocoded
+or fetched. The map's base layer is `web/world.json`, built by
+`tools/build_world_map.py` from Natural Earth 1:110m (public domain).
+
 ## Indicators and CTI
 
 | Method | Path | Purpose |
@@ -262,6 +387,23 @@ proven relationship.
 Module: `intel-orchestrator`. One artifact is detected, then sent in parallel
 to every registered connector that accepts its type.
 
+Detected types: domain, IPv4, IPv6, CIDR, URL, email, MD5, SHA-1, SHA-256,
+ASN, CVE, and since this version CNPJ, CPF, phone number and location
+(coordinates or an address). Known types are tried first; then CPF/CNPJ by
+check digits, phone formats and decimal coordinates; any other text with
+letters and a space or comma is an address. A prefix forces the type:
+`cnpj:`, `cpf:`, `tel:`, `local:`.
+
+| Type | Sources | What comes back |
+| --- | --- | --- |
+| CNPJ | `br-documents` (offline), `brasilapi-cnpj`, `minhareceita-cnpj` (public Receita Federal data) | Check digits, head office or branch; legal and trade names, status, founding date, activities, legal nature, size, capital, address, company phone, tax regime, and partners as a count with roles only |
+| CPF | `br-documents` only | Valid or not, fiscal region of issue. Never who it belongs to |
+| Phone | `br-documents` only | E.164 form, country; for Brazil the DDD, its state and region, line type. Never who it belongs to |
+| Location | `nominatim` (OpenStreetMap) | Places with coordinates, city, state, country, postal code; they appear on the GEOINT map as `place` points with `geocoded` precision |
+
+CPF and phone are personal types: `register_connector` refuses a network
+connector that accepts them and plugin manifests cannot list them.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/intel/connectors` | Registered connectors, availability and health |
@@ -284,7 +426,8 @@ Each source reports one status: `ok`, `empty`, `error`, `rate-limited`,
 `elapsed_ms` and `fetched_at`.
 
 Connectors that contact external services run only when the setting
-`intel.allow_network` is `true` (default `false`). Outbound requests use
+`intel.allow_network` is `true` (the default for a new workspace since the
+dossier release; earlier workspaces keep their value). Outbound requests use
 `garbage_intel/net.py`:
 
 - HTTPS only by default, ports 80/443 only, no credentials in URLs.
@@ -385,6 +528,22 @@ community_size}}}`, computed on the simple undirected graph (duplicates and
 self-loops ignored). `GET /api/graph/path?from=&to=&investigation_id=` returns
 the shortest chain of recorded relationships.
 
+`POST /api/graph/pivot` with `{entity_id, depth?: 1|2, investigation_id?}` (201)
+expands a domain or IP through passive sources only: DNS A/AAAA/CNAME/MX/NS
+for a domain; Team Cymru AS, IPinfo reverse name and Mnemonic passive DNS seen
+in the last year for an IP. New values become entities linked to the node
+(`hosted-on`, `uses`, `references`, `belongs-to`, `associated-with`, described
+as "Pivô automático: …"); at most 8 per node and 40 new per call. Returns
+`created`, `reused`, `relationships`, `skipped`, `new_ids`.
+
+`POST /api/graph/add` with `{run_id, item?: {value, label?, pivot_value?,
+hint?, meta?, sources?, section?}, investigation_id?}` (201) is the search
+screen's "+": the run's artifact becomes (or reuses) an entity, and the item
+becomes one too, typed when its value is a domain, IP, URL, e-mail or hash and
+`other` otherwise (its description keeps the label, hint and sources), joined
+by a `related-to` relationship described by the section. Both are linked to
+the case. Returns `root_id`, `entity_id`, `investigation_id`, `created`.
+
 `POST /api/graph/import` with `{content, format: "graphml"|"json", file_name?,
 investigation_id?, commit?}` previews (default, `200`) or commits (`201`) a
 graph built elsewhere. JSON may be this app's export, Cytoscape (`elements`),
@@ -421,6 +580,100 @@ MX, the source itself) are reported under `skipped`.
   `/.well-known/security.txt`: contacts, policy, encryption key, expiry
   (and whether it has expired) and PGP signature. A non-text answer or one
   without `Contact:` is reported as not published.
+
+## Live URL check
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/intelligence/live-checks` | `{url, screenshot?: true, javascript?: false, investigation_id?}` (201): `hops` (`url`, `status`, `address`, `server`, `location`), `final_url`, `page` (`title`, `forms` with `password`/`other_site`, `external_hosts`, `frames`, `meta_refresh`, `script_redirects`, `obfuscation`, `download`, `technologies`, `headers`), `flags`, `screenshot` (`taken`, `note`). 409 when network sources are off; 400 for private or local addresses |
+| GET | `/api/intelligence/live-checks?url=` | Previous checks, newest first |
+| GET | `/api/intelligence/live-checks/{id}` | One stored check |
+| GET | `/api/intelligence/live-checks/{id}/screenshot` | The PNG screenshot |
+
+## E-mail analysis
+
+`POST /api/intelligence/email` with `{raw}` (a whole message or only its
+headers, up to 2 MiB) returns the same `email` structure that a `.eml` file
+gets in its file analysis: `subject`, `from`, `reply_to`, `return_path`,
+`message_id`, `authentication` (`spf`, `dkim`, `dmarc`), `dkim_domains`,
+`hops` (oldest first, with `ip` and `delay_seconds`), `origin_ip` (first
+public address), `links` (`url`, `text`, `host`, `disguised`), `attachments`
+(`name`, `content_type`, `size`, `sha256`), `body` and `flags`. Nothing is
+stored or sent.
+
+## MISP and OpenCTI
+
+One server of each. The address is stored in the settings table; the key is
+the `misp` or `opencti` entry of `/api/intel/keys` and is never returned.
+With `private: true` the server may be on a private or loopback address, use
+http or a non-standard port; requests still go only to that host and
+link-local addresses stay refused.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/cti-platforms` | `items.misp` and `items.opencti`: `url`, `private`, `configured`, `key_hint`, `last_check` |
+| PUT | `/api/cti-platforms/{misp\|opencti}` | `{url, private?, key?}` |
+| DELETE | `/api/cti-platforms/{misp\|opencti}` | Forgets the address and key |
+| POST | `/api/cti-platforms/{misp\|opencti}/check` | MISP `/servers/getVersion` or OpenCTI `about.version`; 502 with the reason |
+| POST | `/api/investigations/{id}/push/{misp\|opencti}` | `{tlp?}` (201): MISP `/events/add`, or `/events/edit/{uuid}` when the event exists; OpenCTI `stixCyberObservableAdd` per observable and `reportAdd` with a stable `stix_id`. Returns `remote_id`, `link`, `objects` |
+| GET | `/api/investigations/{id}/pushes` | Last send to each platform |
+
+The `misp` and `opencti` connectors look the queried value up in the
+multi-source search (`misp-event`, `opencti-observable`, `opencti-report`
+results); the dossier lists them first.
+
+## AI assistant
+
+A conversation with a model chosen on OpenRouter. The key is the `openrouter`
+entry of `/api/intel/keys` and is never returned. The server runs the loop in
+a background thread (at most 12 model calls per message); the panel polls the
+conversation. Every tool call is stored as a `tool` message with `action`
+(`status`: `done`, `error`, `pending`, `declined`; `summary`; optional `link`,
+`file`, `refresh`, `ui`). Interface actions (`ui`: open a screen, change the
+graph) are performed by the panel. `delete_entity` and `delete_file` stop the
+run with status `waiting` until `/confirm` answers. Person, username and
+profile entities cannot be created by the assistant, and searches go through
+the multi-source orchestrator with its usual limits.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/assistant` | `configured`, `key_hint`, `model`, `files` (its folder and files), last 30 `conversations` |
+| PUT | `/api/assistant/config` | `{model}`: an OpenRouter model id |
+| GET | `/api/assistant/models` | OpenRouter's public catalogue, only models that accept tools (cached one hour); 502 when it cannot be reached |
+| POST | `/api/assistant/conversations` | `{content, context?: {view, params}}` starts a conversation (201) |
+| GET | `/api/assistant/conversations/{id}` | Conversation with `status` (`running`, `waiting`, `idle`, `error`), `error` and `messages` |
+| POST | `/api/assistant/conversations/{id}/messages` | `{content, context?}`; 409 while running or waiting for a confirmation |
+| POST | `/api/assistant/conversations/{id}/confirm` | `{message_id, approve: bool}` answers a pending action |
+| POST | `/api/assistant/conversations/{id}/stop` | Stops after the current step |
+| DELETE | `/api/assistant/conversations/{id}` | Deletes the conversation and its action log; what it created stays |
+| GET | `/api/assistant/files` | Files in the assistant's folder (`assistant-files` next to the database) |
+| GET | `/api/assistant/files/{name}` | Download (always an attachment) |
+| DELETE | `/api/assistant/files/{name}` | Deletes one file |
+
+## Monitoring
+
+A monitor is a saved multi-source query that runs again on a local schedule
+while `garbage serve` is up (one thread, checked every 30 seconds). Each run
+goes through the same gates, keys and rate limits as a manual query, never
+uses the cache, and is compared with the previous successful run by
+(source, result type, value). The first run is the baseline. A source that
+failed is not counted as "everything gone". Changes and failed runs create
+notifications. Only one run of the same monitor happens at a time.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/monitors` | Monitors with `connectors`, `interval_minutes`, `next_run_at`, `last_run_at`, `last_status` (`baseline`, `unchanged`, `changed`, `error`), plus `unread_notifications` and `scheduler` (`running`, `last_tick`, `last_error`) |
+| POST | `/api/monitors` | `{name, value, connectors: [ids], interval_minutes (15-43200, default 1440), investigation_id?}`; the artifact type is detected and every source must accept it. The first run is due at once |
+| PATCH | `/api/monitors/{id}` | `name`, `enabled`, `interval_minutes`, `connectors` |
+| DELETE | `/api/monitors/{id}` | Removes the monitor, its runs and notifications; the underlying query runs stay |
+| POST | `/api/monitors/{id}/run` | Runs now (201) and returns the run with `added` and `removed`; 409 while the same monitor is already running |
+| GET | `/api/monitors/{id}/runs` | Last 30 runs, newest first, each with `trigger` (`manual` or `schedule`), counts, differences (up to 500 items each), per-source status and `intel_run_id` |
+| GET | `/api/notifications?unread=1&limit=` | Notifications, newest first, and the `unread` total |
+| POST | `/api/notifications/read` | `{ids: [ids] | "all"}` marks them read |
+| GET | `/api/monitors/webhook` | `configured`, `host`, `hint`, `format` (`discord`, `slack`, `json`), `last` delivery; the URL itself is never returned |
+| PUT | `/api/monitors/webhook` | `{url, format}`; https only, public hosts |
+| DELETE | `/api/monitors/webhook` | Removes it |
+| POST | `/api/monitors/webhook/test` | Sends a test message and returns the outcome |
 
 ## Transforms
 

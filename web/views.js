@@ -409,6 +409,8 @@
     entities = null,
     relationship = null,
     onSaved = null,
+    sourceId = "",
+    targetId = "",
   } = {}) {
     const isEdit = Boolean(relationship?.id);
     let entityOptions = entities;
@@ -428,12 +430,14 @@
           label: "Entidade de origem",
           type: "select",
           options: entityOptions.map((entity) => [entity.id, entity.name]),
+          value: sourceId || undefined,
         },
         {
           name: "target_entity_id",
           label: "Entidade de destino",
           type: "select",
           options: entityOptions.map((entity) => [entity.id, entity.name]),
+          value: targetId || undefined,
         },
       );
     }
@@ -614,6 +618,14 @@
           value: investigation.description || "",
         },
         {
+          name: "objective",
+          label: "Objetivo",
+          type: "textarea",
+          rows: 2,
+          maxlength: 2000,
+          value: investigation.objective || "",
+        },
+        {
           name: "status",
           label: "Status",
           type: "select",
@@ -779,188 +791,51 @@
   async function renderOverview(root) {
     const data = await api("/api/overview");
     const totals = data.totals;
-    const actions = [
-      button("Atualizar", () => G.refreshView()),
-    ];
+    const newCase = () => G.newInvestigation().catch((error) => toast(error.message, "error"));
     root.append(
       pageHeader({
-        eyebrow: "VISÃO GERAL",
-        title: "Situação do workspace",
-        description:
-          "Casos, entidades compartilhadas, evidências com hash e indicadores extraídos neste workspace local.",
-        actions,
+        title: "Visão geral",
+        actions: [button("Nova investigação", newCase, { variant: "button-primary" })],
       }),
       el(
         "div",
-        { class: "quick-actions" },
-        button("Registrar entidade", () => G.entityDialog()),
-        button("Registrar fonte", () => G.sourceDialog()),
-        button("Abrir quadro", () => go("board")),
-        button("Analisar indicadores", () => go("indicators")),
-        button("Ver evidências", () => go("evidence")),
-      ),
-      el(
-        "div",
-        { class: "metric-grid" },
-        metric({
-          label: "INVESTIGAÇÕES ABERTAS",
-          value: totals.open.toLocaleString("pt-BR"),
-          foot: `${totals.investigations} no total · ${totals.closed} fechadas`,
-          icon: "⌕",
-          tone: "blue",
-        }),
-        metric({
-          label: "ENTIDADES COMPARTILHADAS",
-          value: totals.entities.toLocaleString("pt-BR"),
-          foot: `${totals.relationships.toLocaleString("pt-BR")} relacionamentos`,
-          icon: "⬡",
-          tone: "violet",
-        }),
-        metric({
-          label: "REGISTROS DE EVIDÊNCIA",
-          value: totals.evidence.toLocaleString("pt-BR"),
-          foot: "SHA-256 preservado",
-          icon: "▣",
-          tone: "green",
-        }),
-        metric({
-          label: "INDICADORES ÚNICOS",
-          value: totals.unique_indicators.toLocaleString("pt-BR"),
-          foot: `${totals.indicator_origins.toLocaleString("pt-BR")} ocorrências em observações`,
-          icon: "⌁",
-          tone: "amber",
-        }),
-        metric({
-          label: "OBSERVAÇÕES",
-          value: totals.observations.toLocaleString("pt-BR"),
-          foot: "Proveniência mantida",
-          icon: "▤",
-          tone: "blue",
-        }),
-        metric({
-          label: "CORRELAÇÕES EXATAS",
-          value: totals.correlations.toLocaleString("pt-BR"),
-          foot: "Valores compartilhados entre observações",
-          icon: "⟷",
-          tone: "violet",
-        }),
+        { class: "metric-grid overview-metrics" },
+        metric({ label: "Casos abertos", value: totals.open.toLocaleString("pt-BR") }),
+        metric({ label: "Entidades", value: totals.entities.toLocaleString("pt-BR") }),
+        metric({ label: "Indicadores", value: totals.unique_indicators.toLocaleString("pt-BR") }),
       ),
     );
 
-    if (totals.investigations === 0) {
-      root.append(
-        panel(
-          { eyebrow: "COMECE AQUI", title: "Monte o primeiro caso" },
-          el(
-            "div",
-            { class: "onboarding" },
-            el("p", {}, "Uma investigação integrada avança por registros compartilhados:"),
-            el(
-              "ol",
-              { class: "step-list" },
-              el("li", {}, "Crie uma investigação e defina seu escopo."),
-              el("li", {}, "Registre entidades e vincule-as ao caso."),
-              el("li", {}, "Registre observações, fontes e evidências com hash."),
-              el("li", {}, "Registre relacionamentos e organize o quadro de investigação."),
-              el("li", {}, "Exporte um relatório a partir dos registros reais."),
-            ),
-            button("Criar a primeira investigação", () => G.newInvestigation(), {
-              variant: "button-primary",
-            }),
-          ),
-        ),
-      );
-    }
-
-    const recentRows = data.recent_investigations || [];
+    const openRows = (data.recent_investigations || []).filter((row) => row.status === "open");
     root.append(
-      el(
-        "div",
-        { class: "dashboard-grid" },
-        panel(
-          {
-            eyebrow: "ATIVIDADE DOS CASOS",
-            title: "Atividade recente",
-            caption: "Mais recentes primeiro",
-            actions: [button("Abrir linha do tempo", () => go("activity"))],
-          },
-          renderActivityFeed(data.recent_activity || [], {
-            emptyMessage:
-              "A atividade aparece aqui depois que casos, entidades e evidências são registrados.",
-          }),
-        ),
-        panel(
-          {
-            eyebrow: "CASOS",
-            title: "Investigações recentes",
-            actions: [button("Todos os casos", () => go("investigations"))],
-          },
-          table({
-            columns: [
-              {
-                label: "CASO",
-                render: (row) =>
+      panel(
+        {
+          title: "Casos abertos",
+          actions: totals.investigations ? [button("Todos os casos", () => go("investigations"))] : [],
+        },
+        openRows.length
+          ? el(
+              "ul",
+              { class: "case-list" },
+              ...openRows.map((row) =>
+                el(
+                  "li",
+                  {},
                   el(
-                    "div",
-                    { class: "cell-stack" },
-                    el("strong", {}, row.name),
-                    el("span", { class: "mono" }, shortId(row.id)),
+                    "a",
+                    { class: "case-link", href: `#/investigations/${row.id}` },
+                    el("span", { class: "case-link-name" }, row.name),
+                    el(
+                      "span",
+                      { class: "case-link-meta" },
+                      `${row.entity_count.toLocaleString("pt-BR")} entidades`,
+                    ),
+                    G.icon("arrow", { size: 16, className: "case-link-arrow" }),
                   ),
-              },
-              { label: "STATUS", render: (row) => statusBadge(row.status) },
-              {
-                label: "OBS.",
-                className: "numeric-col",
-                render: (row) => String(row.observation_count),
-              },
-              {
-                label: "ENT.",
-                className: "numeric-col",
-                render: (row) => String(row.entity_count),
-              },
-              {
-                label: "EVID.",
-                className: "numeric-col",
-                render: (row) => String(row.evidence_count),
-              },
-              {
-                label: "",
-                render: (row) => button("Abrir", () => go("investigations", row.id)),
-              },
-            ],
-            rows: recentRows,
-            emptyMessage: "Nenhuma investigação ainda.",
-            onRowClick: (row) => go("investigations", row.id),
-          }),
-        ),
-      ),
-      el(
-        "div",
-        { class: "dashboard-grid" },
-        panel(
-          {
-            eyebrow: "ARTEFATOS OBSERVADOS",
-            title: "Distribuição de indicadores",
-            caption: `${totals.unique_indicators} únicos`,
-          },
-          indicatorMix(data.indicator_mix || {}, totals.unique_indicators),
-        ),
-        panel(
-          {
-            eyebrow: "PROVENIÊNCIA DAS EVIDÊNCIAS",
-            title: "Base de coleta",
-            caption: `${totals.observations} observações`,
-          },
-          collectionBasis(data.collection_basis || {}, totals.observations),
-        ),
-        panel(
-          {
-            eyebrow: "SISTEMA",
-            title: "Status dos módulos",
-            actions: [button("Gerenciar módulos", () => go("modules"))],
-          },
-          moduleSummary(data.modules || {}),
-        ),
+                ),
+              ),
+            )
+          : el("p", { class: "panel-empty" }, "Nenhum caso aberto."),
       ),
     );
   }
@@ -1086,6 +961,13 @@
       el("option", { value: "closed" }, "Fechadas"),
       el("option", { value: "cancelled" }, "Canceladas"),
     );
+    const archiveFilter = el(
+      "select",
+      { class: "input compact-select", "aria-label": "Arquivadas" },
+      el("option", { value: "active" }, "Ativas"),
+      el("option", { value: "archived" }, "Arquivadas"),
+      el("option", { value: "all" }, "Ativas e arquivadas"),
+    );
     const sortSelect = el(
       "select",
       { class: "input compact-select", "aria-label": "Ordenar investigações" },
@@ -1101,6 +983,8 @@
       const status = statusFilter.value;
       let rows = investigations.filter((item) => {
         if (status && item.status !== status) return false;
+        if (archiveFilter.value === "active" && item.archived_at) return false;
+        if (archiveFilter.value === "archived" && !item.archived_at) return false;
         return `${item.name} ${item.description} ${item.status}`
           .toLowerCase()
           .includes(query);
@@ -1164,15 +1048,14 @@
 
     root.append(
       pageHeader({
-        eyebrow: "GESTÃO DE CASOS",
         title: "Investigações",
-        description:
-          "Todos os casos compartilham o mesmo registro de entidades, armazenamento de evidências e relacionamentos.",
+        actions: [
+          button("Importar caso", () => importCaseDialog(), { title: "Importar um pacote de caso exportado por um GARBAGE" }),
+          button("Nova investigação", () => G.newInvestigation().catch((error) => toast(error.message, "error")), { variant: "button-primary" }),
+        ],
       }),
       panel(
         {
-          eyebrow: "CASOS",
-          title: "Índice de casos",
           actions: [countLabel],
           className: "table-panel",
         },
@@ -1181,6 +1064,7 @@
           { class: "toolbar" },
           el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
           statusFilter,
+          archiveFilter,
           sortSelect,
         ),
         investigations.length === 0
@@ -1199,6 +1083,7 @@
       drawTable();
       search.addEventListener("input", drawTable);
       statusFilter.addEventListener("change", drawTable);
+      archiveFilter.addEventListener("change", drawTable);
       sortSelect.addEventListener("change", drawTable);
     }
   }
@@ -1242,11 +1127,12 @@
       G.setLoading(false);
       const investigation = report.investigation;
       const header = pageHeader({
-        eyebrow: "CASO",
         title: investigation.name,
-        description: investigation.description || "Nenhuma descrição registrada.",
+        description: investigation.description || "",
         actions: [
-          button("‹ Todos os casos", () => go("investigations")),
+          button("Quadro", () => go("board", investigation.id)),
+          button("Grafo", () => go("graph", investigation.id)),
+          G.moreMenu([
           button("Editar caso", () => G.investigationEditDialog(investigation)),
           button(
             investigation.status === "open" ? "Fechar caso" : "Reabrir caso",
@@ -1269,8 +1155,39 @@
               }
             },
           ),
-          button("Quadro", () => go("board", investigation.id)),
-          button("Grafo", () => go("graph", investigation.id)),
+          button(investigation.archived_at ? "Desarquivar" : "Arquivar", async () => {
+            try {
+              await api(`/api/investigations/${investigation.id}/archive`, {
+                method: "POST",
+                body: JSON.stringify({ archived: !investigation.archived_at }),
+              });
+              G.invalidateInvestigations();
+              toast(investigation.archived_at ? "Caso restaurado para a lista ativa." : "Caso arquivado; ele sai da lista ativa, nada é apagado.");
+              await draw();
+            } catch (error) {
+              toast(error.message, "error");
+            }
+          }),
+          button("Duplicar", async () => {
+            try {
+              const created = await api(`/api/investigations/${investigation.id}/duplicate`, { method: "POST", body: "{}" });
+              G.invalidateInvestigations();
+              toast(`Criado "${created.name}" com ${created.copied.entities} entidade(s) e ${created.copied.relationships} relacionamento(s); observações e evidências ficam no original.`);
+              go("investigations", created.id);
+            } catch (error) {
+              toast(error.message, "error");
+            }
+          }, { title: "Novo caso com o mesmo objetivo, entidades, relacionamentos, fontes e técnicas" }),
+          el(
+            "a",
+            {
+              class: "button button-secondary button-small",
+              href: `/api/investigations/${investigation.id}/package`,
+              download: "",
+              title: "Pacote JSON com o caso inteiro, evidências e cadeia de custódia, verificável por SHA-256",
+            },
+            "Exportar caso",
+          ),
           el(
             "a",
             {
@@ -1281,19 +1198,25 @@
             },
             "Imprimir relatório",
           ),
+          button("Todos os casos", () => go("investigations")),
           button("Excluir", () => G.deleteInvestigation(investigation), {
             variant: "button-danger",
           }),
+          ]),
         ],
       });
       const meta = el(
         "div",
         { class: "case-meta" },
         statusBadge(investigation.status),
+        investigation.archived_at ? badge(`Arquivada em ${formatDate(investigation.archived_at)}`, "neutral") : null,
         el("code", {}, investigation.id),
         el("span", {}, `Criada em ${formatDate(investigation.created_at)}`),
         el("span", {}, `Atualizada ${relativeTime(investigation.updated_at)}`),
       );
+      const objective = investigation.objective
+        ? el("p", { class: "case-objective" }, el("strong", {}, "Objetivo: "), investigation.objective)
+        : null;
       const tabBar = tabs({
         items: [
           { key: "overview", label: "Visão geral" },
@@ -1317,7 +1240,7 @@
         },
       });
       const body = el("div", { class: "case-tab-body" });
-      root.replaceChildren(header, meta, tabBar, body);
+      root.replaceChildren(header, meta, ...(objective ? [objective] : []), tabBar, body);
       await renderCaseTab(body, activeTab, investigation);
     }
 
@@ -1525,6 +1448,7 @@
                                 }
                               })
                             : null,
+                          button("Custódia", () => custodyDialog(row)),
                           button("Excluir", async () => {
                             if (
                               !(await confirm({
@@ -1814,11 +1738,6 @@
         actions: [button("Atualizar", onRefresh)],
       },
       el(
-        "p",
-        { class: "panel-note" },
-        "A cobertura verifica fatos presentes no caso. Ela não mede qualidade analítica, risco ou culpa, e a ausência de pendências não prova que o caso está completo.",
-      ),
-      el(
         "div",
         { class: "coverage-grid" },
         ...data.checks.map((check) =>
@@ -1907,6 +1826,192 @@
     return list;
   }
 
+  const CUSTODY_PT = {
+    recorded: "Registrada", verified: "Verificada", accessed: "Acessada", annotated: "Anotada",
+    exported: "Exportada", imported: "Importada", "imported-history": "Histórico de origem", deleted: "Excluída",
+  };
+
+  const CUSTODY_DETAIL_PT = [
+    [/^Recorded before the custody log existed; the log starts at the upgrade\.$/, () => "Registrada antes de existir a cadeia de custódia; o registro começa na atualização."],
+    [/^Recorded (\w+) '(.+?)'(?: from file (.+?), (\d+) bytes)?; acquired (.+?)(?:; reference (.+))?$/, (m) => `Registrada (${m[1]}) "${m[2]}"${m[3] ? ` a partir do arquivo ${m[3]}, ${m[4]} bytes` : ""}; obtida em ${m[5]}${m[6] ? `; referência ${m[6]}` : ""}`],
+    [/^Integrity check: (\w+)(?:; computed (\w+))?(; stored file not found)?$/, (m) => `Verificação de integridade: ${G.statusLabel(m[1]).toLowerCase()}${m[2] ? `; calculado ${m[2]}` : ""}${m[3] ? "; arquivo armazenado não encontrado" : ""}`],
+    [/^File (downloaded|previewed) through the local interface \((\d+) bytes, sha256 (\w+)\)$/, (m) => `Arquivo ${m[1] === "downloaded" ? "baixado" : "visualizado"} pela interface local (${m[2]} bytes, sha256 ${m[3]})`],
+    [/^Note (\S+) added \(sha256 (\w+)\)\.$/, (m) => `Anotação ${m[1].slice(0, 8)} adicionada (sha256 ${m[2]})`],
+    [/^Included in a case package with its file$/, () => "Incluída num pacote de caso, com o arquivo"],
+    [/^Included in a case package \(metadata only\)$/, () => "Incluída num pacote de caso (só metadados)"],
+    [/^Evidence record '(.+)' and its stored file deleted$/, (m) => `Registro "${m[1]}" e o arquivo armazenado excluídos`],
+    [/^Deleted with investigation '(.+)'$/, (m) => `Excluída junto com a investigação "${m[1]}"`],
+    [/^Imported from case package (\w+) \((.*?)\); (.+?); original evidence id (\S*); original log (\d+) event\(s\)$/, (m) => `Importada do pacote ${m[1]} (${m[2]}); ${m[3] === "file re-hashed and matches" ? "hash do arquivo refeito e confere" : "só metadados, sem arquivo no pacote"}; id original ${m[4].slice(0, 8)}; registro original com ${m[5]} evento(s)`],
+  ];
+
+  function custodyDetail(text) {
+    for (const [pattern, render] of CUSTODY_DETAIL_PT) {
+      const match = String(text).match(pattern);
+      if (match) return render(match);
+    }
+    return text;
+  }
+
+  /* Chain of custody and notes of one evidence item. */
+  async function custodyDialog(evidence) {
+    const body = el("div", { class: "pivot-body" }, loadingBlock("Carregando a cadeia de custódia…"));
+    const dialog = el(
+      "dialog",
+      { class: "app-dialog pivot-dialog", "aria-label": `Custódia de ${evidence.title}` },
+      el(
+        "div",
+        { class: "dialog-form" },
+        el("div", { class: "dialog-heading" }, el("div", {}, el("p", { class: "eyebrow" }, "CADEIA DE CUSTÓDIA"), el("h2", {}, evidence.title))),
+        body,
+        el("div", { class: "dialog-actions" }, el("button", { class: "button button-secondary", type: "button", onClick: () => dialog.close() }, "Fechar")),
+      ),
+    );
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => dialog.remove());
+    dialog.showModal();
+
+    async function load() {
+      let log;
+      let notes;
+      try {
+        [log, notes] = await Promise.all([
+          api(`/api/evidence/${evidence.id}/custody`),
+          api(`/api/evidence/${evidence.id}/notes`),
+        ]);
+      } catch (error) {
+        body.replaceChildren(inlineError(error.message));
+        return;
+      }
+      const note = el("textarea", { class: "input", rows: 3, maxlength: 5000, placeholder: "Anotação sobre esta evidência (fica registrada na cadeia)", "aria-label": "Nova anotação" });
+      const save = el("button", { class: "button button-primary button-small", type: "button" }, "Adicionar anotação");
+      save.addEventListener("click", async () => {
+        if (!note.value.trim()) return;
+        save.disabled = true;
+        try {
+          await api(`/api/evidence/${evidence.id}/notes`, { method: "POST", body: JSON.stringify({ body: note.value }) });
+          toast("Anotação registrada.");
+          load();
+        } catch (error) {
+          toast(error.message, "error");
+          save.disabled = false;
+        }
+      });
+      body.replaceChildren(
+        el(
+          "p",
+          { class: "run-meta" },
+          badge(log.intact ? "Cadeia íntegra" : `Cadeia quebrada no evento ${log.broken_at}`, log.intact ? "success" : "danger"),
+          ` ${log.events.length} evento(s) · topo `,
+          el("code", { title: log.head }, log.head.slice(0, 16)),
+        ),
+        table({
+          columns: [
+            { label: "#", className: "numeric-col", render: (row) => String(row.sequence) },
+            { label: "QUANDO", render: (row) => formatDate(row.occurred_at, { time: true }) },
+            { label: "AÇÃO", render: (row) => badge(CUSTODY_PT[row.action] || row.action, "neutral") },
+            { label: "DETALHE", render: (row) => el("span", { class: "clamp-3", title: row.detail }, row.action === "imported-history" ? "Registro de custódia do sistema de origem (ver o texto completo ao passar o mouse)" : custodyDetail(row.detail)) },
+            { label: "HASH", render: (row) => el("code", { title: row.entry_hash }, row.entry_hash.slice(0, 10)) },
+          ],
+          rows: log.events,
+          emptyMessage: "Sem eventos.",
+        }),
+        el("p", { class: "tool-limit" }, "Cada evento guarda o hash do anterior: editar ou apagar um evento quebra a cadeia daquele ponto em diante. É um registro desta estação, não uma assinatura nem um carimbo de tempo externo."),
+        el("h3", { class: "subheading" }, `Anotações (${notes.total})`),
+        notes.items.length
+          ? el("ul", { class: "plain-list" }, ...notes.items.map((item) => el("li", {}, el("span", { class: "muted" }, `${formatDate(item.created_at, { time: true })} · `), item.body)))
+          : el("p", { class: "panel-empty" }, "Nenhuma anotação."),
+        note,
+        el("div", { class: "inline-actions" }, save),
+      );
+    }
+    load();
+  }
+
+  /* Import a case package: read, preview, then create a new case. */
+  function importCaseDialog() {
+    let pkg = null;
+    const fileInput = el("input", { class: "input", type: "file", accept: ".json,application/json" });
+    const result = el("div", { class: "import-result", "aria-live": "polite" });
+    const commit = el("button", { class: "button button-primary", type: "button", disabled: true }, "Importar");
+    const dialog = el(
+      "dialog",
+      { class: "app-dialog pivot-dialog", "aria-label": "Importar caso" },
+      el(
+        "div",
+        { class: "dialog-form" },
+        el(
+          "div",
+          { class: "dialog-heading" },
+          el(
+            "div",
+            {},
+            el("p", { class: "eyebrow" }, "IMPORTAR CASO"),
+            el("h2", {}, "Pacote de caso do GARBAGE"),
+            el("p", { class: "dialog-description" }, "O pacote é conferido pelo SHA-256 e cada arquivo de evidência é refeito o hash antes de entrar. Sempre cria um caso novo; entidades iguais às existentes são reaproveitadas."),
+          ),
+        ),
+        el("div", { class: "pivot-body" }, el("label", { class: "field" }, el("span", {}, "Arquivo do pacote (.json)"), fileInput), result),
+        el("div", { class: "dialog-actions" }, el("button", { class: "button button-secondary", type: "button", onClick: () => dialog.close() }, "Cancelar"), commit),
+      ),
+    );
+    document.body.append(dialog);
+    dialog.addEventListener("close", () => dialog.remove());
+    dialog.showModal();
+
+    function show(preview) {
+      const plan = preview.plan;
+      result.replaceChildren(
+        G.kvList([
+          ["Caso", preview.name],
+          ["Gerado por", `${preview.generator} em ${formatDate(preview.exported_at, { time: true })}`],
+          ["SHA-256 do pacote", el("code", { class: "hash" }, preview.sha256)],
+          ["Entidades", `${plan.entities_new} nova(s), ${plan.entities_reused} reaproveitada(s)`],
+          ["Relacionamentos", String(plan.relationships)],
+          ["Observações", String(plan.observations)],
+          ["Evidências", `${plan.evidence} (${plan.evidence_files} com arquivo${plan.evidence_rejected ? `, ${plan.evidence_rejected} recusada(s)` : ""})`],
+          ["Fontes, técnicas, análises", `${plan.sources}, ${plan.techniques}, ${plan.file_analyses}`],
+        ]),
+        preview.problems.length
+          ? el("ul", { class: "import-problems" }, ...preview.problems.map((item) => el("li", {}, el("code", {}, item.key), ` ${G.translateError(item.reason)}`)))
+          : null,
+      );
+    }
+
+    fileInput.addEventListener("change", async () => {
+      commit.disabled = true;
+      result.replaceChildren();
+      const file = fileInput.files[0];
+      if (!file) return;
+      try {
+        pkg = JSON.parse(await file.text());
+        const preview = await api("/api/cases/import", { method: "POST", body: JSON.stringify({ package: pkg }) });
+        show(preview);
+        commit.disabled = false;
+      } catch (error) {
+        result.replaceChildren(inlineError(error instanceof SyntaxError ? "O arquivo não é JSON." : error.message));
+      }
+    });
+    commit.addEventListener("click", async () => {
+      commit.disabled = true;
+      try {
+        const done = await api("/api/cases/import", { method: "POST", body: JSON.stringify({ package: pkg, commit: true }) });
+        G.invalidateInvestigations();
+        toast(`Caso "${done.name}" importado.`);
+        dialog.close();
+        go("investigations", done.id);
+      } catch (error) {
+        result.append(inlineError(error.message));
+      }
+    });
+  }
+
+  const REPORT_SECTIONS = [
+    ["summary", "Resumo e objetivo"], ["methodology", "Metodologia"], ["entities", "Entidades"],
+    ["relationships", "Relacionamentos"], ["graph", "Grafo"], ["evidence", "Evidências"], ["custody", "Cadeia de custódia"],
+    ["sources", "Fontes"], ["observations", "Observações"], ["indicators", "Indicadores"], ["correlations", "Correlações"],
+    ["techniques", "Técnicas ATT&CK"], ["limitations", "Limitações"],
+  ];
+
   function reportTabContent(investigation, report) {
     const formats = [
       ["html", "Relatório HTML"],
@@ -1936,17 +2041,41 @@
       el("div", { class: "export-grid" }, ...ctiLinks.map(([, link]) => link)),
       el("p", { class: "tool-limit" }, "Indicadores saem com tipo \"unknown\" e com o status de verificação de cada registro: exportar não transforma associação em atribuição."),
     );
+    const sectionBoxes = REPORT_SECTIONS.map(([key, label]) => {
+      const box = el("input", { type: "checkbox", checked: true, value: key });
+      return [key, box, el("label", { class: "check-field" }, box, label)];
+    });
+    const sectionLinks = [];
+    function sectionQuery() {
+      const chosen = sectionBoxes.filter(([, box]) => box.checked).map(([key]) => key);
+      return `sections=${encodeURIComponent(chosen.join(",") || "summary")}`;
+    }
+    function syncLinks() {
+      for (const [link, base] of sectionLinks) link.href = `${base}${base.includes("?") ? "&" : "?"}${sectionQuery()}`;
+    }
+    sectionBoxes.forEach(([, box]) => box.addEventListener("change", syncLinks));
+    const sectionsPanel = panel(
+      { eyebrow: "CONTEÚDO", title: "Seções do relatório", caption: "Vale para HTML, impressão, Markdown e JSON" },
+      el("div", { class: "report-sections" }, ...sectionBoxes.map(([, , label]) => label)),
+      el("p", { class: "tool-limit" }, "A metodologia é gerada dos registros do caso (fontes consultadas, transformações, análises, importações e verificações); nada é escrito à mão."),
+    );
+    const exportLink = (attributes, ...children) => {
+      const link = el("a", attributes, ...children);
+      if (!attributes.href.includes("format=csv")) sectionLinks.push([link, attributes.href]);
+      return link;
+    };
+    queueMicrotask(syncLinks);
     return el(
       "div",
       { class: "report-tab" },
+      sectionsPanel,
       panel(
         { eyebrow: "SAÍDA", title: "Exportar este caso", caption: "Somente registros reais" },
         el(
           "div",
           { class: "export-grid" },
           ...formats.map(([format, label]) =>
-            el(
-              "a",
+            exportLink(
               {
                 class: "export-card",
                 href: `/api/investigations/${investigation.id}/export?format=${format}`,
@@ -1956,8 +2085,7 @@
               el("span", {}, `Gerado a partir ${format === "csv" ? "dos registros atuais" : "do caso atual"}.`),
             ),
           ),
-          el(
-            "a",
+          exportLink(
             {
               class: "export-card",
               href: `/reports/${investigation.id}`,

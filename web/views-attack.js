@@ -264,6 +264,28 @@
           list(detail.software, "Nenhum software registrado."),
           G.sectionHeading("Mitigações", `${detail.mitigations.length}`),
           list(detail.mitigations, "Nenhuma mitigação registrada."),
+          detail.sigma
+            ? [
+                G.sectionHeading("Regras de detecção Sigma", `${detail.sigma.total}`),
+                detail.sigma.items.length
+                  ? el(
+                      "ul",
+                      { class: "attack-list" },
+                      ...detail.sigma.items.map((rule) =>
+                        el(
+                          "li",
+                          {},
+                          el("a", { class: "table-link", href: `#/feeds/sigma/${rule.id}` }, rule.title),
+                          el("span", { class: "muted" }, ` · ${G.SIGMA_LEVEL_PT?.[rule.level] || rule.level}${rule.product ? ` · ${rule.product}` : ""}`),
+                        ),
+                      ),
+                    )
+                  : el("p", { class: "panel-empty" }, "Nenhuma regra Sigma carregada cita esta técnica. Carregue o conjunto em Feeds CTI."),
+                detail.sigma.total > detail.sigma.items.length
+                  ? el("a", { class: "table-link", href: `#/feeds/sigma?technique=${detail.id}` }, `Ver as ${detail.sigma.total} regras`)
+                  : null,
+              ]
+            : null,
           el("p", { class: "tool-limit" }, "Uso por grupos e softwares vem dos relatos públicos compilados pelo MITRE. Ver a mesma técnica num caso não indica o mesmo autor."),
         ),
       );
@@ -332,6 +354,8 @@
       el("div", { class: "attack-layout" }, matrixHost, sideHost),
     );
     await load();
+    const requested = new URLSearchParams(location.hash.split("?")[1] || "").get("technique");
+    if (requested && /^T\d{4}(\.\d{3})?$/.test(requested)) openTechnique(requested);
   }
 
   G.views.attack = renderAttack;

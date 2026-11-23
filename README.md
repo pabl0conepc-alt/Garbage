@@ -17,24 +17,44 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 
 | Area | Capability |
 | --- | --- |
-| Cases | Investigation lifecycle, observations, status timeline, report and JSON/CSV/Markdown/HTML export |
-| Sources | Source registry with references, categories, access time and verification state; links to cases and entities |
-| Entities | Canonical entity registry with aliases, confidence, verification and relationships |
-| Analysis | IPv4, IPv6, CIDR, domain, URL, email and hash extraction with refanging, canonical values, provenance, cross-source correlation and manual assessment |
-| Evidence | Upload, SHA-256 integrity record, verification, download and safe image preview |
-| File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; hashes, entropy, strings, metadata, archive listing, findings and history; optional C scanner for ELF/PE hardening markers (PIE, NX, RELRO, bind-now, canary, Fortify, ASLR, CFG) |
-| Board | Persisted investigation board with cards, notes, groups, connections, layers, autosave, conflict handling and SVG export |
-| Graph | Relationship graph with type filters, focus, search, pan/zoom, drag and layered export; optional C++ metrics for components, density, isolates, degrees and reciprocal links |
-| Accounts | Public lookups for Discord IDs and invites, Roblox users, Telegram channels and groups, usernames across 17 sites with offline variations, Minecraft and Steam profiles, email/domain posture grade, offline email header analysis and Have I Been Pwned breach names (own key); photo EXIF with GPS position and map link; webhook summary of finished queries |
-| Monitoring and evidence | Watchlists with change and expiry alerts; page capture with original bytes and headers; verifiable evidence packages (manifest, SHA256SUMS, verify.py); daily integrity checks |
-| Research and AI | topic: search across GDELT, Hacker News, Wikipedia/Wikidata, Crossref and OpenAlex; RSS/Atom feeds; passive website surface; case map with GeoJSON/KML export; AI investigator on local, OpenAI-compatible or Anthropic models; side-by-side run comparison with explainable score |
-| CTI | CISA KEV catalogue with explicit refresh, bounded download, provenance and offline cache |
-| System | Global search, settings, activity log, module registry with capability gating |
+| Cases | Objective, lifecycle, archive, duplicate, observations, timeline; whole-case package (`garbage-case` v1, SHA-256) with preview and import |
+| Evidence | Upload, SHA-256 integrity, verification, download, preview; hash-chained chain of custody (recorded, verified, accessed, annotated, exported, imported, deleted) and notes |
+| Preservation | Capture a page as evidence (exact bytes, final URL, status, redirects, server address, headers, time) with a text-only working copy; verifiable package (manifest with custody chain, SHA256SUMS, stand-alone verify.py); daily integrity re-check |
+| Companies | CNPJ: public Receita record (partners as counts only, the owner's CPF masked in individual entrepreneurs' names), map by CEP, the company's .br domains, IP blocks and AS counted by Registro.br, likely sites confirmed by the domain holder's CNPJ, and, with a free Portal da Transparência key, federal sanctions (CEIS, CNEP, CEPIM, leniency), federal contracts and the largest payments of the last two years |
+| Sources and entities | Source registry with access time and verification; canonical entities with aliases, confidence and relationships; entity resolution (exact, probable, weak candidates, analyst-approved merge) |
+| Multi-source search | One artifact (domain, IP, CIDR, URL, email, hash, ASN, CVE, CNPJ, address or coordinates) fanned out to 50 connectors with live per-source status, cache, rate limits and async runs; CPF and phone numbers are checked offline only (validity, region, line type), never looked up |
+| Accounts and usernames | Discord IDs and invites, Roblox, Telegram, Minecraft and Steam public profiles; a username across 17 sites plus offline variations; Have I Been Pwned breach names with your own key |
+| News and research | `topic:` search across GDELT, Hacker News, Wikipedia/Wikidata, Crossref and OpenAlex; RSS/Atom feeds by URL |
+| Website surface | robots.txt, sitemap, SEO and Open Graph, canonical, hreflang, manifest, Content-Security-Policy weak points, mixed content and a visible-text hash for change monitoring |
+| Comparison | Two saved queries side by side with an explainable score (names, images, sites, links, bios, shared findings), labelled as a lead, not an identification |
+| Transforms and pivot | Connectors as typed transforms from an entity, with parameters, logs, measured duration and enrichment history; plugins become transforms |
+| Monitoring | Saved queries on a local schedule, differences between runs (what appeared, what disappeared, ignoring counts that drift on their own), warnings for TLS certificates and domain registrations within 30 days of expiry, in-app notifications and a webhook (Discord, Slack or JSON) for changes, failures and evidence integrity |
+| Graph and board | Relationship graph with eight layouts, multi-select, pin/hide, undo/redo, minimap, matrix and timeline views, path finding, PNG/SVG/GraphML/JSON export and GraphML/JSON import; investigation board with layers and autosave |
+| Analysis | Indicator extraction with refanging and provenance, correlation, analytics dashboard, typosquatting candidates (Rust) |
+| E-mail | .eml files and pasted headers: the Received chain with delays and the first public IP, SPF/DKIM/DMARC verdicts, Return-Path / Reply-To / DKIM / Message-ID domains that differ from the sender, display-name spoofing, disguised links and attachments (hashed, never opened) |
+| E-mail and domain posture | Grade A–F for SPF, DMARC, DKIM (common selectors), DNSSEC, MTA-STS, TLS-RPT, BIMI and CAA from public DNS, mail provider and disposable-mail domains |
+| Live URL check | On request: every redirect hop (status, address, server), the final page read without running it (title, forms and where a password field posts, other hosts it loads, frames, obfuscated scripts, downloads, technologies) and a screenshot from a headless Chromium or Firefox with a throwaway profile, JavaScript off unless chosen; stored with its screenshot |
+| Ransomware leak sites | Whether the organisation behind a domain or CNPJ appears as a victim in ransomware groups' posts tracked by ransomware.live (same domain, same name, or only a mention in another victim's description) |
+| Phishing lists | OpenPhish, Phishing Army, Block List Project and Phishing.Database downloaded whole and matched locally for domains and URLs, including names listed under the domain |
+| File intelligence | ClamAV verdict for every analysed file when ClamAV is installed (clamd socket, or clamscan); readable text of Word, Excel, PowerPoint, OpenDocument, EPUB, PDF, RTF and HTML, and OCR of images and scanned PDFs when Tesseract is installed (pdftoppm from Poppler for PDF pages); bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; YARA rules; TLSH/ssdeep; EXIF with GPS; perceptual hashes (pHash/dHash) and similar images |
+| GEOINT | Local world map (Natural Earth) with EXIF positions of analysed images and JPEG evidence, approximate network locations and points the analyst adds to a case, always with origin and precision; GeoJSON and KML export |
+| CTI | Offline MITRE ATT&CK with case techniques and threat-actor profiles (groups ranked by techniques shared with a case, never as attribution), Sigma rules from SigmaHQ, TAXII 2.1 client, CISA KEV, NVD/EPSS/OSV, STIX 2.1 / MISP / IOC export with TLP |
+| MISP and OpenCTI | Send a case to your own MISP (as an event, updated on resend) or OpenCTI (observables plus one report), and see in every multi-source search whether the value is already in your MISP events or OpenCTI observables; internal servers on private addresses are allowed when you say so |
+| Plugins | Local folder, validated manifest, declared permissions, approval by code SHA-256, separate process with brokered network |
+| Reports | Chosen sections, generated methodology, graph picture, custody and techniques; HTML, Markdown, JSON, CSV and browser print to PDF |
+| AI assistant | Side panel (robot button) driven by the model chosen in Settings: local (Ollama, LM Studio, llama.cpp, vLLM), OpenAI-compatible (OpenRouter, OpenAI…) or Anthropic; it searches, creates cases, notes, entities and links, arranges the board and graph and opens screens, asking before destructive actions |
+| AI investigator | The same model plans and chains multi-source queries on its own, within a query budget; results reach it as untrusted data; the report separates evidence (with source), inference, hypothesis and what was not confirmed |
+| System | FTS5 global search with ranking, settings, activity log, module registry with capability gating |
 
 The **module registry** is the source of truth. Modules without a tested backend
 are marked `planned` and cannot be enabled; the UI does not show navigation for
-them. Current planned modules are the NVD connector, external OSINT connectors
-and expanded media forensics.
+them. The only planned module left is expanded media forensics (OCR, video
+frames).
+
+People are out of scope by design: no person or username search, no breach
+or stealer-log data, no profile correlation. Person, username and profile
+entities can be recorded by hand but are never transform inputs and never
+leave in CTI exports.
 
 ## Quick start
 
@@ -70,6 +90,20 @@ python3 -m garbage_intel serve --port 8765
 Select a different database with `--database PATH` or `GARBAGE_DATABASE`.
 Evidence bytes are stored next to the database by default.
 
+### In its own window
+
+```sh
+python3 -m garbage_intel app
+```
+
+`app` serves the same interface on a free loopback port and opens it in a
+window of its own, not a browser tab; closing the window stops it. It uses
+[pywebview](https://pywebview.flowrl.com/) when installed (`pip install
+pywebview`; a native window on the system's web engine), otherwise a
+Chrome, Chromium, Edge, Brave or Vivaldi window in app mode with its own
+profile next to the database, otherwise the default browser. Force one with
+`--engine webview|browser|none`.
+
 ### Zipapp
 
 ```sh
@@ -99,7 +133,14 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
   **Cross-source matches** show observation count,
   independent source count and a corroboration strength. Matches are not
   reputation verdicts.
-- **File intelligence** — select or drop a file up to 4 MiB; results include
+- **File intelligence** — select or drop a file up to 4 MiB; documents show their
+  text in a searchable panel (copy, download as .txt) and the indicators inside
+  it. OCR is optional: install `tesseract` (with the `por` language for
+  Portuguese) and Poppler's `pdftoppm`, or point `GARBAGE_TESSERACT` /
+  `GARBAGE_PDFTOPPM` at them; files also go through ClamAV when it is
+  installed: a running `clamd` (local socket or `tcp://127.0.0.1:3310`, or
+  `GARBAGE_CLAMD`) answers in milliseconds, otherwise `clamscan` is used
+  (`GARBAGE_CLAMSCAN`); run `freshclam` to keep its signatures current; results include
   hashes, format, entropy, strings, metadata, structure, findings, binary
   hardening markers and embedded indicators. An analysis can be attached to an
   open case as evidence.
@@ -108,11 +149,25 @@ new artifact. The zipapp still requires Python 3.10+ on the target machine.
 - **Sources** — record where material came from and how it was obtained.
 - **Boards** — arrange entity-backed cards and notes, connect them, group them
   into layers and export the board as SVG.
-- **Graph** — inspect recorded relationships; layout is client-side and derived
-  only from stored entities and edges.
+- **Graph** — a tab next to Search that fills the screen. Entities are cards
+  (icon, kind, name) that open on click to show what is recorded; edges are
+  curves between cards. A dock on the right appears on hover: graph types
+  (keys 1–8), settings, actions, the selected entity and the shortcut list
+  (N or double-click: new entity, L: link two cards, X: expand a domain or IP
+  into its addresses, mail and name servers, AS and recent passive DNS — Shift+X
+  goes two levels —, E: open cards, F: fit,
+  D: keep the dock open). Every finding on the search screen is a box with a
+  **+** that puts it on the graph, linked to the searched artifact, and opens
+  the graph on it.
 - **Threat intel** — view the cached CISA KEV catalogue and refresh it
   explicitly. Page loads never contact CISA.
 - **Modules / Settings** — inspect capability state, storage and preferences.
+- **Assistant** — the robot button in the corner opens a side panel. Add an
+  OpenRouter key and pick a model (only models that accept tools are listed);
+  then ask in plain language. The model works only through the workstation's
+  own actions, so it has the same limits (no people search). Each action shows
+  in the conversation; deleting waits for **Permitir**. Messages and action
+  results go to OpenRouter and the chosen model.
 - **Command palette** (`Ctrl/⌘ K` or `/`) — search local records or run quick actions
   such as creating a case, registering an entity, adding evidence and switching density.
 - **Display menu** (◐) — persist theme, comfortable/compact density and reduced motion
@@ -236,11 +291,12 @@ python3 -m compileall -q garbage_intel tests
 for f in web/*.js; do node --check "$f"; done
 ```
 
-Current result: **115 tests pass** with the native build present; without it,
-the same suite passes with the nine native parity tests skipped. A temporary
-jsdom smoke test rendered every route against a seeded database with zero error
-states and zero console errors. There is no real-browser E2E test. See
-[TESTING.md](docs/TESTING.md) for what is and is not verified.
+Current result: **295 tests pass** with the native build present (native
+parity tests skip cleanly without it). They include an end-to-end run of a
+whole case over HTTP and a contract check between the web interface and the
+API routes. `tools/a11y_audit.js` audits every screen in a real browser for
+names, labels, contrast, ids and headings. See [TESTING.md](docs/TESTING.md)
+for what is and is not verified.
 
 Optional native helpers:
 
@@ -257,15 +313,23 @@ fallback. See [native/README.md](native/README.md).
 - Loopback only; no authentication, TLS or CSRF token. Do not expose it.
 - No encryption at rest. Protect the database and evidence directory.
 - Static analysis is not antivirus and does not prove a file is safe.
-- No website/domain/IP collectors, external OSINT connectors, automation,
-  plugin loader, FTS5 search or PDF export yet.
+- Passive network sources (registries, certificate logs, reputation services)
+  are on for a new workspace: they receive the value you search. Turn them off
+  in Configurações › Conectores. Sources that contact the target itself have a
+  second switch, off by default. Keys are stored locally and never returned by
+  the API.
+- Plugins run in a separate process with brokered network access. That is
+  containment, not a sandbox: approve only code you have read.
+- The custody log is hash-chained, which shows tampering inside the
+  database; it is not a digital signature or a trusted timestamp.
+- Monitors run only while `garbage serve` is running.
 - Native helpers are optional and loaded only from an explicit build directory
   or `GARBAGE_NATIVE_DIR`; they are never downloaded. Missing, mismatched or
   malformed libraries fall back to Python. Native code does not execute input,
   open files or use the network.
-- OpenArchive identity is ambiguous. The only verified reference is **OpenArchive
-  Save**, a mobile media-preservation app. GARBAGE does not claim feature parity
-  with it or with any unnamed project. Read
+- The reference product is **OpenArchive X** (openarchivex.net). GARBAGE
+  adopts its architecture for infrastructure and threats, and refuses its
+  people, breach and stealer-log features. See
   [OPENARCHIVE_FEATURE_MATRIX.md](docs/OPENARCHIVE_FEATURE_MATRIX.md).
 
 Report vulnerabilities privately; see [SECURITY.md](docs/SECURITY.md).
@@ -287,5 +351,7 @@ Report vulnerabilities privately; see [SECURITY.md](docs/SECURITY.md).
 ## Licence and provenance
 
 See the repository licence. GARBAGE is an independent implementation; no
-OpenArchive source code is included. OpenArchive Save is GPL-3.0; its name and
-links are used only for identification and comparison.
+OpenArchive (Save or X) source code is included. Names and links are used only
+for identification and comparison. Data that GARBAGE ships or downloads keeps
+its own terms: MITRE ATT&CK, SigmaHQ rules (Detection Rule License 1.1) and
+Natural Earth (public domain).

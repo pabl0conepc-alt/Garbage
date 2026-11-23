@@ -53,7 +53,7 @@ class Base(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_for(self, name):
-        return intel.run_query(self.database, value=f"user:{name}", wait=True, notify=False)["id"]
+        return intel.run_query(self.database, value=f"user:{name}", wait=True)["id"]
 
 
 class CompareTests(Base):
