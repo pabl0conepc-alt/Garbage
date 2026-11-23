@@ -1155,3 +1155,4 @@ from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: 
 from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402,F401
 from .modules import intel_account_connectors as _intel_account_connectors  # noqa: E402,F401
 from .modules import intel_posture_connectors as _intel_posture_connectors  # noqa: E402,F401
+from .modules import intel_web_surface as _intel_web_surface  # noqa: E402,F401

@@ -40,6 +40,18 @@
     urlhaus: ["URLhaus", "URLs de distribuição de malware ligadas a uma URL, host ou hash de payload."],
     threatfox: ["ThreatFox", "Indicadores de comprometimento ligados a famílias de malware e infraestrutura de botnets."],
     malwarebazaar: ["MalwareBazaar", "Registro de amostra de malware: família, tipo, entrega e hashes de semelhança."],
+    "discord-snowflake": ["Discord: data do ID", "Data de criação embutida num ID do Discord. Nada sai da máquina."],
+    "discord-user": ["Discord: usuário", "Perfil público de um usuário pelo ID: nome, nome de exibição, avatar, banner, insígnias e tag de servidor. Exige um token de bot seu."],
+    "discord-invite": ["Discord: convite", "Servidor por trás de um convite: nome, ID, data de criação, descrição, recursos, membros e online, quem convidou e validade."],
+    "roblox-user": ["Roblox", "Perfil público por ID ou nome: nomes, criação, banimento, descrição, amigos e seguidores, grupos e cargos, nomes anteriores e avatar."],
+    "username-sites": ["Username em 17 sites", "Se o nome existe em GitHub, GitLab, Chess.com, Lichess, Hacker News, DEV, Docker Hub, npm, PyPI, Keybase, Codeberg, Minecraft, Steam, Bluesky, Mastodon, Hugging Face e Launchpad, com o link do perfil."],
+    "username-variations": ["Variações de username", "Forma normalizada, traços estruturais e grafias parecidas para pesquisar em seguida. Nada sai da máquina."],
+    minecraft: ["Minecraft", "Perfil Java Edition por nome: UUID, skin e capa pela API pública da Mojang."],
+    steam: ["Steam", "Perfil público da Steam Community: nome, SteamID64, membro desde, privacidade, banimentos VAC e de troca e avatar. Nome real e localização não são guardados."],
+    telegram: ["Telegram", "Prévia pública do t.me de usuário, bot, grupo ou canal: nome, descrição, membros ou inscritos e foto."],
+    hibp: ["Have I Been Pwned", "Vazamentos em que um e-mail apareceu: nome, data, tamanho e tipos de dado expostos. Exige sua chave do HIBP; nunca traz os dados vazados."],
+    "email-posture": ["Postura de e-mail e domínio", "Nota de SPF, DMARC, DKIM, DNSSEC, MTA-STS, TLS-RPT, BIMI e CAA pelo DNS público, provedor de e-mail e domínio descartável."],
+    "web-surface": ["Superfície do site", "Página inicial, robots.txt, sitemap e manifest: caminhos bloqueados e sensíveis, seções do sitemap, SEO e Open Graph, canonical, hreflang, pontos fracos da CSP, conteúdo misto, hosts externos e hash do texto para monitoramento. Contata o servidor do alvo."],
   };
 
   const RESULT_LABELS = {
@@ -78,6 +90,24 @@
     "security-contact": "Contato de segurança", "security-policy": "Política de divulgação",
     "security-encryption": "Chave de criptografia", "security-acknowledgments": "Agradecimentos",
     "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
+    "created-at": "Criado em", username: "Nome de usuário", avatar: "Avatar", banner: "Banner",
+    "accent-color": "Cor de destaque", badge: "Insígnia", "server-tag": "Tag de servidor", account: "Conta",
+    server: "Servidor", "server-feature": "Recurso do servidor", "server-icon": "Ícone do servidor",
+    "member-count": "Membros", "invite-channel": "Canal do convite", inviter: "Quem convidou",
+    "invite-expires": "Validade do convite", invite: "Convite", "user-id": "ID do usuário", banned: "Banido",
+    description: "Descrição", "friends-count": "Amigos", "followers-count": "Seguidores",
+    "following-count": "Seguindo", group: "Grupo", "previous-username": "Nome anterior",
+    "site-unknown": "Site sem resposta clara", "telegram-name": "Nome no Telegram", handle: "Identificador",
+    breach: "Vazamento", "username-analysis": "Análise do username", variation: "Variação", skin: "Skin",
+    cape: "Capa", "steam-id64": "SteamID64", "persona-name": "Nome na Steam", "custom-url": "URL personalizada",
+    "member-since": "Membro desde", privacy: "Privacidade", "vac-banned": "Banido por VAC",
+    "trade-ban": "Banimento de troca", "limited-account": "Conta limitada", headline: "Título",
+    "posture-score": "Nota de postura", "posture-check": "Verificação", "mail-provider": "Provedor de e-mail",
+    "disposable-domain": "Domínio descartável", "robots-txt": "robots.txt", "robots-disallow": "Caminho bloqueado",
+    sitemap: "Sitemap", "sitemap-notable": "URL sensível no sitemap", canonical: "Canonical",
+    "seo-meta": "Meta de SEO", "social-meta": "Meta social (Open Graph)", "seo-missing": "Meta ausente",
+    hreflang: "Idioma alternativo", "page-links": "Links da página", "mixed-content": "Conteúdo misto",
+    csp: "Content-Security-Policy", "page-text-hash": "Hash do texto da página", "web-manifest": "Manifest do app",
   };
 
   const DATA_LABELS = {
@@ -150,6 +180,8 @@
   const TYPE_LABELS = {
     domain: "Domínio", ipv4: "IPv4", ipv6: "IPv6", cidr: "CIDR", url: "URL", email: "E-mail",
     md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", asn: "ASN", cve: "CVE",
+    "discord-id": "ID do Discord", "discord-invite": "Convite do Discord", "roblox-user": "Roblox",
+    username: "Username", telegram: "Telegram", minecraft: "Minecraft", steam: "Steam",
   };
 
   /* Which findings can become a shared entity, and as which category. */
@@ -166,7 +198,7 @@
     "dns-a", "dns-aaaa", "dns-ns", "dns-cname", "dns-mx", "nameserver", "ct-name",
     "asn", "cidr", "abuse-contact", "lookalike", "co-occurrence", "indicator", "cert-san",
     "cert-san-ip", "http-redirect", "hostname", "origin-asn", "announced-prefix", "subdomain",
-    "malicious-url", "final-url", "ioc", "cve",
+    "malicious-url", "final-url", "ioc", "cve", "variation", "inviter",
   ]);
 
   const PROVIDER_NOTE = {
@@ -179,6 +211,8 @@
     urlscan: "Opcional: a busca funciona sem chave, com limite menor.",
     nvd: "Opcional: aumenta o limite de 5 para 50 consultas a cada 30 s.",
     ipinfo: "Opcional: sem token, o limite anônimo é menor.",
+    discord: "Obrigatório para o perfil de usuário. Crie um bot no Developer Portal e cole o token dele.",
+    hibp: "Obrigatória e paga. Mostra só em quais vazamentos o e-mail apareceu.",
   };
 
   function button(label, onClick, options = {}) {
@@ -214,6 +248,8 @@
     let value = String(item.value || "").trim();
     if (item.result_type === "dns-mx") value = value.split(/\s+/).pop() || "";
     if (item.result_type === "ct-name") value = value.replace(/^\*\./, "");
+    if (item.result_type === "variation" && item.data?.query) return item.data.query;
+    if (item.result_type === "inviter") return `discord:${item.data?.user_id || ""}`;
     return value.replace(/\.$/, "");
   }
 
