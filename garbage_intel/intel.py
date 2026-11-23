@@ -36,7 +36,7 @@ from .modules.indicator_tools import inspect_value
 from .net import NetworkError, NetworkPolicyError
 from .validation import clean_text
 
-ARTIFACT_TYPES = (
+INDICATOR_TYPES = (
     "domain",
     "ipv4",
     "ipv6",
@@ -49,6 +49,10 @@ ARTIFACT_TYPES = (
     "asn",
     "cve",
 )
+# Public platform accounts, written with a prefix (discord:<id>, roblox:<id or
+# name>) or as their profile/invite URL so they never collide with indicators.
+ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user")
+ARTIFACT_TYPES = INDICATOR_TYPES + ACCOUNT_TYPES
 RESULT_STATUSES = (
     "pending",
     "ok",
@@ -64,6 +68,16 @@ RESULT_STATUSES = (
 MAX_FINDINGS_PER_CONNECTOR = 200
 MAX_RUNS_LISTED = 100
 _CVE = re.compile(r"CVE-(\d{4})-(\d{4,7})", re.IGNORECASE)
+_DISCORD_ID = re.compile(r"discord:\s*(\d{15,20})", re.IGNORECASE)
+_DISCORD_INVITE = re.compile(
+    r"(?:https?://)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com/invite)/([A-Za-z0-9-]{2,32})/?",
+    re.IGNORECASE,
+)
+_ROBLOX_PREFIX = re.compile(r"roblox:\s*(\d{1,19}|[A-Za-z0-9_]{3,20})", re.IGNORECASE)
+_ROBLOX_PROFILE = re.compile(
+    r"(?:https?://)?(?:www\.)?roblox\.com/(?:[a-z]{2}/)?users/(\d{1,19})(?:/profile)?/?",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -196,6 +210,9 @@ def detect_artifact(raw: object) -> dict[str, str]:
     cve = _CVE.fullmatch(value.strip())
     if cve:
         return {"type": "cve", "value": f"CVE-{cve.group(1)}-{cve.group(2)}", "label": "CVE"}
+    account = _detect_account(value.strip())
+    if account:
+        return account
     try:
         inspection = inspect_value(value)
     except ValueError as exc:
@@ -205,9 +222,23 @@ def detect_artifact(raw: object) -> dict[str, str]:
     if kind not in ARTIFACT_TYPES or not canonical:
         raise ValidationError(
             "value is not a supported artifact; use a domain, IP, CIDR, URL, "
-            "email, hash, ASN or CVE"
+            "email, hash, ASN, CVE, discord:<id>, a Discord invite or roblox:<id or name>"
         )
     return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
+
+
+def _detect_account(value: str) -> dict[str, str] | None:
+    match = _DISCORD_ID.fullmatch(value)
+    if match:
+        return {"type": "discord-id", "value": match.group(1), "label": "Discord ID"}
+    match = _DISCORD_INVITE.fullmatch(value)
+    if match:
+        return {"type": "discord-invite", "value": match.group(1), "label": "Discord invite"}
+    match = _ROBLOX_PREFIX.fullmatch(value) or _ROBLOX_PROFILE.fullmatch(value)
+    if match:
+        # Usernames are case-insensitive on Roblox; ids are kept as written.
+        return {"type": "roblox-user", "value": match.group(1).lower(), "label": "Roblox user"}
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1005,7 +1036,7 @@ register_connector(
         connector_id="local-structure",
         name="Structural facts",
         description="Syntax, canonical form and structural facts of the artifact; nothing leaves the machine.",
-        accepts=ARTIFACT_TYPES,
+        accepts=INDICATOR_TYPES,
         run=_structure_connector,
     )
 )
@@ -1014,7 +1045,7 @@ register_connector(
         connector_id="local-workspace",
         name="Local workspace",
         description="Exact matches in local entities, evidence, file analyses and indicator index.",
-        accepts=tuple(item for item in ARTIFACT_TYPES if item != "cve"),
+        accepts=tuple(item for item in INDICATOR_TYPES if item != "cve"),
         run=_workspace_connector,
     )
 )
@@ -1026,3 +1057,4 @@ from .modules import intel_target_connectors as _intel_target_connectors  # noqa
 from .modules import intel_open_connectors as _intel_open_connectors  # noqa: E402,F401
 from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: E402,F401
 from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402,F401
+from .modules import intel_account_connectors as _intel_account_connectors  # noqa: E402,F401
