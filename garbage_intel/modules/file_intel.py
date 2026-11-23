@@ -29,6 +29,7 @@ from ..validation import clean_text
 from .embedded_scan import scan_signatures
 from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
 from .hardening import describe_hardening
+from .exif import read_exif
 from .imaging import inspect_image
 from .indicators import extract_indicators
 from .yara_rules import scan_with_enabled
@@ -1215,6 +1216,15 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         if image:
             structure = {"image": image}
             metadata["image"] = image
+        exif = read_exif(data) if kind == "jpeg" else None
+        if exif:
+            metadata["exif"] = exif
+            if "gps" in exif:
+                flags.append(
+                    f"photo carries a GPS position ({exif['gps']['latitude']}, {exif['gps']['longitude']})"
+                )
+            if exif.get("body_serial") or exif.get("camera_owner"):
+                flags.append("photo carries a camera serial number or owner name")
     elif kind in {"json", "xml", "html", "text"}:
         encoded = data[:4096].decode("utf-8", errors="replace")
         structure = {

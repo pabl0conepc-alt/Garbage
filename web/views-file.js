@@ -680,6 +680,21 @@
       ]);
 
       const sections = [];
+      const gps = analysis.metadata?.exif?.gps;
+      if (gps) {
+        sections.push(
+          panel(
+            { eyebrow: "GEOLOCALIZAÇÃO", title: "Posição gravada na foto", caption: "Do EXIF; pode ter sido editada" },
+            G.kvList([
+              ["Latitude", String(gps.latitude)],
+              ["Longitude", String(gps.longitude)],
+              ["Altitude", gps.altitude_m !== undefined ? `${gps.altitude_m} m` : null],
+              ["Hora GPS (UTC)", gps.utc || null],
+              ["Mapa", el("a", { class: "table-link", href: gps.map_url, target: "_blank", rel: "noopener noreferrer" }, "Abrir no OpenStreetMap")],
+            ]),
+          ),
+        );
+      }
       if (structure.entries?.length) {
         sections.push(
           panel(

@@ -169,6 +169,13 @@ def _coerce_setting(entry: dict[str, Any], value: object) -> str:
         if not minimum <= number <= maximum:
             raise ValidationError(f"{key} must be between {minimum} and {maximum}")
         return str(number)
+    if entry["type"] == "url":
+        if not isinstance(value, str):
+            raise ValidationError(f"{key} must be a string")
+        value = value.strip()
+        if value and (not value.startswith("https://") or len(value) > 500 or any(c.isspace() for c in value)):
+            raise ValidationError(f"{key} must be empty or an https:// URL of at most 500 characters")
+        return value
     raise ValidationError(f"unsupported setting type for {key}")
 
 

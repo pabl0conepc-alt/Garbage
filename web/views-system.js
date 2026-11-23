@@ -233,6 +233,22 @@
         el("p", { class: "field-hint" }, entry.description),
       );
     }
+    if (entry.type === "url") {
+      return el(
+        "div",
+        { class: "field" },
+        el("label", {}, entry.label),
+        el("input", {
+          class: "input",
+          type: "url",
+          value,
+          placeholder: "https://",
+          "data-setting": entry.key,
+          "aria-label": entry.label,
+        }),
+        el("p", { class: "field-hint" }, entry.description),
+      );
+    }
     return el(
       "div",
       { class: "field" },

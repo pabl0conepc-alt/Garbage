@@ -36,6 +36,8 @@ PROVIDERS: dict[str, Provider] = {
         Provider("urlscan", "urlscan.io", "https://urlscan.io/user/profile/", "Optional: search works without a key at a lower rate."),
         Provider("nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key", "Optional: raises the rate limit from 5 to 50 requests per 30 s."),
         Provider("ipinfo", "IPinfo", "https://ipinfo.io/account/token", "Optional: the anonymous tier is rate limited."),
+        Provider("discord", "Discord (bot token)", "https://discord.com/developers/applications", "A token of your own bot; needed only for user profile lookups by ID."),
+        Provider("hibp", "Have I Been Pwned", "https://haveibeenpwned.com/API/Key", "Paid key; returns only which breaches an address appeared in, never the leaked data."),
     )
 }
 
