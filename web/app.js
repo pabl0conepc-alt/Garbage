@@ -58,6 +58,7 @@ G.NAV = [
     items: [
       { view: "board", label: "Quadro de investigação", icon: "board", module: "investigation-board" },
       { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
+      { view: "geo", label: "Mapa", icon: "graph", module: "investigations" },
       { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
       { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
     ],

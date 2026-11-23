@@ -1071,6 +1071,24 @@ def _migrate_watchlists(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_geo_points(connection: sqlite3.Connection) -> None:
+    """Version 11: map points added by the analyst."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS geo_points (
+               id TEXT PRIMARY KEY,
+               investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+               label TEXT NOT NULL,
+               latitude REAL NOT NULL,
+               longitude REAL NOT NULL,
+               note TEXT NOT NULL DEFAULT '',
+               source_reference TEXT NOT NULL DEFAULT '',
+               observed_at TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS geo_points_case ON geo_points(investigation_id);"""
+    )
+
+
 MIGRATIONS = (
     (1, "Baseline evidence ledger schema", _migrate_ledger),
     (2, "Investigation workspace tables and columns", _migrate_workspace),
@@ -1082,6 +1100,7 @@ MIGRATIONS = (
     (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
     (9, "Full-text search index", _migrate_search_index),
     (10, "Watchlists and alerts", _migrate_watchlists),
+    (11, "Analyst map points", _migrate_geo_points),
 )
 
 

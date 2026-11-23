@@ -68,7 +68,7 @@ from .intel import (
     run_query,
 )
 from .modules.email_headers import analyze_headers
-from . import preservation, watchlist
+from . import geo, preservation, watchlist
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -150,6 +150,7 @@ _STATIC_FILES = {
     "views-attack.js": "text/javascript; charset=utf-8",
     "views-transforms.js": "text/javascript; charset=utf-8",
     "views-watchlist.js": "text/javascript; charset=utf-8",
+    "views-geo.js": "text/javascript; charset=utf-8",
     "graph-tools.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
@@ -1061,6 +1062,30 @@ class RequestHandler(BaseHTTPRequestHandler):
     def api_evidence_verify_all(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._module("evidence")
         self._json(200, preservation.verify_all(self.database_path))
+
+    def api_geo_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        case = _query_text(query, "investigation_id", "").strip() or None
+        self._json(200, geo.collect_points(self.database_path, case))
+
+    def api_geo_export(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        case = _query_text(query, "investigation_id", "").strip() or None
+        kind = _query_text(query, "format", "geojson")
+        points = geo.collect_points(self.database_path, case)["items"]
+        if kind == "kml":
+            self._send(200, "application/vnd.google-earth.kml+xml", geo.to_kml(points, "GARBAGE").encode("utf-8"),
+                       {"Content-Disposition": _attachment_disposition("garbage-map.kml")})
+        elif kind == "geojson":
+            self._send(200, "application/geo+json", json.dumps(geo.to_geojson(points), ensure_ascii=False).encode("utf-8"),
+                       {"Content-Disposition": _attachment_disposition("garbage-map.geojson")})
+        else:
+            raise ValidationError("format must be geojson or kml")
+
+    def api_geo_point_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(201, geo.add_point(self.database_path, match.group(1), payload))
+
+    def api_geo_point_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        geo.delete_point(self.database_path, match.group(1))
+        self._json(200, {"deleted": match.group(1)})
 
     def api_evidence_preview(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
@@ -2135,6 +2160,10 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/capture$"), "api_evidence_capture", MAX_BODY_BYTES),
     ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/evidence-package$"), "api_evidence_package", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/evidence/verify-all$"), "api_evidence_verify_all", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/geo$"), "api_geo_get", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/geo/export$"), "api_geo_export", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/geo-points$"), "api_geo_point_post", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/geo-points/{_ID_PATTERN}$"), "api_geo_point_delete", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/watchlist$"), "api_watchlist_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/watchlist$"), "api_watchlist_post", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/watchlist/alerts$"), "api_watch_alerts", MAX_BODY_BYTES),

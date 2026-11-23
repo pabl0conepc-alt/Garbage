@@ -1002,7 +1002,7 @@
       status,
       el(
         "div",
-        { class: "row-actions", style: "justify-content:flex-start" },
+        { class: "row-actions" },
         button("Exportar pacote verificável do caso", () => {
           if (caseSelect.value) location.href = `/api/investigations/${caseSelect.value}/evidence-package`;
         }),
