@@ -68,7 +68,7 @@ from .intel import (
     run_query,
 )
 from .modules.email_headers import analyze_headers
-from . import watchlist
+from . import preservation, watchlist
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -1048,6 +1048,19 @@ class RequestHandler(BaseHTTPRequestHandler):
             data,
             {"Content-Disposition": _attachment_disposition(original_name)},
         )
+
+    def api_evidence_capture(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("evidence")
+        self._json(201, preservation.capture_url(self.database_path, match.group(1), payload))
+
+    def api_evidence_package(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        data, name = preservation.export_package(self.database_path, match.group(1))
+        self._send(200, "application/zip", data, {"Content-Disposition": _attachment_disposition(name)})
+
+    def api_evidence_verify_all(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        self._json(200, preservation.verify_all(self.database_path))
 
     def api_evidence_preview(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
@@ -2119,6 +2132,9 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ),
     ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/intel/email-headers$"), "api_intel_email_headers", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/capture$"), "api_evidence_capture", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/evidence-package$"), "api_evidence_package", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/evidence/verify-all$"), "api_evidence_verify_all", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/watchlist$"), "api_watchlist_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/watchlist$"), "api_watchlist_post", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/watchlist/alerts$"), "api_watch_alerts", MAX_BODY_BYTES),

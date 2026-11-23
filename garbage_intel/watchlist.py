@@ -304,6 +304,9 @@ def start_scheduler(database: str, period_seconds: float = 60.0) -> threading.Ev
         while not stop.wait(period_seconds):
             try:
                 run_due(database)
+                from .preservation import run_daily_verification
+
+                run_daily_verification(database)
             except Exception as exc:  # noqa: BLE001 - the scheduler must survive any one failure
                 with _connection(database) as connection:
                     record_activity(connection, action="watch-scheduler", target_type="watch",
