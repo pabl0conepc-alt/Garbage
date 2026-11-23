@@ -397,7 +397,7 @@
     let detected = null;
     let currentRun = null;
     let pollToken = 0;
-    let activeTab = { conectores: "connectors", chaves: "keys" }[params[0]] || "search";
+    let activeTab = { conectores: "connectors", chaves: "keys", cabecalhos: "headers" }[params[0]] || "search";
     const keysHost = el("div");
     let detectTimer = null;
     const selected = new Set(connectorData.items.map((item) => item.connector_id));
@@ -874,6 +874,84 @@
       );
     }
 
+    const headersHost = el("div");
+    function headersTab() {
+      if (headersHost.childElementCount) return headersHost;
+      const area = el("textarea", {
+        class: "input header-input",
+        rows: "12",
+        spellcheck: "false",
+        placeholder: "Cole aqui os cabeçalhos completos da mensagem (no Gmail: Mostrar original; no Outlook: Exibir origem da mensagem).",
+        "aria-label": "Cabeçalhos do e-mail",
+      });
+      const output = el("div");
+      const levelTone = { high: "danger", medium: "warning", low: "neutral" };
+      const levelLabel = { high: "Alto", medium: "Médio", low: "Baixo" };
+      async function analyse(event) {
+        event.preventDefault();
+        output.replaceChildren(loadingBlock("Analisando cabeçalhos…"));
+        try {
+          const r = await api("/api/intel/email-headers", { method: "POST", body: JSON.stringify({ headers: area.value }) });
+          const auth = r.authentication;
+          output.replaceChildren(
+            panel(
+              { eyebrow: "RESUMO", title: r.subject || "(sem assunto)", caption: `Risco: ${levelLabel[r.risk]}` },
+              G.kvList([
+                ["De", `${r.from.name ? r.from.name + " " : ""}<${r.from.address}>`],
+                ["Responder para", r.reply_to || null],
+                ["Return-Path", r.return_path || null],
+                ["Data", r.date || null],
+                ["IP de origem", r.origin_ip || null],
+                ["SPF / DKIM / DMARC", ["spf", "dkim", "dmarc"].map((m) => `${m.toUpperCase()}=${auth.verdicts[m] || "—"}`).join("  ")],
+                ["Alinhamento", `SPF ${auth.alignment.spf ? "alinhado" : "não alinhado"} · DKIM ${auth.alignment.dkim ? "alinhado" : "não alinhado"}`],
+                ["Assinaturas DKIM", auth.dkim_signatures.map((d) => `${d.domain} (s=${d.selector})`).join(", ") || null],
+              ]),
+            ),
+            panel(
+              { eyebrow: "SINAIS", title: `Observações (${r.signals.length})` },
+              r.signals.length
+                ? el("div", {}, ...r.signals.map((sig) => el("div", { class: "file-finding" }, badge(levelLabel[sig.level], levelTone[sig.level]), el("span", {}, sig.message))))
+                : el("p", { class: "panel-empty" }, "Nenhum sinal de alerta."),
+            ),
+            panel(
+              { eyebrow: "CAMINHO", title: `Saltos de entrega (${r.hops.length})`, caption: "Do primeiro servidor ao destino" },
+              table({
+                columns: [
+                  { label: "#", render: (h) => String(h.hop) },
+                  { label: "DE", render: (h) => h.from || "—" },
+                  { label: "IP", render: (h) => h.from_ip || "—" },
+                  { label: "POR", render: (h) => h.by || "—" },
+                  { label: "ATRASO", render: (h) => (h.delay_seconds !== undefined ? `${h.delay_seconds}s` : "—") },
+                ],
+                rows: r.hops,
+                emptyMessage: "Nenhum cabeçalho Received.",
+              }),
+            ),
+            panel(
+              { eyebrow: "INDICADORES", title: `Extraídos (${r.indicators.length})`, caption: "Clique para consultar na multibusca" },
+              r.indicators.length
+                ? el("div", { class: "chip-row" }, ...r.indicators.map((i) => el("button", { class: "button button-secondary button-small", type: "button", onclick: () => { input.value = i.value; activeTab = "search"; renderTab(); form.requestSubmit(); } }, `${i.type}: ${i.value}`)))
+                : el("p", { class: "panel-empty" }, "Nenhum indicador."),
+            ),
+            el("p", { class: "field-hint" }, r.limitations.join(" ")),
+          );
+        } catch (error) {
+          output.replaceChildren(G.inlineError(error.message));
+        }
+      }
+      headersHost.append(
+        el(
+          "form",
+          { class: "query-panel", onsubmit: analyse },
+          area,
+          el("button", { class: "button button-primary", type: "submit" }, "Analisar cabeçalhos"),
+          el("p", { class: "field-hint" }, "Tudo é analisado localmente; nenhum link é aberto e nada é consultado na internet."),
+        ),
+        output,
+      );
+      return headersHost;
+    }
+
     function renderTab() {
       tabStrip.replaceChildren(
         G.tabs({
@@ -881,6 +959,7 @@
             { key: "search", label: "Pesquisa" },
             { key: "connectors", label: "Conectores", count: connectorData.total },
             { key: "keys", label: "Chaves de API" },
+            { key: "headers", label: "Cabeçalhos de e-mail" },
           ],
           active: activeTab,
           onSelect: (key) => {
@@ -893,6 +972,8 @@
       tabHost.replaceChildren(
         activeTab === "keys"
           ? keysHost
+          : activeTab === "headers"
+          ? headersTab()
           : activeTab === "connectors"
           ? connectorsTab()
           : el(

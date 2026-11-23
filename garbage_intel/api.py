@@ -67,6 +67,7 @@ from .intel import (
     recover_interrupted_runs,
     run_query,
 )
+from .modules.email_headers import analyze_headers
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -1438,6 +1439,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             raise ValidationError("value is required")
         self._json(200, detect_artifact(value))
 
+    def api_intel_email_headers(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("intel-orchestrator")
+        if not isinstance(payload, dict) or set(payload) - {"headers"}:
+            raise ValidationError("send {\"headers\": \"...\"}")
+        try:
+            self._json(200, analyze_headers(payload.get("headers")))
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
     def api_intel_runs_get(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -2075,6 +2087,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         MAX_BODY_BYTES,
     ),
     ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/intel/email-headers$"), "api_intel_email_headers", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/intel/runs$"), "api_intel_runs_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/intel/runs$"), "api_intel_runs_post", MAX_BODY_BYTES),
     (
