@@ -432,7 +432,7 @@
   /* View                                                             */
   /* ---------------------------------------------------------------- */
 
-  async function renderMultiSearch(root, params = []) {
+  async function renderMultiSearch(root, params = [], only = "") {
     let [connectorData, runs] = await Promise.all([
       api("/api/intel/connectors"),
       api("/api/intel/runs?limit=15"),
@@ -443,7 +443,13 @@
     let detected = null;
     let currentRun = null;
     let pollToken = 0;
-    let activeTab = { conectores: "connectors", chaves: "keys", cabecalhos: "headers", comparar: "compare" }[params[0]] || "search";
+    // Conectores and Chaves de API live under Configurações (`only`); the search
+    // screen keeps the search itself, e-mail headers and run comparison.
+    let activeTab = only || { cabecalhos: "headers", comparar: "compare" }[params[0]] || "search";
+    if (!only && ["conectores", "chaves"].includes(params[0])) {
+      location.hash = `#/${params[0] === "chaves" ? "keys" : "connectors"}`;
+      return;
+    }
     const keysHost = el("div");
     let detectTimer = null;
     const selected = new Set(connectorData.items.map((item) => item.connector_id));
@@ -454,7 +460,6 @@
       id: "multisearch-input",
       autocomplete: "off",
       spellcheck: "false",
-      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome>, t.me/<nome>, minecraft:<nome>, steam:<nome> ou topic:<termos>",
       "aria-label": "Artefato para consultar",
       maxlength: "2000",
     });
@@ -1069,11 +1074,9 @@
 
     function renderTab() {
       tabStrip.replaceChildren(
-        G.tabs({
+        only ? "" : G.tabs({
           items: [
             { key: "search", label: "Pesquisa" },
-            { key: "connectors", label: "Conectores", count: connectorData.total },
-            { key: "keys", label: "Chaves de API" },
             { key: "headers", label: "Cabeçalhos de e-mail" },
             { key: "compare", label: "Comparar" },
           ],
@@ -1100,8 +1103,8 @@
               el(
                 "section",
                 { class: "query-panel" },
+                // Every compatible source is asked; choosing them is in the Conectores tab.
                 form,
-                connectorChips,
               ),
               resultArea,
               panel({ eyebrow: "HISTÓRICO", title: "Consultas recentes" }, historyHost),
@@ -1112,12 +1115,7 @@
 
     root.append(
       ...[
-      pageHeader({
-        eyebrow: "INTELIGÊNCIA MULTIFONTE",
-        title: "Pesquisa multifonte",
-        description:
-          "Um artefato consultado em paralelo em todas as fontes compatíveis. Cada resultado guarda a fonte, o hash da resposta e o horário. Correlação não é atribuição.",
-      }),
+      pageHeader({ title: { connectors: "Conectores", keys: "Chaves de API" }[only] || "Pesquisa multifonte" }),
       connectorData.network_allowed
         ? null
         : el(
@@ -1172,6 +1170,8 @@
   }
 
   G.views.multisearch = renderMultiSearch;
+  G.views.connectors = (root) => renderMultiSearch(root, [], "connectors");
+  G.views.keys = (root) => renderMultiSearch(root, [], "keys");
   G.connectorLabel = (id) => connectorName(id, id);
   G.resultTypeLabel = (type) => RESULT_LABELS[type] || type;
   G.sourceStatusLabel = (status) => (STATUS_TEXT[status] || [status])[0];

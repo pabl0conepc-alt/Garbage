@@ -1180,18 +1180,18 @@
         const stroke = record.element_kind === "group" ? "#4b5a70" : "#2c3644";
         parts.push(
           `<rect x="${record.x}" y="${record.y}" width="${record.width}" height="${record.height}" rx="8" fill="${fill}" stroke="${stroke}"/>`,
-          `<text x="${record.x + 16}" y="${record.y + 26}" fill="#8fa0b5" font-family="ui-monospace, monospace" font-size="10">${escapeXml(
+          `<text x="${record.x + 16}" y="${record.y + 26}" fill="#8fa0b5" font-family="Inter, system-ui, sans-serif" font-size="10">${escapeXml(
             record.element_kind === "entity"
               ? entityTypeLabel(record.entity_type)
               : titleCase(record.element_kind),
           )}</text>`,
-          `<text x="${record.x + 16}" y="${record.y + 50}" fill="#e7edf5" font-family="system-ui, sans-serif" font-size="15" font-weight="600">${escapeXml(
+          `<text x="${record.x + 16}" y="${record.y + 50}" fill="#e7edf5" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600">${escapeXml(
             (record.label || "").slice(0, 42),
           )}</text>`,
         );
         if (record.entity_identifier) {
           parts.push(
-            `<text x="${record.x + 16}" y="${record.y + 72}" fill="#7f8ea3" font-family="ui-monospace, monospace" font-size="11">${escapeXml(
+            `<text x="${record.x + 16}" y="${record.y + 72}" fill="#7f8ea3" font-family="Inter, system-ui, sans-serif" font-size="11">${escapeXml(
               record.entity_identifier.slice(0, 44),
             )}</text>`,
           );
@@ -1200,7 +1200,7 @@
           const lines = record.content.slice(0, 220).match(/.{1,52}(\s|$)/g) || [];
           lines.slice(0, 5).forEach((line, index) => {
             parts.push(
-              `<text x="${record.x + 16}" y="${record.y + 94 + index * 16}" fill="#a8b6c8" font-family="system-ui, sans-serif" font-size="12">${escapeXml(
+              `<text x="${record.x + 16}" y="${record.y + 94 + index * 16}" fill="#a8b6c8" font-family="Inter, system-ui, sans-serif" font-size="12">${escapeXml(
                 line.trim(),
               )}</text>`,
             );
