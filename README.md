@@ -25,7 +25,7 @@ zipapp. There is no telemetry, no cloud account and no hidden collection.
 | File intelligence | Bounded static analysis of PDF, OOXML/ZIP, TAR, GZIP, images, ELF, PE and Mach-O; hashes, entropy, strings, metadata, archive listing, findings and history; optional C scanner for ELF/PE hardening markers (PIE, NX, RELRO, bind-now, canary, Fortify, ASLR, CFG) |
 | Board | Persisted investigation board with cards, notes, groups, connections, layers, autosave, conflict handling and SVG export |
 | Graph | Relationship graph with type filters, focus, search, pan/zoom, drag and layered export; optional C++ metrics for components, density, isolates, degrees and reciprocal links |
-| Accounts | Public lookups for Discord IDs and invites, Roblox users, Telegram channels and groups, usernames across 11 sites and Have I Been Pwned breach names (own key); photo EXIF with GPS position and map link; webhook summary of finished queries |
+| Accounts | Public lookups for Discord IDs and invites, Roblox users, Telegram channels and groups, usernames across 17 sites with offline variations, Minecraft and Steam profiles, email/domain posture grade, offline email header analysis and Have I Been Pwned breach names (own key); photo EXIF with GPS position and map link; webhook summary of finished queries |
 | CTI | CISA KEV catalogue with explicit refresh, bounded download, provenance and offline cache |
 | System | Global search, settings, activity log, module registry with capability gating |
 

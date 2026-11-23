@@ -408,7 +408,7 @@
       id: "multisearch-input",
       autocomplete: "off",
       spellcheck: "false",
-      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome> ou t.me/<nome>",
+      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome>, t.me/<nome>, minecraft:<nome> ou steam:<nome>",
       "aria-label": "Artefato para consultar",
       maxlength: "2000",
     });

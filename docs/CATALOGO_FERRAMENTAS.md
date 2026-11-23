@@ -27,7 +27,7 @@ não será implementado.
 | Bloco | Conteúdo | Itens do catálogo | Estado |
 | --- | --- | --- | --- |
 | 1 | Postura de e-mail e domínio: nota de SPF/DMARC/DKIM/DNSSEC/MTA-STS/TLS-RPT/BIMI/CAA, provedor de e-mail, domínio descartável; análise offline de cabeçalhos de e-mail (caminho, autenticação, alinhamento, sinais de phishing, indicadores) | 51–58, 72, 73, 86–92 | **Feito** |
-| 2 | Username avançado: variações, normalização, similaridade e typosquatting de username, comparação lado a lado de perfis, pontuação explicável, Minecraft e Steam públicos, mais sites | 1–50, IntelByte "Minecraft/Steam" | Planejado |
+| 2 | Username avançado: normalização, variações (separadores, dígitos, prefixos, sufixos, erros de uma letra), traços estruturais, Minecraft e Steam públicos, 17 sites | 1–5, 9, 10, 12, 24, 25; IntelByte "Minecraft/Steam" | **Feito**; comparação lado a lado de perfis e pontuação de correspondência (36, 37) ficam para o bloco 9 |
 | 3 | Watchlists e monitoramento: identificadores próprios, verificação periódica, diff de DNS, certificado novo, expiração de domínio e certificado, mudança de página, alertas no painel e por webhook | 74–77, 119–121, Monitoramento e alertas | Planejado |
 | 4 | Web passivo: robots.txt, sitemap, cadeia de redirecionamento, CSP, Open Graph/SEO, links quebrados, inventário de páginas, subdomínios passivos consolidados | 94–148 | Planejado |
 | 5 | Preservação de evidências (estilo OpenArchive Save): captura de página por URL com hash e timestamp, original x cópia de trabalho, manifesto de hashes assinado, verificação periódica, pacote exportável verificável | Seção OpenArchive | Planejado |

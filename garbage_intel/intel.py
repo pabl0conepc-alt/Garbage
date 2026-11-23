@@ -54,7 +54,7 @@ INDICATOR_TYPES = (
 # Public platform accounts, written with a prefix (discord:<id>, roblox:<id or
 # name>, user:<name>, telegram:<name>) or as their profile/invite URL so they
 # never collide with indicators.
-ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram")
+ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram", "minecraft", "steam")
 ARTIFACT_TYPES = INDICATOR_TYPES + ACCOUNT_TYPES
 RESULT_STATUSES = (
     "pending",
@@ -79,6 +79,11 @@ _DISCORD_INVITE = re.compile(
 _USERNAME = re.compile(r"(?:user|username):\s*@?([A-Za-z0-9_.-]{2,39})", re.IGNORECASE)
 _TELEGRAM = re.compile(
     r"(?:telegram:\s*@?|(?:https?://)?(?:www\.)?(?:t|telegram)\.me/)([A-Za-z][A-Za-z0-9_]{3,31})/?",
+    re.IGNORECASE,
+)
+_MINECRAFT = re.compile(r"minecraft:\s*([A-Za-z0-9_]{3,16})", re.IGNORECASE)
+_STEAM = re.compile(
+    r"(?:steam:\s*|(?:https?://)?steamcommunity\.com/(?:id|profiles)/)([A-Za-z0-9_-]{2,32})/?",
     re.IGNORECASE,
 )
 _ROBLOX_PREFIX = re.compile(r"roblox:\s*(\d{1,19}|[A-Za-z0-9_]{3,20})", re.IGNORECASE)
@@ -231,7 +236,7 @@ def detect_artifact(raw: object) -> dict[str, str]:
         raise ValidationError(
             "value is not a supported artifact; use a domain, IP, CIDR, URL, "
             "email, hash, ASN, CVE, discord:<id>, a Discord invite, roblox:<id or name>, "
-            "user:<name> or telegram:<name>"
+            "user:<name>, telegram:<name>, minecraft:<name> or steam:<name or id>"
         )
     return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
 
@@ -249,6 +254,12 @@ def _detect_account(value: str) -> dict[str, str] | None:
     match = _TELEGRAM.fullmatch(value)
     if match:
         return {"type": "telegram", "value": match.group(1).lower(), "label": "Telegram"}
+    match = _MINECRAFT.fullmatch(value)
+    if match:
+        return {"type": "minecraft", "value": match.group(1).lower(), "label": "Minecraft"}
+    match = _STEAM.fullmatch(value)
+    if match:
+        return {"type": "steam", "value": match.group(1).lower(), "label": "Steam"}
     match = _ROBLOX_PREFIX.fullmatch(value) or _ROBLOX_PROFILE.fullmatch(value)
     if match:
         # Usernames are case-insensitive on Roblox; ids are kept as written.

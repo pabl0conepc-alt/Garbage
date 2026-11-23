@@ -15,9 +15,11 @@ cross-referenced with breach dumps, message archives or scraped membership.
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 import re
+import xml.etree.ElementTree as ElementTree
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
@@ -305,6 +307,12 @@ USERNAME_SITES: tuple[tuple[str, str, str, str], ...] = (
     ("PyPI", "https://pypi.org/user/{}/", "https://pypi.org/user/{}/", "status"),
     ("Keybase", "https://keybase.io/_/api/1.0/user/lookup.json?usernames={}", "https://keybase.io/{}", "keybase"),
     ("Codeberg", "https://codeberg.org/api/v1/users/{}", "https://codeberg.org/{}", "status"),
+    ("Minecraft", "https://api.mojang.com/users/profiles/minecraft/{}", "https://namemc.com/profile/{}", "status"),
+    ("Steam", "https://steamcommunity.com/id/{}?xml=1", "https://steamcommunity.com/id/{}", "steam-xml"),
+    ("Bluesky", "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={}.bsky.social", "https://bsky.app/profile/{}.bsky.social", "status400"),
+    ("Mastodon (mastodon.social)", "https://mastodon.social/api/v1/accounts/lookup?acct={}", "https://mastodon.social/@{}", "status"),
+    ("Hugging Face", "https://huggingface.co/api/users/{}/overview", "https://huggingface.co/{}", "status"),
+    ("Launchpad", "https://api.launchpad.net/1.0/~{}", "https://launchpad.net/~{}", "status"),
 )
 
 
@@ -312,6 +320,12 @@ def _site_answer(rule: str, status: int, body: bytes) -> bool | None:
     """True = account exists, False = no account, None = could not tell."""
     if rule == "status":
         return True if status == 200 else False if status in (404, 410) else None
+    if rule == "status400":
+        return True if status == 200 else False if status in (400, 404) else None
+    if rule == "steam-xml":
+        if status != 200:
+            return False if status == 404 else None
+        return b"<steamID64>" in body if b"<profile>" in body or b"<error>" in body else None
     if status != 200:
         return False if status == 404 else None
     try:
@@ -434,6 +448,136 @@ def _hibp_connector(context: ConnectorContext) -> list[Finding]:
     return findings
 
 
+# ---------------------------------------------------------------------------
+# Username variations and analysis (offline)
+
+_LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "@": "a", "$": "s"})
+_SEPARATORS = re.compile(r"[._-]+")
+
+
+def normalise_username(name: str) -> str:
+    """Lowercase, undo leetspeak, drop separators and trailing digits."""
+    base = _SEPARATORS.sub("", name.lower())
+    base = re.sub(r"\d+$", "", base) or base
+    return base.translate(_LEET)
+
+
+def username_variations(name: str, limit: int = 40) -> list[tuple[str, str]]:
+    """Plausible spellings of the same handle, each with the rule that made it."""
+    lower = name.lower()
+    parts = [part for part in _SEPARATORS.split(lower) if part]
+    stem = re.sub(r"\d+$", "", lower).rstrip("._-") or lower
+    found: dict[str, str] = {}
+
+    def add(value: str, rule: str) -> None:
+        if 2 <= len(value) <= 39 and value != lower and value not in found:
+            found[value] = rule
+
+    if len(parts) > 1:
+        for separator in ("", ".", "_", "-"):
+            add(separator.join(parts), f"separator {separator or 'none'}")
+        add("".join(reversed(parts)), "parts reversed")
+        add(parts[0], "first part only")
+    if stem != lower:
+        add(stem, "trailing digits removed")
+    add(normalise_username(lower), "normalised (leetspeak and separators)")
+    for prefix in ("the", "real", "its", "iam", "official"):
+        add(prefix + stem, f"prefix {prefix}")
+    for suffix in ("_", "official", "real", "1", "01", "123", "x", "tv", "yt", "hd"):
+        add(stem + suffix, f"suffix {suffix}")
+    for index, char in enumerate(stem):  # one-character typos
+        if index + 1 < len(stem):
+            add(stem[:index] + stem[index + 1] + stem[index] + stem[index + 2:], "adjacent letters swapped")
+        add(stem[:index] + stem[index + 1:], "one letter removed")
+        if char.isalpha():
+            add(stem[:index] + char + stem[index:], "one letter doubled")
+    return list(found.items())[:limit]
+
+
+def _variations_connector(context: ConnectorContext) -> list[Finding]:
+    name = context.query_value
+    digits = re.search(r"(\d+)$", name)
+    traits = {
+        "length": len(name),
+        "normalised": normalise_username(name),
+        "has_separators": bool(_SEPARATORS.search(name)),
+        "trailing_digits": digits.group(1) if digits else "",
+        "leetspeak": bool(re.search(r"[a-z][0134578@$]|[0134578@$][a-z]", name.lower())),
+    }
+    if digits and len(digits.group(1)) in (2, 4):
+        number = int(digits.group(1))
+        if len(digits.group(1)) == 4 and 1950 <= number <= 2025 or len(digits.group(1)) == 2:
+            traits["digits_may_be_year"] = True
+    findings = [Finding("username-analysis", traits["normalised"], {**traits, "meaning": "structural facts only; a match on another site is not proof of the same person"})]
+    findings += [Finding("variation", value, {"rule": rule, "query": f"user:{value}"}) for value, rule in username_variations(name)]
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# Minecraft and Steam public profiles
+
+
+def _minecraft_connector(context: ConnectorContext) -> list[Finding]:
+    hosts = ("api.mojang.com", "sessionserver.mojang.com")
+    data, result = shared.request_json(f"https://api.mojang.com/users/profiles/minecraft/{quote(context.query_value, safe='')}", hosts=hosts)
+    if not isinstance(data, dict) or not data.get("id"):
+        return [Finding("account", "not found", {"meaning": "no Java Edition account has this name"}, result.final_url)]
+    uuid = _text(data["id"], 32)
+    findings = [
+        Finding("username", _text(data.get("name"), 16), {"uuid": uuid, "namemc": f"https://namemc.com/profile/{uuid}", "legacy": bool(data.get("legacy")), "demo": bool(data.get("demo"))}, result.final_url, result.sha256)
+    ]
+    profile, result = shared.request_json(f"https://sessionserver.mojang.com/session/minecraft/profile/{uuid}", hosts=hosts)
+    for prop in _list((profile or {}).get("properties"), 5) if isinstance(profile, dict) else []:
+        if not isinstance(prop, dict) or prop.get("name") != "textures":
+            continue
+        try:
+            textures = json.loads(base64.b64decode(prop.get("value", ""))).get("textures", {})
+        except (ValueError, json.JSONDecodeError):
+            continue
+        for kind in ("SKIN", "CAPE"):
+            if isinstance(textures.get(kind), dict) and textures[kind].get("url"):
+                model = (textures[kind].get("metadata") or {}).get("model", "classic") if kind == "SKIN" else ""
+                findings.append(Finding(kind.lower(), _text(textures[kind]["url"], 300), {"model": model} if model else {}, result.final_url, result.sha256))
+    return findings
+
+
+_STEAM_FIELDS = (
+    ("steamID", "persona-name"),
+    ("customURL", "custom-url"),
+    ("memberSince", "member-since"),
+    ("privacyState", "privacy"),
+    ("vacBanned", "vac-banned"),
+    ("tradeBanState", "trade-ban"),
+    ("isLimitedAccount", "limited-account"),
+    ("headline", "headline"),
+    ("avatarFull", "avatar"),
+)
+
+
+def _steam_connector(context: ConnectorContext) -> list[Finding]:
+    value = context.query_value
+    path = f"profiles/{value}" if value.isdigit() and len(value) == 17 else f"id/{quote(value, safe='')}"
+    url = f"https://steamcommunity.com/{path}?xml=1"
+    page = shared.FETCH(url, allowed_hosts=("steamcommunity.com",), max_bytes=512 * 1024, timeout=15.0)
+    if page.status >= 400:
+        raise NetworkError(f"the source answered HTTP {page.status}")
+    try:
+        root = ElementTree.fromstring(page.body)
+    except ElementTree.ParseError as exc:
+        raise NetworkError("Steam returned a page that is not profile XML") from exc
+    if root.tag != "profile" or root.findtext("steamID64") is None:
+        return [Finding("account", "not found", {}, url)]
+    source = (page.final_url, page.sha256)
+    steam_id = root.findtext("steamID64", "").strip()
+    findings = [Finding("steam-id64", steam_id, {"profile_url": f"https://steamcommunity.com/profiles/{steam_id}"}, *source)]
+    # Real name, location and free-text summary are left out on purpose.
+    for tag, result_type in _STEAM_FIELDS:
+        text = (root.findtext(tag) or "").strip()
+        if text and text != "None":
+            findings.append(Finding(result_type, _text(text, 300), {}, *source))
+    return findings
+
+
 CONNECTORS = (
     Connector("discord-snowflake", "Discord ID decode",
               "Creation time and generator fields encoded in a Discord ID; nothing leaves the machine.",
@@ -451,8 +595,19 @@ CONNECTORS = (
               ("roblox-user",), _roblox_user, network=True,
               rate_per_minute=20, ttl_seconds=3600, source_url="https://create.roblox.com/docs/cloud/legacy"),
     Connector("username-sites", "Username across sites",
-              "Whether the name is taken on GitHub, GitLab, Chess.com, Lichess, Hacker News, DEV, Docker Hub, npm, PyPI, Keybase and Codeberg, with profile links.",
+              "Whether the name is taken on 17 public sites (GitHub, GitLab, Chess.com, Lichess, Hacker News, DEV, Docker Hub, npm, PyPI, Keybase, Codeberg, Minecraft, Steam, Bluesky, Mastodon, Hugging Face, Launchpad), with profile links.",
               ("username",), _username_connector, network=True, rate_per_minute=6, ttl_seconds=3600),
+    Connector("username-variations", "Username variations",
+              "Offline: normalised form, structural traits and plausible spellings of a handle (separators, digits, prefixes, suffixes, one-letter typos) to search next.",
+              ("username",), _variations_connector),
+    Connector("minecraft", "Minecraft",
+              "Java Edition profile by name: UUID, skin and cape from Mojang's public API.",
+              ("minecraft",), _minecraft_connector, network=True, rate_per_minute=30, ttl_seconds=3600,
+              source_url="https://api.mojang.com/"),
+    Connector("steam", "Steam",
+              "Public Steam Community profile by custom URL or SteamID64: persona name, SteamID64, member since, privacy, VAC and trade bans, limited account and avatar.",
+              ("steam",), _steam_connector, network=True, rate_per_minute=20, ttl_seconds=3600,
+              source_url="https://steamcommunity.com/"),
     Connector("telegram", "Telegram",
               "Public t.me preview of a user, bot, group or channel: name, description, member or subscriber count and photo.",
               ("telegram",), _telegram_connector, network=True, rate_per_minute=20, ttl_seconds=3600,
