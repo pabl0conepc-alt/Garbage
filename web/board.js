@@ -1180,7 +1180,7 @@
         const stroke = record.element_kind === "group" ? "#4b5a70" : "#2c3644";
         parts.push(
           `<rect x="${record.x}" y="${record.y}" width="${record.width}" height="${record.height}" rx="8" fill="${fill}" stroke="${stroke}"/>`,
-          `<text x="${record.x + 16}" y="${record.y + 26}" fill="#8fa0b5" font-family="ui-monospace, monospace" font-size="10">${escapeXml(
+          `<text x="${record.x + 16}" y="${record.y + 26}" fill="#8fa0b5" font-family="system-ui, sans-serif" font-size="10">${escapeXml(
             record.element_kind === "entity"
               ? entityTypeLabel(record.entity_type)
               : titleCase(record.element_kind),
@@ -1191,7 +1191,7 @@
         );
         if (record.entity_identifier) {
           parts.push(
-            `<text x="${record.x + 16}" y="${record.y + 72}" fill="#7f8ea3" font-family="ui-monospace, monospace" font-size="11">${escapeXml(
+            `<text x="${record.x + 16}" y="${record.y + 72}" fill="#7f8ea3" font-family="system-ui, sans-serif" font-size="11">${escapeXml(
               record.entity_identifier.slice(0, 44),
             )}</text>`,
           );

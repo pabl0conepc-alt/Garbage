@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from garbage_intel import intel, preservation
+from garbage_intel import monitoring, preservation
 from garbage_intel.errors import ValidationError
 from garbage_intel.db import _connection
 from garbage_intel.evidence import _stored_path, add_evidence
@@ -81,7 +81,8 @@ class PreservationTests(unittest.TestCase):
         self.assertEqual(len(manifest["items"]), 2)
         photo = [item for item in manifest["items"] if item["title"] == "Photo"][0]
         self.assertEqual(photo["sha256"], photo["sha256_at_export"])
-        self.assertTrue(photo["custody"])
+        self.assertTrue(photo["custody"]["intact"])
+        self.assertEqual(photo["custody"]["events"][0]["action"], "recorded")
         folder = Path(self.tmp.name) / "pkg"
         archive.extractall(folder)
         ok = subprocess.run([sys.executable, "-I", "verify.py"], cwd=folder, capture_output=True, text=True)
@@ -96,9 +97,11 @@ class PreservationTests(unittest.TestCase):
         record = add_evidence(self.database, self.case, title="Doc", original_name="d.txt", data=b"original")
         self.assertEqual(preservation.verify_all(self.database)["counts"]["verified"], 1)
         stored_file(self.database, record["id"]).write_bytes(b"changed")
-        update_settings(self.database, {"intel.allow_network": "true", "intel.webhook_url": "https://example.net/h"})
+
         sent = []
-        with patch.object(intel, "WEBHOOK_FETCH", lambda url, **o: sent.append(o) or reply(url, {})):
+        monitoring.set_webhook(self.database, url="https://example.net/h", kind="discord")
+        with patch.object(monitoring.net, "fetch", lambda url, **o: sent.append(o) or reply(url, {})), \
+             patch.object(monitoring, "WEBHOOK_SEND", lambda work: work()):
             result = preservation.verify_all(self.database)
         self.assertEqual(result["problems"][0]["status"], "mismatch")
         self.assertIn("Doc: mismatch", json.loads(sent[0]["body"])["content"])

@@ -45,3 +45,24 @@ não será implementado.
 | Usuários, times, permissões, planos, cobrança, checkout, créditos, missões, tickets de suporte | O GARBAGE é local e de um único operador (ver README e SECURITY.md); não há contas nem cobrança. |
 | Verificação de portas, testes ativos e captura de screenshot de terceiros | Só para ativos próprios e com autorização explícita; entram, se entrarem, atrás do controle `intel.allow_target_contact`. |
 | Armazenamento em fita, S3 corporativo, WORM em hardware (GRAU DATA) | Infraestrutura corporativa, não funcionalidade de uma estação local. O bloco 5 cobre integridade e imutabilidade lógica. |
+
+## Integração com a linha dos PRs #20–#46
+
+Os PRs #20 a #46 (busca BR, contratos e sanções, MISP/OpenCTI, ClamAV,
+TAXII/Sigma, plugins, casos, monitoramento, assistente, redesign, GEOINT,
+pivô automático) foram integrados ao `main` junto com os blocos 1–9. Onde as
+duas linhas tinham o mesmo recurso, ficou uma implementação:
+
+| Recurso | Ficou | Veio da outra |
+| --- | --- | --- |
+| EXIF / GPS | `modules/exif.py` dos PRs #20–#46 (JPEG, PNG, WebP, TIFF; coordenada inválida marcada) | — |
+| Monitoramento | `monitoring.py` (monitores, notificações, webhook Discord/Slack/JSON) | filtro de valores que mudam sozinhos e aviso de certificado ou domínio perto de expirar (bloco 3); as watchlists foram removidas |
+| Mapa | Mapa GEOINT com mapa-base local | fotos guardadas como evidência, pontos manuais e exportação GeoJSON/KML (bloco 6); a página Mapa foi removida |
+| Cabeçalhos de e-mail | `modules/email_analysis.py` (.eml, links disfarçados, anexos) | sinal "SPF/DKIM não alinhados", horários fora de ordem e nível de risco (bloco 1); a aba da pesquisa foi removida |
+| Modelo de IA | Uma configuração só (`ai.provider`, `ai.base_url`, `ai.model`, chave "AI model") para o assistente e o Investigador IA | o assistente passou a aceitar modelos locais, APIs compatíveis com OpenAI e Anthropic; a configuração antiga com chave do OpenRouter continua funcionando |
+| Pacote de evidências | Os dois ficam: pacote portável do caso (reimportável) e pacote verificável (verify.py) | o pacote verificável usa a cadeia de custódia com hash dos PRs #20–#46 |
+| Webhook | O do monitoramento | o webhook por consulta (PR #47) foi removido; alertas de integridade usam o do monitoramento |
+
+As migrações das duas linhas usavam os números 10–12 para tabelas diferentes.
+Agora uma migração conta como aplicada pela descrição, e bancos criados por
+qualquer uma das linhas recebem as tabelas da outra ao abrir.

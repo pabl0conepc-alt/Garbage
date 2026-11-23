@@ -40,6 +40,92 @@
   /* Module manager                                                    */
   /* ================================================================ */
 
+  const PLUGIN_STATE = {
+    enabled: ["Ativo", "success"],
+    disabled: ["Não aprovado", "neutral"],
+    changed: ["Alterado: aprove de novo", "warning"],
+    invalid: ["Inválido", "danger"],
+  };
+
+  /* Local plugins: discovered in a folder, approved by code digest. */
+  function pluginsPanel() {
+    const body = el("div", {}, loadingBlock("Procurando plugins…"));
+    const box = panel({ eyebrow: "EXTENSÕES", title: "Plugins locais" }, body);
+
+    function permissionsText(manifest) {
+      const permissions = manifest.permissions;
+      const parts = [permissions.network.length ? `rede: ${permissions.network.join(", ")}` : "sem rede"];
+      if (permissions.contacts_target) parts.push("contata o alvo");
+      if (permissions.network.length) parts.push(`até ${permissions.max_requests} requisição(ões)`);
+      parts.push(`${permissions.timeout_seconds} s`, `${permissions.max_output_kb} KB de saída`);
+      return parts.join(" · ");
+    }
+
+    async function act(path, payload, message) {
+      try {
+        const listing = await api(path, { method: "POST", body: JSON.stringify(payload || {}) });
+        toast(message);
+        draw(listing);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    async function approve(item) {
+      const manifest = item.manifest;
+      const ok = await confirm({
+        title: `Aprovar ${manifest.name} ${manifest.version}?`,
+        message: `Este código (SHA-256 ${item.sha256.slice(0, 16)}…) passa a rodar como transformação, num processo separado com estas permissões: ${permissionsText(manifest)}. O isolamento limita erros e excessos, mas não protege contra código hostil: aprove só plugins que você leu. Qualquer alteração nos arquivos exige nova aprovação.`,
+        confirmLabel: "Aprovar e ativar",
+      });
+      if (ok) act(`/api/plugins/${item.id}/enable`, { sha256: item.sha256 }, `${manifest.name} aprovado.`);
+    }
+
+    function draw(listing) {
+      body.replaceChildren(
+        el("p", { class: "panel-note" }, "Pasta: ", el("code", {}, listing.directory), ". Cada plugin é uma pasta com plugin.json e o código Python. Exemplo em examples/plugins/idn-inspect."),
+        listing.items.length
+          ? table({
+              columns: [
+                {
+                  label: "PLUGIN",
+                  render: (row) =>
+                    el(
+                      "div",
+                      { class: "cell-stack" },
+                      el("strong", {}, row.manifest ? `${row.manifest.name} ${row.manifest.version}` : row.folder),
+                      el("span", {}, row.manifest ? row.manifest.description : G.translateError(row.error)),
+                    ),
+                },
+                { label: "ESTADO", render: (row) => badge(...(PLUGIN_STATE[row.state] || [row.state, "neutral"])) },
+                { label: "PERMISSÕES", render: (row) => (row.manifest ? el("span", { class: "clamp-3" }, permissionsText(row.manifest)) : "—") },
+                { label: "CÓDIGO", render: (row) => (row.sha256 ? el("code", { title: row.sha256 }, row.sha256.slice(0, 12)) : "—") },
+                {
+                  label: "",
+                  render: (row) =>
+                    row.state === "enabled"
+                      ? el("button", { class: "button button-secondary button-small", type: "button", onClick: () => act(`/api/plugins/${row.id}/disable`, null, "Plugin desativado.") }, "Desativar")
+                      : row.manifest
+                        ? el("button", { class: "button button-primary button-small", type: "button", onClick: () => approve(row) }, row.state === "changed" ? "Revisar e aprovar" : "Aprovar")
+                        : null,
+                },
+              ],
+              rows: listing.items,
+            })
+          : el("p", { class: "panel-empty" }, "Nenhum plugin na pasta."),
+        el(
+          "div",
+          { class: "inline-actions" },
+          el("button", { class: "button button-secondary button-small", type: "button", onClick: () => act("/api/plugins/rescan", null, "Pasta de plugins relida.") }, "Reler pasta"),
+        ),
+        el("p", { class: "tool-limit" }, listing.items.length ? "Isolamento: processo python -I separado, limite de tempo e de memória, rede só pelo GARBAGE e só para os hosts declarados. Não é um sandbox contra código hostil." : ""),
+      );
+    }
+
+    api("/api/plugins").then(draw).catch((error) => body.replaceChildren(inlineError(error.message)));
+    return box;
+  }
+
   async function renderModules(root) {
     const data = await api("/api/modules");
     const available = data.items.filter((item) => item.state === "available").length;
@@ -169,6 +255,7 @@
           "Módulos essenciais não podem ser desativados.",
       ),
       ...sections,
+      G.moduleEnabled("plugins") ? pluginsPanel() : null,
       panel(
         { eyebrow: "CONTRATOS", title: "Interface dos módulos" },
         el(
@@ -275,11 +362,18 @@
     );
   }
 
-  async function renderSettings(root) {
+  const SETTINGS_TABS = {
+    preferencias: "prefs", casos: "cases", "linha-do-tempo": "activity", conectores: "connectors",
+    chaves: "keys", modulos: "modules", atalhos: "shortcuts", sistema: "system",
+  };
+
+  async function renderSettings(root, params = []) {
     const [settings, system] = await Promise.all([
       api("/api/settings"),
       api("/api/system").catch(() => null),
     ]);
+    const intelEnabled = !G.moduleEnabled || G.moduleEnabled("intel-orchestrator");
+    let active = SETTINGS_TABS[params[0]] || "prefs";
     const controls = new Map();
     const fields = settings.schema.map((entry) => {
       const control = settingsControl(entry, settings.values[entry.key]);
@@ -314,48 +408,38 @@
       }
     }
 
-    const runtimeEntries = system?.runtime ? Object.entries(system.runtime) : [];
-    root.append(
-      pageHeader({
-        eyebrow: "CONFIGURAÇÃO DO WORKSPACE",
-        title: "Configurações",
-        description:
-          "As preferências de interface são salvas no SQLite. Os padrões de relatório e pesquisa afetam as saídas reais.",
-        actions: [button("Salvar configurações", save, { variant: "button-primary" })],
-      }),
-      el(
-        "div",
-        { class: "settings-layout" },
-        panel(
-          { eyebrow: "INTERFACE E PADRÕES", title: "Preferências" },
-          el("div", { class: "settings-fields" }, ...fields),
-          el(
-            "div",
-            { class: "toolbar-end" },
-            button("Salvar configurações", save, { variant: "button-primary" }),
-          ),
-        ),
+    function preferences() {
+      return panel(
+        { title: "Preferências" },
+        el("div", { class: "settings-fields" }, ...fields),
         el(
           "div",
-          { class: "settings-side" },
+          { class: "toolbar-end" },
+          button("Salvar", save, { variant: "button-primary" }),
+        ),
+      );
+    }
+
+    function systemSection() {
+      const runtimeEntries = system?.runtime ? Object.entries(system.runtime) : [];
+      return el(
+        "div",
+        {},
+        el(
+          "div",
+          { class: "settings-layout" },
           panel(
-            { eyebrow: "EXECUÇÃO", title: "Diagnóstico do sistema" },
+            { title: "Diagnóstico" },
             system
               ? G.kvList([
                   ["Versão do aplicativo", system.version],
                   ["Versão do esquema", String(system.schema_version)],
-                  [
-                    "Banco de dados",
-                    `${system.database.name} · ${formatBytes(system.database.size_bytes)}`,
-                  ],
-                  [
-                    "Armazenamento",
-                    system.database.file_backed ? "SQLite em arquivo" : "Em memória",
-                  ],
+                  ["Banco de dados", `${system.database.name} · ${formatBytes(system.database.size_bytes)}`],
+                  ["Armazenamento", system.database.file_backed ? "SQLite em arquivo" : "Em memória"],
                   [
                     "Python",
                     system.runtime?.python?.version
-                      ? `${system.runtime.python.version} (mínimo ${system.runtime.python.minimum || "—"}${system.runtime.python.supported === false ? ", não suportado" : ""})`
+                      ? `${system.runtime.python.version}${system.runtime.python.supported === false ? " (não suportado)" : ""}`
                       : "—",
                   ],
                   [
@@ -364,102 +448,130 @@
                       ? [system.runtime.platform.system, system.runtime.platform.distribution].filter(Boolean).join(" · ")
                       : "—",
                   ],
-                  [
-                    "SQLite",
-                    system.runtime?.sqlite_version
-                      ? String(system.runtime.sqlite_version)
-                      : "—",
-                  ],
-                  [
-                    "FTS5",
-                    system.runtime?.fts5 === undefined ? "—" : system.runtime.fts5 ? "Disponível" : "Indisponível",
-                  ],
+                  ["SQLite", system.runtime?.sqlite_version ? String(system.runtime.sqlite_version) : "—"],
+                  ["FTS5", system.runtime?.fts5 === undefined ? "—" : system.runtime.fts5 ? "Disponível" : "Indisponível"],
                 ])
-              : el("p", { class: "panel-empty" }, "O diagnóstico do sistema está indisponível."),
+              : el("p", { class: "panel-empty" }, "Diagnóstico indisponível."),
           ),
-          panel(
-            { eyebrow: "MOTOR NATIVO", title: "Aceleradores opcionais" },
-            system?.native
-              ? G.kvList([
-                  [
-                    "Análise de arquivos em C",
-                    system.native.engines.c_file_intelligence
-                      ? "Carregado"
-                      : "Alternativa em Python",
-                  ],
-                  [
-                    "Métricas de grafo em C++",
-                    system.native.engines.cpp_graph_metrics
-                      ? "Carregado"
-                      : "Alternativa em Python",
-                  ],
-                  [
-                    "Similaridade em Rust",
-                    system.native.engines.rust_similarity
-                      ? "Carregado"
-                      : "Alternativa em Python",
-                  ],
-                  ["Diretório de build", system.native.directory],
-                ])
-              : el("p", { class: "panel-empty" }, "O status nativo está indisponível."),
-          ),
-          panel(
-            { eyebrow: "CONTAGENS", title: "Registros armazenados" },
-            system
-              ? G.kvList(
-                  Object.entries(system.counts).map(([key, value]) => [
-                    titleCase(key),
-                    String(value),
-                  ]),
-                )
-              : el("p", { class: "panel-empty" }, "Sem diagnósticos."),
-          ),
-          panel(
-            { eyebrow: "EXTENSÕES", title: "Integrações" },
-            system && system.integrations.length
-              ? el(
-                  "ul",
-                  { class: "plain-list" },
-                  ...system.integrations.map((integration) =>
-                    el(
-                      "li",
-                      {},
-                      el("strong", {}, integration.module_id),
-                      ` · ${G.translateText(integration.mode)}`,
+          el(
+            "div",
+            { class: "settings-side" },
+            panel(
+              { title: "Aceleradores nativos" },
+              system?.native
+                ? G.kvList([
+                    ["Arquivos (C)", system.native.engines.c_file_intelligence ? "Carregado" : "Python"],
+                    ["Grafo (C++)", system.native.engines.cpp_graph_metrics ? "Carregado" : "Python"],
+                    ["Similaridade (Rust)", system.native.engines.rust_similarity ? "Carregado" : "Python"],
+                    ["Diretório de build", system.native.directory],
+                  ])
+                : el("p", { class: "panel-empty" }, "Status nativo indisponível."),
+            ),
+            panel(
+              { title: "Registros" },
+              system
+                ? G.kvList(Object.entries(system.counts).map(([key, value]) => [titleCase(key), String(value)]))
+                : el("p", { class: "panel-empty" }, "Sem diagnósticos."),
+            ),
+            panel(
+              { title: "Integrações" },
+              system && system.integrations.length
+                ? el(
+                    "ul",
+                    { class: "plain-list" },
+                    ...system.integrations.map((integration) =>
+                      el("li", {}, el("strong", {}, integration.module_id), ` · ${G.translateText(integration.mode)}`),
                     ),
-                  ),
-                )
-              : el("p", { class: "panel-empty" }, "Nenhuma integração registrada."),
+                  )
+                : el("p", { class: "panel-empty" }, "Nenhuma integração."),
+            ),
           ),
-          runtimeEntries.length
-            ? panel(
-                { eyebrow: "DETALHES DO DIAGNÓSTICO", title: "Campos de execução" },
-                el(
-                  "pre",
-                  { class: "code-block" },
-                  runtimeEntries
-                    .map(([key, value]) => `${key}: ${String(value)}`)
-                    .join("\n"),
-                ),
-              )
-            : null,
         ),
-      ),
-      system
-        ? panel(
-            { eyebrow: "MIGRAÇÕES", title: "Histórico do esquema", caption: `${system.migrations.length} aplicadas` },
-            table({
-              columns: [
-                { label: "VERSÃO", className: "numeric-col", render: (row) => String(row.version) },
-                { label: "DESCRIÇÃO", render: (row) => G.translateText(row.description) },
-                { label: "APLICADA EM", render: (row) => formatDate(row.applied_at, { time: true }) },
-              ],
-              rows: system.migrations,
-              emptyMessage: "Nenhuma migração registrada.",
-            }),
-          )
-        : null,
-    );
+        runtimeEntries.length
+          ? panel(
+              { title: "Campos de execução" },
+              el("pre", { class: "code-block" }, runtimeEntries.map(([key, value]) => `${key}: ${String(value)}`).join("\n")),
+            )
+          : null,
+        system
+          ? panel(
+              { title: "Migrações", caption: `${system.migrations.length} aplicadas` },
+              table({
+                columns: [
+                  { label: "VERSÃO", className: "numeric-col", render: (row) => String(row.version) },
+                  { label: "DESCRIÇÃO", render: (row) => G.translateText(row.description) },
+                  { label: "APLICADA EM", render: (row) => formatDate(row.applied_at, { time: true }) },
+                ],
+                rows: system.migrations,
+                emptyMessage: "Nenhuma migração registrada.",
+              }),
+            )
+          : null,
+      );
+    }
+
+    const tabStrip = el("div");
+    const body = el("div", { class: "settings-body" });
+    const slug = Object.fromEntries(Object.entries(SETTINGS_TABS).map(([name, key]) => [key, name]));
+    const enabled = (module) => !G.moduleEnabled || G.moduleEnabled(module);
+    const available = [
+      { key: "prefs", label: "Preferências" },
+      enabled("investigations") ? { key: "cases", label: "Casos" } : null,
+      enabled("activity-log") ? { key: "activity", label: "Linha do tempo" } : null,
+      intelEnabled ? { key: "connectors", label: "Conectores" } : null,
+      intelEnabled ? { key: "keys", label: "Chaves de API" } : null,
+      enabled("module-manager") ? { key: "modules", label: "Módulos" } : null,
+      { key: "shortcuts", label: "Atalhos" },
+      { key: "system", label: "Sistema" },
+    ].filter(Boolean);
+    if (!available.some((item) => item.key === active)) active = "prefs";
+
+    // Full screens shown inside a tab keep their own actions; the embed
+    // class only quiets their heading.
+    async function embed(view) {
+      const host = el("div", { class: "settings-embed" });
+      body.replaceChildren(host);
+      try {
+        await G.views[view](host, []);
+        G.hydrateIcons(host);
+      } catch (error) {
+        host.replaceChildren(inlineError(error.message));
+      }
+    }
+
+    function draw() {
+      tabStrip.replaceChildren(
+        G.tabs({
+          items: available,
+          active,
+          onSelect: (key) => {
+            active = key;
+            history.replaceState(null, "", `#/settings/${slug[key]}`);
+            draw();
+          },
+        }),
+      );
+      if (active === "connectors" && G.renderIntelConnectors) {
+        G.renderIntelConnectors(body);
+      } else if (active === "keys" && G.renderIntelKeys) {
+        G.renderIntelKeys(body);
+      } else if (active === "cases") {
+        embed("investigations");
+      } else if (active === "activity") {
+        embed("activity");
+      } else if (active === "modules") {
+        embed("modules");
+      } else if (active === "shortcuts") {
+        body.replaceChildren(
+          panel({ title: "Atalhos de teclado" }, G.shortcutList()),
+        );
+      } else {
+        body.replaceChildren(active === "system" ? systemSection() : preferences());
+      }
+    }
+
+    root.append(pageHeader({ title: "Configurações" }), tabStrip, body);
+    draw();
   }
 
   /* ================================================================ */
@@ -489,7 +601,7 @@
                 icon: "☰",
                 title: "Atualize o catálogo público",
                 description:
-                  "O cache do KEV está vazio. O GARBAGE faz uma única solicitação HTTPS explícita à CISA e armazena um snapshot validado e com hash. Não há consultas em segundo plano.",
+                  "Uma única solicitação à CISA salva o catálogo neste computador.",
                 action: button(
                   "Atualizar CISA KEV",
                   () => refresh(root, true),

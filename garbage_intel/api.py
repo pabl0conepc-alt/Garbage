@@ -12,7 +12,7 @@ import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
 from .boards import get_board, save_board
@@ -52,8 +52,15 @@ from .evidence import (
 )
 from .analytics import workspace_analytics
 from .cti_export import build_ioc_csv, build_misp, build_stix
-from .modules import attack
+from .modules import actors, attack, email_analysis, live_check
+from .geoint import geo_points
+from .net import NetworkError
+from .modules import sigma, taxii
+from . import assistant, cases, cti_platforms, custody, monitoring, plugins
+from .report_sections import parse_sections
 from .graph_io import import_graph
+from .graph_add import add_to_graph
+from .auto_pivot import expand as auto_pivot
 from .resolution import dismiss_pair, entity_aliases, find_candidates, merge_entities
 from .transforms import entity_history, list_transforms, run_transforms
 from .intel_keys import delete_key, list_keys, set_key
@@ -67,8 +74,7 @@ from .intel import (
     recover_interrupted_runs,
     run_query,
 )
-from .modules.email_headers import analyze_headers
-from . import ai_agent, compare, geo, preservation, watchlist
+from . import ai_agent, compare, geoint, preservation
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -141,6 +147,8 @@ _STATIC_FILES = {
     "views-intel.js": "text/javascript; charset=utf-8",
     "views-system.js": "text/javascript; charset=utf-8",
     "views-file.js": "text/javascript; charset=utf-8",
+    "street-map.js": "text/javascript; charset=utf-8",
+    "assistant.js": "text/javascript; charset=utf-8",
     "views-multisearch.js": "text/javascript; charset=utf-8",
     "views-yara.js": "text/javascript; charset=utf-8",
     "charts.js": "text/javascript; charset=utf-8",
@@ -149,10 +157,15 @@ _STATIC_FILES = {
     "views-analytics.js": "text/javascript; charset=utf-8",
     "views-attack.js": "text/javascript; charset=utf-8",
     "views-transforms.js": "text/javascript; charset=utf-8",
-    "views-watchlist.js": "text/javascript; charset=utf-8",
-    "views-geo.js": "text/javascript; charset=utf-8",
     "views-ai.js": "text/javascript; charset=utf-8",
+    "views-compare.js": "text/javascript; charset=utf-8",
     "graph-tools.js": "text/javascript; charset=utf-8",
+    "image-hash.js": "text/javascript; charset=utf-8",
+    "world.json": "application/json; charset=utf-8",
+    "views-geoint.js": "text/javascript; charset=utf-8",
+    "views-feeds.js": "text/javascript; charset=utf-8",
+    "views-actors.js": "text/javascript; charset=utf-8",
+    "views-monitors.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
@@ -233,7 +246,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self'; "
-            "img-src 'self' blob:; connect-src 'self'; object-src 'none'; "
+            # Street-map tiles from OpenStreetMap; only requested while
+            # network sources are allowed.
+            "img-src 'self' blob: https://tile.openstreetmap.org; connect-src 'self'; object-src 'none'; "
             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
         )
         for header, value in (extra_headers or {}).items():
@@ -465,6 +480,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.database_path,
             self._text(payload, "name") or "",
             self._text(payload, "description", required=False) or "",
+            self._text(payload, "objective", required=False) or "",
         )
         self._json(201, result)
 
@@ -478,7 +494,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("investigations")
-        allowed = {"name", "description", "status"}
+        allowed = {"name", "description", "status", "objective"}
         unknown = set(payload) - allowed
         if unknown:
             raise ValidationError(
@@ -495,6 +511,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             ) or ""
         if "status" in payload:
             fields["status"] = self._text(payload, "status") or ""
+        if "objective" in payload:
+            fields["objective"] = self._text(payload, "objective", required=False) or ""
         result = update_investigation(
             self.database_path, match.group(1), **fields
         )
@@ -533,7 +551,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         if file_format in ("stix", "misp", "iocs"):
             self._send_cti_export(match.group(1), file_format, _query_text(query, "tlp", "amber").strip().lower())
             return
-        report = build_report(self.database_path, match.group(1))
+        sections = parse_sections(_query_text(query, "sections", "")) if _query_text(query, "sections", "") else None
+        report = build_report(self.database_path, match.group(1), sections)
         if file_format == "json":
             body = json.dumps(report, ensure_ascii=False, indent=2)
             content_type = "application/json; charset=utf-8"
@@ -1043,7 +1062,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     ) -> None:
         self._module("evidence")
         data, _media_type, original_name, _is_image = read_evidence_file(
-            self.database_path, match.group(1)
+            self.database_path, match.group(1), purpose="downloaded"
         )
         self._send(
             200,
@@ -1065,28 +1084,25 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("evidence")
         self._json(200, preservation.verify_all(self.database_path))
 
-    def api_geo_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
-        case = _query_text(query, "investigation_id", "").strip() or None
-        self._json(200, geo.collect_points(self.database_path, case))
-
     def api_geo_export(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("geoint")
         case = _query_text(query, "investigation_id", "").strip() or None
         kind = _query_text(query, "format", "geojson")
-        points = geo.collect_points(self.database_path, case)["items"]
+        points = geo_points(self.database_path, investigation_id=case)["points"]
         if kind == "kml":
-            self._send(200, "application/vnd.google-earth.kml+xml", geo.to_kml(points, "GARBAGE").encode("utf-8"),
-                       {"Content-Disposition": _attachment_disposition("garbage-map.kml")})
+            self._send(200, "application/vnd.google-earth.kml+xml", geoint.to_kml(points, "GARBAGE").encode("utf-8"),
+                       {"Content-Disposition": _attachment_disposition("garbage-geoint.kml")})
         elif kind == "geojson":
-            self._send(200, "application/geo+json", json.dumps(geo.to_geojson(points), ensure_ascii=False).encode("utf-8"),
-                       {"Content-Disposition": _attachment_disposition("garbage-map.geojson")})
+            self._send(200, "application/geo+json", json.dumps(geoint.to_geojson(points), ensure_ascii=False).encode("utf-8"),
+                       {"Content-Disposition": _attachment_disposition("garbage-geoint.geojson")})
         else:
             raise ValidationError("format must be geojson or kml")
 
     def api_geo_point_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
-        self._json(201, geo.add_point(self.database_path, match.group(1), payload))
+        self._json(201, geoint.add_point(self.database_path, match.group(1), payload))
 
     def api_geo_point_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
-        geo.delete_point(self.database_path, match.group(1))
+        geoint.delete_point(self.database_path, match.group(1))
         self._json(200, {"deleted": match.group(1)})
 
     def api_intel_compare(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
@@ -1113,7 +1129,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     ) -> None:
         self._module("evidence")
         data, media_type, original_name, is_image = read_evidence_file(
-            self.database_path, match.group(1)
+            self.database_path, match.group(1), purpose="previewed"
         )
         if not is_image:
             raise ConflictError("preview is only available for image evidence")
@@ -1139,11 +1155,52 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    def api_live_check_post(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("live-check")
+        unknown = set(payload) - {"url", "screenshot", "javascript", "investigation_id"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(201, live_check.run(
+            self.database_path, url=payload.get("url"), take_screenshot=payload.get("screenshot", True),
+            javascript=payload.get("javascript", False), investigation_id=payload.get("investigation_id"),
+        ))
+
+    def api_live_checks(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("live-check")
+        self._json(200, live_check.history(self.database_path, _query_text(query, "url", ""), _query_int(query, "limit", 20)))
+
+    def api_live_check_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("live-check")
+        self._json(200, live_check.get(self.database_path, match.group(1)))
+
+    def api_live_check_screenshot(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("live-check")
+        self._send(200, "image/png", live_check.image(self.database_path, match.group(1)), {"Content-Disposition": _attachment_disposition(f"captura-{match.group(1)[:8]}.png", inline=True)})
+
+    def api_email_analysis(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("file-intelligence")
+        raw = payload.get("raw")
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValidationError("raw must be the message or its headers as text")
+        if len(raw) > 2 * 1024 * 1024:
+            raise ValidationError("the message is larger than 2 MiB")
+        self._json(200, email_analysis.analyse(raw.encode("utf-8", "replace")))
+
     def api_file_analysis_post(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
         self._module("file-intelligence")
-        allowed = {"filename", "content_base64", "investigation_id"}
+        allowed = {"filename", "content_base64", "investigation_id", "perceptual"}
         unknown = set(payload) - allowed
         if unknown:
             raise ValidationError(
@@ -1171,6 +1228,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 data=data,
                 filename=filename,
                 investigation_id=investigation_id,
+                perceptual=payload.get("perceptual"),
             ),
         )
 
@@ -1404,7 +1462,24 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def api_attack_technique(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._module("attack-matrix")
-        self._json(200, attack.technique(self.database_path, match.group(1)))
+        detail = attack.technique(self.database_path, match.group(1))
+        if self._module_enabled("sigma-rules"):
+            # Detection rules for this technique, when the Sigma set is loaded.
+            found = sigma.search(self.database_path, technique=detail["id"], limit=15)
+            detail["sigma"] = {"total": found["total"], "items": found["items"], "license": found["license"]}
+        self._json(200, detail)
+
+    def api_attack_groups(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
+        self._json(200, actors.groups(self.database_path, query=_query_text(query, "q", ""), limit=_query_int(query, "limit", 200)))
+
+    def api_attack_group(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
+        self._json(200, actors.group(self.database_path, match.group(1)))
+
+    def api_case_actors(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("attack-matrix")
+        self._json(200, actors.case_overlap(self.database_path, match.group(1), limit=_query_int(query, "limit", 10)))
 
     def api_attack_search(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._module("attack-matrix")
@@ -1470,6 +1545,160 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
         )
 
+    # --- MISP and OpenCTI -------------------------------------------------------
+
+    def api_monitor_webhook(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.webhook(self.database_path))
+
+    def api_monitor_webhook_put(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.set_webhook(self.database_path, url=payload.get("url"), kind=payload.get("format", "json")))
+
+    def api_monitor_webhook_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.delete_webhook(self.database_path))
+
+    def api_monitor_webhook_test(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("monitoring")
+        self._json(200, monitoring.test_webhook(self.database_path))
+
+    def api_cti_platforms(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        self._json(200, cti_platforms.status(self.database_path))
+
+    def api_cti_platform_put(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("cti-exchange")
+        unknown = set(payload) - {"url", "private", "key"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(200, cti_platforms.configure(self.database_path, match.group(1), url=payload.get("url"), private=payload.get("private", False), key=payload.get("key")))
+
+    def api_cti_platform_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        self._json(200, cti_platforms.remove(self.database_path, match.group(1)))
+
+    def api_cti_platform_check(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        try:
+            self._json(200, cti_platforms.check(self.database_path, match.group(1)))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_case_push(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("cti-exchange")
+        try:
+            self._json(201, cti_platforms.push_case(self.database_path, match.group(2), match.group(1), tlp=payload.get("tlp", "amber")))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_case_pushes(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("cti-exchange")
+        self._json(200, cti_platforms.pushes(self.database_path, match.group(1)))
+
+    # --- AI assistant -----------------------------------------------------------
+
+    def api_assistant_status(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.status(self.database_path))
+
+    def api_assistant_config(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        unknown = set(payload) - {"model"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(200, assistant.set_model(self.database_path, payload.get("model")))
+
+    def api_assistant_models(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        try:
+            self._json(200, assistant.list_models())
+        except (assistant.AssistantError, NetworkError) as exc:
+            self._error(502, str(exc))
+
+    def api_assistant_start(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(201, assistant.start_conversation(self.database_path, payload.get("content"), payload.get("context")))
+
+    def api_assistant_conversation(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.get_conversation(self.database_path, match.group(1)))
+
+    def api_assistant_conversation_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.delete_conversation(self.database_path, match.group(1)))
+
+    def api_assistant_message(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.send_message(self.database_path, match.group(1), payload.get("content"), payload.get("context")))
+
+    def api_assistant_confirm(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.confirm(self.database_path, match.group(1), payload.get("message_id"), payload.get("approve")))
+
+    def api_assistant_stop(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.stop(self.database_path, match.group(1)))
+
+    def api_assistant_files(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.list_files(self.database_path))
+
+    def api_assistant_file_get(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        name = unquote(match.group(1))
+        text = assistant.read_file(self.database_path, name)
+        # Always a download: the model wrote it, so it is never rendered here.
+        self._send(200, "application/octet-stream", text.encode("utf-8"), {"Content-Disposition": _attachment_disposition(name)})
+
+    def api_assistant_file_delete(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("ai-assistant")
+        self._json(200, assistant.delete_file(self.database_path, unquote(match.group(1))))
+
     def api_intel_keys(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1491,35 +1720,6 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("intel-orchestrator")
         self._json(200, delete_key(self.database_path, match.group(1)))
 
-    def api_watchlist_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
-        self._json(200, watchlist.list_watches(self.database_path))
-
-    def api_watchlist_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
-        self._json(201, watchlist.create_watch(self.database_path, payload))
-
-    def api_watch_patch(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
-        self._module("intel-orchestrator")
-        self._json(200, watchlist.update_watch(self.database_path, match.group(1), payload))
-
-    def api_watch_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
-        self._module("intel-orchestrator")
-        watchlist.delete_watch(self.database_path, match.group(1))
-        self._json(200, {"deleted": match.group(1)})
-
-    def api_watch_check(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
-        self._module("intel-orchestrator")
-        self._json(200, watchlist.check_watch(self.database_path, match.group(1)))
-
-    def api_watch_alerts(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
-        self._module("intel-orchestrator")
-        unread = _query_text(query, "unread", "") in ("1", "true")
-        self._json(200, watchlist.list_alerts(self.database_path, unread_only=unread))
-
-    def api_watch_alerts_read(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
-        self._module("intel-orchestrator")
-        ids = payload.get("ids") if isinstance(payload, dict) else None
-        self._json(200, {"updated": watchlist.mark_alerts_read(self.database_path, ids)})
-
     def api_intel_detect(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1528,17 +1728,6 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not value:
             raise ValidationError("value is required")
         self._json(200, detect_artifact(value))
-
-    def api_intel_email_headers(
-        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
-    ) -> None:
-        self._module("intel-orchestrator")
-        if not isinstance(payload, dict) or set(payload) - {"headers"}:
-            raise ValidationError("send {\"headers\": \"...\"}")
-        try:
-            self._json(200, analyze_headers(payload.get("headers")))
-        except ValueError as exc:
-            raise ValidationError(str(exc)) from exc
 
     def api_intel_runs_get(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
@@ -1662,6 +1851,209 @@ class RequestHandler(BaseHTTPRequestHandler):
             entity_history(self.database_path, match.group(1), limit=_query_int(query, "limit", 50)),
         )
 
+    # --- TAXII and Sigma ------------------------------------------------------
+
+    def api_taxii_servers(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.list_servers(self.database_path))
+
+    def api_taxii_server_add(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        unknown = set(payload) - {"name", "discovery_url", "username", "password"}
+        if unknown:
+            raise ValidationError(f"unsupported TAXII fields: {', '.join(sorted(unknown))}")
+        self._json(201, taxii.add_server(self.database_path, name=payload.get("name"), discovery_url=payload.get("discovery_url"),
+                                         username=payload.get("username", ""), password=payload.get("password", "")))
+
+    def api_taxii_server_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.delete_server(self.database_path, match.group(1)))
+
+    def api_taxii_discover(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        try:
+            self._json(200, taxii.discover(self.database_path, match.group(1)))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_taxii_collections(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        try:
+            self._json(200, taxii.collections(self.database_path, match.group(1), _query_text(query, "api_root", "")))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_taxii_pull(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        unknown = set(payload) - {"api_root", "collection_id", "added_after", "object_types", "max_objects"}
+        if unknown:
+            raise ValidationError(f"unsupported pull fields: {', '.join(sorted(unknown))}")
+        try:
+            self._json(201, taxii.pull(self.database_path, match.group(1), api_root=payload.get("api_root"),
+                                       collection_id=payload.get("collection_id"), added_after=payload.get("added_after"),
+                                       object_types=payload.get("object_types"), max_objects=payload.get("max_objects", 5000)))
+        except NetworkError as exc:
+            self._error(502, str(exc))
+
+    def api_taxii_objects(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.list_objects(
+            self.database_path,
+            server_id=_query_text(query, "server_id", "") or None,
+            collection_id=_query_text(query, "collection_id", "") or None,
+            object_type=_query_text(query, "type", "") or None,
+            search=_query_text(query, "q", ""),
+            limit=_query_int(query, "limit", 100),
+            offset=_query_int(query, "offset", 0),
+        ))
+
+    def api_taxii_object(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, taxii.get_object(self.database_path, _query_text(query, "server_id", ""), _query_text(query, "collection_id", ""), _query_text(query, "object_id", "")))
+
+    def api_taxii_to_case(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        unknown = set(payload) - {"investigation_id", "server_id", "collection_id", "object_ids"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(201, taxii.indicators_to_case(self.database_path, investigation_id=payload.get("investigation_id"),
+                                                 server_id=payload.get("server_id"), collection_id=payload.get("collection_id"),
+                                                 object_ids=payload.get("object_ids")))
+
+    def api_sigma_status(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, sigma.status(self.database_path))
+
+    def api_sigma_refresh(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        try:
+            self._json(200, sigma.refresh(self.database_path))
+        except sigma.SigmaError as exc:
+            self._error(502, str(exc))
+
+    def api_sigma_rules(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, sigma.search(
+            self.database_path,
+            technique=_query_text(query, "technique", "") or None,
+            query=_query_text(query, "q", ""),
+            level=_query_text(query, "level", "") or None,
+            product=_query_text(query, "product", "") or None,
+            limit=_query_int(query, "limit", 50),
+        ))
+
+    def api_sigma_rule(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, sigma.get_rule(self.database_path, match.group(1)))
+
+    def api_case_archive(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        archived = payload.get("archived", True)
+        if not isinstance(archived, bool) or set(payload) - {"archived"}:
+            raise ValidationError("send {\"archived\": true or false}")
+        self._json(200, cases.set_archived(self.database_path, match.group(1), archived))
+
+    def api_case_duplicate(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        if set(payload) - {"name"}:
+            raise ValidationError("only name may be given")
+        self._json(201, cases.duplicate(self.database_path, match.group(1), name=payload.get("name")))
+
+    def api_case_package(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("investigations")
+        include = _query_text(query, "files", "1") != "0"
+        package = cases.export_package(self.database_path, match.group(1), include_files=include)
+        name = package["content"]["case"]["name"]
+        body = json.dumps(package, ensure_ascii=False, indent=1).encode("utf-8")
+        self._send(200, "application/json; charset=utf-8", body,
+                   {"Content-Disposition": _attachment_disposition(_report_filename(name, "case.json").replace("-report.", "-"))})
+
+    def api_case_import(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("investigations")
+        if set(payload) - {"package", "commit", "name"}:
+            raise ValidationError("send package, commit and optionally name")
+        commit = payload.get("commit", False)
+        if not isinstance(commit, bool):
+            raise ValidationError("commit must be a boolean")
+        self._json(201 if commit else 200, cases.import_package(self.database_path, payload.get("package"), commit=commit, name=payload.get("name")))
+
+    def api_evidence_custody(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        self._json(200, custody.chain(self.database_path, match.group(1)))
+
+    def api_evidence_notes(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        self._json(200, custody.list_notes(self.database_path, match.group(1)))
+
+    def api_evidence_note_add(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("evidence")
+        if set(payload) - {"body"}:
+            raise ValidationError("send body")
+        self._json(201, custody.add_note(self.database_path, match.group(1), payload.get("body")))
+
+    def api_monitors(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.list_monitors(self.database_path))
+
+    def api_monitor_create(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        unknown = set(payload) - {"name", "value", "connectors", "interval_minutes", "investigation_id"}
+        if unknown:
+            raise ValidationError(f"unsupported monitor fields: {', '.join(sorted(unknown))}")
+        self._json(201, monitoring.create_monitor(
+            self.database_path, name=payload.get("name"), value=payload.get("value"), connector_ids=payload.get("connectors"),
+            interval_minutes=payload.get("interval_minutes", 1440), investigation_id=payload.get("investigation_id"),
+        ))
+
+    def api_monitor_patch(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(200, monitoring.update_monitor(self.database_path, match.group(1), payload))
+
+    def api_monitor_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.delete_monitor(self.database_path, match.group(1)))
+
+    def api_monitor_run(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        self._json(201, monitoring.run_monitor(self.database_path, match.group(1), trigger="manual"))
+
+    def api_monitor_runs(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.monitor_runs(self.database_path, match.group(1), limit=_query_int(query, "limit", 30)))
+
+    def api_notifications(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, monitoring.notifications(self.database_path, unread_only=_query_text(query, "unread", "") == "1", limit=_query_int(query, "limit", 50)))
+
+    def api_notifications_read(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        if set(payload) - {"ids"}:
+            raise ValidationError("send ids")
+        self._json(200, monitoring.mark_read(self.database_path, payload.get("ids")))
+
+    def api_plugins(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, plugins.list_plugins(self.database_path))
+
+    def api_plugins_rescan(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("plugins")
+        plugins.load_approved(self.database_path)
+        self._json(200, plugins.list_plugins(self.database_path))
+
+    def api_plugin_enable(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        unknown = set(payload) - {"sha256"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(200, plugins.enable(self.database_path, match.group(1), sha256=payload.get("sha256")))
+
+    def api_plugin_disable(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, plugins.disable(self.database_path, match.group(1)))
+
+    def api_geoint(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: object
+    ) -> None:
+        self._module("geoint")
+        self._json(200, geo_points(self.database_path, investigation_id=_query_text(query, "investigation_id", "") or None))
+
+    def api_graph_add(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("relationship-graph")
+        unknown = set(payload) - {"run_id", "item", "investigation_id"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(201, add_to_graph(self.database_path, run_id=payload.get("run_id"), item=payload.get("item"), investigation_id=payload.get("investigation_id")))
+
+    def api_graph_pivot(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("relationship-graph")
+        unknown = set(payload) - {"entity_id", "depth", "investigation_id"}
+        if unknown:
+            raise ValidationError(f"unsupported fields: {', '.join(sorted(unknown))}")
+        self._json(201, auto_pivot(self.database_path, entity_id=payload.get("entity_id"), depth=payload.get("depth", 1), investigation_id=payload.get("investigation_id")))
+
     def api_graph_import(
         self, match: re.Match[str], query: dict[str, list[str]], payload: Any
     ) -> None:
@@ -1745,7 +2137,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
         self._module("report-center")
-        report = build_report(self.database_path, match.group(1))
+        sections = parse_sections(_query_text(query, "sections", "")) if _query_text(query, "sections", "") else None
+        report = build_report(self.database_path, match.group(1), sections)
         self._send(
             200,
             "text/html; charset=utf-8",
@@ -1833,6 +2226,45 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ),
     ("GET", re.compile(r"^/api/graph$"), "api_graph", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/graph/import$"), "api_graph_import", 10 * 1024 * 1024),
+    ("POST", re.compile(r"^/api/graph/add$"), "api_graph_add", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/graph/pivot$"), "api_graph_pivot", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/geoint$"), "api_geoint", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/plugins$"), "api_plugins", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/monitors/webhook$"), "api_monitor_webhook", MAX_BODY_BYTES),
+    ("PUT", re.compile(r"^/api/monitors/webhook$"), "api_monitor_webhook_put", MAX_BODY_BYTES),
+    ("DELETE", re.compile(r"^/api/monitors/webhook$"), "api_monitor_webhook_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/monitors/webhook/test$"), "api_monitor_webhook_test", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/monitors$"), "api_monitors", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/monitors$"), "api_monitor_create", MAX_BODY_BYTES),
+    ("PATCH", re.compile(rf"^/api/monitors/{_ID_PATTERN}$"), "api_monitor_patch", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/monitors/{_ID_PATTERN}$"), "api_monitor_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/monitors/{_ID_PATTERN}/run$"), "api_monitor_run", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/monitors/{_ID_PATTERN}/runs$"), "api_monitor_runs", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/notifications$"), "api_notifications", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/notifications/read$"), "api_notifications_read", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/archive$"), "api_case_archive", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/duplicate$"), "api_case_duplicate", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/package$"), "api_case_package", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/cases/import$"), "api_case_import", 72 * 1024 * 1024),
+    ("GET", re.compile(rf"^/api/evidence/{_ID_PATTERN}/custody$"), "api_evidence_custody", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/evidence/{_ID_PATTERN}/notes$"), "api_evidence_notes", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/evidence/{_ID_PATTERN}/notes$"), "api_evidence_note_add", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/plugins/rescan$"), "api_plugins_rescan", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/plugins/([a-z0-9][a-z0-9-]{1,40})/enable$"), "api_plugin_enable", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/plugins/([a-z0-9][a-z0-9-]{1,40})/disable$"), "api_plugin_disable", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/taxii/servers$"), "api_taxii_servers", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/taxii/servers$"), "api_taxii_server_add", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}$"), "api_taxii_server_delete", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}/discover$"), "api_taxii_discover", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}/collections$"), "api_taxii_collections", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/taxii/servers/{_ID_PATTERN}/pull$"), "api_taxii_pull", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/taxii/objects$"), "api_taxii_objects", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/taxii/object$"), "api_taxii_object", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/taxii/objects/to-case$"), "api_taxii_to_case", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/sigma$"), "api_sigma_status", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/sigma/refresh$"), "api_sigma_refresh", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/sigma/rules$"), "api_sigma_rules", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/sigma/rules/([0-9a-fA-F-]{8,64})$"), "api_sigma_rule", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/transforms$"), "api_transforms_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/transforms/run$"), "api_transforms_run", MAX_BODY_BYTES),
     (
@@ -2128,6 +2560,9 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "api_attack_technique",
         MAX_BODY_BYTES,
     ),
+    ("GET", re.compile(r"^/api/attack/groups$"), "api_attack_groups", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/attack/groups/(G\d{4})$"), "api_attack_group", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/actors$"), "api_case_actors", MAX_BODY_BYTES),
     (
         "GET",
         re.compile(rf"^/api/investigations/{_ID_PATTERN}/techniques$"),
@@ -2176,8 +2611,30 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         "api_intel_key_delete",
         MAX_BODY_BYTES,
     ),
+    ("POST", re.compile(r"^/api/intelligence/email$"), "api_email_analysis", 4 * 1024 * 1024),
+    ("POST", re.compile(r"^/api/intelligence/live-checks$"), "api_live_check_post", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/intelligence/live-checks$"), "api_live_checks", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/intelligence/live-checks/{_ID_PATTERN}$"), "api_live_check_get", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/intelligence/live-checks/{_ID_PATTERN}/screenshot$"), "api_live_check_screenshot", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/cti-platforms$"), "api_cti_platforms", MAX_BODY_BYTES),
+    ("PUT", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_put", MAX_BODY_BYTES),
+    ("DELETE", re.compile(r"^/api/cti-platforms/(misp|opencti)$"), "api_cti_platform_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/cti-platforms/(misp|opencti)/check$"), "api_cti_platform_check", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/push/(misp|opencti)$"), "api_case_push", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/pushes$"), "api_case_pushes", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/assistant$"), "api_assistant_status", MAX_BODY_BYTES),
+    ("PUT", re.compile(r"^/api/assistant/config$"), "api_assistant_config", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/assistant/models$"), "api_assistant_models", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/assistant/conversations$"), "api_assistant_start", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}$"), "api_assistant_conversation", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}$"), "api_assistant_conversation_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}/messages$"), "api_assistant_message", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}/confirm$"), "api_assistant_confirm", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/assistant/conversations/{_ID_PATTERN}/stop$"), "api_assistant_stop", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/assistant/files$"), "api_assistant_files", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/assistant/files/([A-Za-z0-9%._-]{1,300})$"), "api_assistant_file_get", MAX_BODY_BYTES),
+    ("DELETE", re.compile(r"^/api/assistant/files/([A-Za-z0-9%._-]{1,300})$"), "api_assistant_file_delete", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),
-    ("POST", re.compile(r"^/api/intel/email-headers$"), "api_intel_email_headers", MAX_BODY_BYTES),
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/capture$"), "api_evidence_capture", MAX_BODY_BYTES),
     ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/evidence-package$"), "api_evidence_package", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/evidence/verify-all$"), "api_evidence_verify_all", MAX_BODY_BYTES),
@@ -2186,17 +2643,9 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("POST", re.compile(r"^/api/ai/sessions$"), "api_ai_sessions_post", MAX_BODY_BYTES),
     ("GET", re.compile(rf"^/api/ai/sessions/{_ID_PATTERN}$"), "api_ai_session_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/ai/test$"), "api_ai_test", MAX_BODY_BYTES),
-    ("GET", re.compile(r"^/api/geo$"), "api_geo_get", MAX_BODY_BYTES),
-    ("GET", re.compile(r"^/api/geo/export$"), "api_geo_export", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/geoint/export$"), "api_geo_export", MAX_BODY_BYTES),
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/geo-points$"), "api_geo_point_post", MAX_BODY_BYTES),
     ("DELETE", re.compile(rf"^/api/geo-points/{_ID_PATTERN}$"), "api_geo_point_delete", MAX_BODY_BYTES),
-    ("GET", re.compile(r"^/api/watchlist$"), "api_watchlist_get", MAX_BODY_BYTES),
-    ("POST", re.compile(r"^/api/watchlist$"), "api_watchlist_post", MAX_BODY_BYTES),
-    ("GET", re.compile(r"^/api/watchlist/alerts$"), "api_watch_alerts", MAX_BODY_BYTES),
-    ("POST", re.compile(r"^/api/watchlist/alerts/read$"), "api_watch_alerts_read", MAX_BODY_BYTES),
-    ("PATCH", re.compile(rf"^/api/watchlist/{_ID_PATTERN}$"), "api_watch_patch", MAX_BODY_BYTES),
-    ("DELETE", re.compile(rf"^/api/watchlist/{_ID_PATTERN}$"), "api_watch_delete", MAX_BODY_BYTES),
-    ("POST", re.compile(rf"^/api/watchlist/{_ID_PATTERN}/check$"), "api_watch_check", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/intel/runs$"), "api_intel_runs_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/intel/runs$"), "api_intel_runs_post", MAX_BODY_BYTES),
     (
@@ -2248,10 +2697,20 @@ def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer
     return server
 
 
+def prepare_runtime(database: str | Path) -> None:
+    """What a running workstation needs besides the HTTP server: interrupted
+    runs closed, approved plugins loaded and the monitor scheduler started."""
+    recover_interrupted_runs(str(database))
+    assistant.recover(str(database))
+    loaded = plugins.load_approved(str(database))
+    if loaded:
+        print(f"Plugins loaded: {', '.join(loaded)}")
+    monitoring.SCHEDULER.start(str(database))
+
+
 def serve(database: str | Path, port: int = 8000) -> None:
     server = create_server(database, port)
-    recover_interrupted_runs(str(database))
-    watchlist.start_scheduler(str(database))
+    prepare_runtime(database)
     print(f"GARBAGE local interface: http://127.0.0.1:{server.server_port}/")
     try:
         server.serve_forever()

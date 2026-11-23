@@ -321,70 +321,104 @@ def render_html_report(report: dict[str, Any]) -> str:
             f"<li><strong>{_esc(key)}</strong>: {_esc(value)}</li>"
             for key, value in record_classes.items()
         )
+    chosen = report.get("sections") or [
+        "summary", "entities", "relationships", "evidence", "sources", "observations", "indicators", "correlations", "limitations",
+    ]
+
+    def table(headers: list[str], rows: str, empty: str, columns: int) -> str:
+        head = "".join(f"<th>{_esc(item)}</th>" for item in headers)
+        return f"<table><thead><tr>{head}</tr></thead><tbody>{rows or f'<tr><td colspan={columns}>{_esc(empty)}</td></tr>'}</tbody></table>"
+
+    blocks: dict[str, str] = {
+        "entities": f"<section><h2>Entities ({len(entities)})</h2>"
+        + table(["Type", "Name", "Identifier", "Verification", "Source"], entity_rows, "No entities linked.", 5)
+        + "<p class=\"report-note\">Entities are analyst-entered records and are not independently verified.</p></section>",
+        "relationships": f"<section><h2>Relationships ({len(relationships)})</h2>"
+        + table(["Source", "Type", "Target", "Verification", "Source reference"], relationship_rows, "No relationships recorded.", 5)
+        + "<p class=\"report-note\">Relationships are analyst-entered links; the verification status is recorded per link.</p></section>",
+        "evidence": f"<section><h2>Evidence ({len(evidence)})</h2>"
+        + table(["Title", "Type", "SHA-256", "Size (bytes)", "Integrity", "Image"], evidence_rows, "No evidence recorded.", 6)
+        + "<p class=\"report-note\">Digests confirm file identity only; they do not establish authenticity.</p></section>",
+        "sources": f"<section><h2>Sources ({len(sources)})</h2>"
+        + table(["Title", "Category", "Reference", "Accessed", "Verification"], source_rows, "No sources linked.", 5)
+        + "<p class=\"report-note\">Sources record where information was consulted and when.</p></section>",
+        "observations": f"<section><h2>Observations ({len(observations)})</h2>{observation_sections or '<p>No observations recorded.</p>'}</section>",
+        "indicators": f"<section><h2>Extracted indicators ({len(indicator_sections)})</h2><ul>{''.join(indicator_sections) or '<li>No indicators detected.</li>'}</ul></section>",
+        "correlations": f"<section><h2>Exact-value correlations ({len(correlations)})</h2><ul>{correlation_items or '<li>No repeated indicators detected.</li>'}</ul></section>",
+        "limitations": f"<section><h2>Record classes</h2><ul>{record_class_items or '<li>No record classes reported.</li>'}</ul></section>"
+        f"<section><h2>Limitations</h2><ul>{limitation_items or '<li>No limitations recorded.</li>'}</ul></section>",
+    }
+    method = report.get("methodology")
+    if isinstance(method, dict):
+        queried = "".join(
+            f"<tr><td>{_esc(row['connector_id'])}</td><td>{_esc(row['runs'])}</td><td>{_esc(row['findings'])}</td>"
+            f"<td>{_esc(row['error_rows'])}</td><td>{_esc(row['first_at'])} – {_esc(row['last_at'])}</td></tr>"
+            for row in method.get("sources_queried", [])
+        )
+        transforms = "".join(
+            f"<li>{_esc(row['transform_id'])}: {_esc(row['runs'])} run(s), {_esc(row['created'])} new entities, {_esc(row['relationships'])} relationships</li>"
+            for row in method.get("transforms", [])
+        )
+        analyses = ", ".join(f"{_esc(row['format'])} ({_esc(row['count'])})" for row in method.get("file_analyses", []))
+        counts = lambda mapping: ", ".join(f"{_esc(key)}: {_esc(value)}" for key, value in mapping.items()) or "none"  # noqa: E731
+        imports = "".join(f"<li>{_esc(row['created_at'])}: {_esc(row['summary'])}</li>" for row in method.get("imports", []))
+        blocks["methodology"] = (
+            "<section><h2>Methodology</h2>"
+            f"<p>{_esc(method.get('statement', ''))}</p>"
+            f"<p>Recorded activity from <time>{_esc(method['period']['first'])}</time> to <time>{_esc(method['period']['last'])}</time>.</p>"
+            "<h3>Sources queried</h3>"
+            + table(["Source", "Queries", "Findings", "Errors", "When"], queried, "No multi-source queries were linked to this case.", 5)
+            + f"<h3>Transforms</h3><ul>{transforms or '<li>None run on this case.</li>'}</ul>"
+            f"<h3>Files analysed</h3><p>{analyses or 'None.'}</p>"
+            f"<h3>Collection basis of observations</h3><p>{counts(method.get('collection_bases', {}))}</p>"
+            f"<h3>Verification</h3><p>Entities: {counts(method.get('entity_verification', {}))}. Relationships: {counts(method.get('relationship_verification', {}))}.</p>"
+            f"<h3>Imports</h3><ul>{imports or '<li>None.</li>'}</ul></section>"
+        )
+    techniques = report.get("techniques")
+    if isinstance(techniques, list):
+        rows = "".join(
+            f"<tr><td><code>{_esc(row['technique_id'])}</code></td><td>{_esc(row['name'])}</td><td>{_esc(row['tactics'])}</td>"
+            f"<td>{_esc(row['source'])}</td><td>{_esc(row['note'])}</td></tr>"
+            for row in techniques
+        )
+        blocks["techniques"] = (
+            f"<section><h2>MITRE ATT&amp;CK techniques ({len(techniques)})</h2>"
+            + table(["Technique", "Name", "Tactics", "Origin", "Note"], rows, "No techniques linked.", 5)
+            + "<p class=\"report-note\">Techniques mapped by the analyst or accepted from suggestions; a shared technique is not attribution.</p></section>"
+        )
+    custody_rows = report.get("custody")
+    if isinstance(custody_rows, list):
+        rows = "".join(
+            f"<tr><td>{_esc(row['title'])}</td><td>{_esc(row['events'])}</td><td>{'intact' if row['intact'] else 'BROKEN'}</td>"
+            f"<td>{_esc(', '.join(row['actions']))}</td><td><code>{_esc(row['head'][:16])}</code></td></tr>"
+            for row in custody_rows
+        )
+        blocks["custody"] = (
+            "<section><h2>Chain of custody</h2>"
+            + table(["Evidence", "Events", "Chain", "Actions", "Head hash"], rows, "No evidence recorded.", 5)
+            + "<p class=\"report-note\">Hash-chained log kept by this workstation; it reveals later edits but is not a signature or trusted timestamp.</p></section>"
+        )
+    if report.get("graph_svg"):
+        blocks["graph"] = f"<section><h2>Graph</h2><figure class=\"report-graph\">{report['graph_svg']}</figure></section>"
+    objective = investigation.get("objective") or ""
+    header = (
+        "<header><p class=\"eyebrow\">GARBAGE INVESTIGATION REPORT</p>"
+        f"<h1>{_esc(investigation.get('name', 'Investigation'))}</h1><p>{_esc(investigation.get('description', ''))}</p>"
+        + (f"<p><strong>Objective:</strong> {_esc(objective)}</p>" if objective else "")
+        + f"<p>Status: {_esc(investigation.get('status', 'open'))}</p><p>Created: <time>{_esc(investigation.get('created_at', ''))}</time></p>"
+        f"<p>Generated: <time>{_esc(metadata.get('generated_at', ''))}</time></p>"
+        "<button id=\"print-button\" type=\"button\">Print report</button></header>"
+    )
+    body = "".join(blocks[name] for name in chosen if name in blocks)
     return (
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        "<title>{} | GARBAGE report</title><link rel=\"stylesheet\" href=\"/style.css\">"
+        f"<title>{_esc(investigation.get('name', 'Investigation'))} | GARBAGE report</title><link rel=\"stylesheet\" href=\"/style.css\">"
         "<script src=\"/report.js\" defer></script>"
-        "</head><body class=\"report-page\"><main class=\"report-main\"><header>"
-        "<p class=\"eyebrow\">GARBAGE INVESTIGATION REPORT</p>"
-        "<h1>{}</h1><p>{}</p>"
-        "<p>Status: {}</p><p>Created: <time>{}</time></p>"
-        "<p>Generated: <time>{}</time></p>"
-        "<button id=\"print-button\" type=\"button\">Print report</button>"
-        "</header>"
-        "<section><h2>Entities ({})</h2>"
-        "<table><thead><tr><th>Type</th><th>Name</th><th>Identifier</th>"
-        "<th>Verification</th><th>Source</th></tr></thead><tbody>{}</tbody></table>"
-        "<p class=\"report-note\">{}</p></section>"
-        "<section><h2>Relationships ({})</h2>"
-        "<table><thead><tr><th>Source</th><th>Type</th><th>Target</th>"
-        "<th>Verification</th><th>Source reference</th></tr></thead><tbody>{}</tbody></table>"
-        "<p class=\"report-note\">{}</p></section>"
-        "<section><h2>Evidence ({})</h2>"
-        "<table><thead><tr><th>Title</th><th>Type</th><th>SHA-256</th>"
-        "<th>Size (bytes)</th><th>Integrity</th><th>Image</th></tr></thead>"
-        "<tbody>{}</tbody></table><p class=\"report-note\">{}</p></section>"
-        "<section><h2>Sources ({})</h2>"
-        "<table><thead><tr><th>Title</th><th>Category</th><th>Reference</th>"
-        "<th>Accessed</th><th>Verification</th></tr></thead><tbody>{}</tbody></table>"
-        "<p class=\"report-note\">{}</p></section>"
-        "<section><h2>Observations ({})</h2>{}</section>"
-        "<section><h2>Extracted indicators ({})</h2><ul>{}</ul></section>"
-        "<section><h2>Exact-value correlations ({})</h2><ul>{}</ul></section>"
-        "<section><h2>Record classes</h2><ul>{}</ul></section>"
-        "<section><h2>Limitations</h2><ul>{}</ul></section>"
+        "</head><body class=\"report-page\"><main class=\"report-main\">"
+        f"{header if 'summary' in chosen else ''}{body}"
         "<p><a href=\"/\">Return to the GARBAGE workspace</a></p>"
         "</main></body></html>"
-    ).format(
-        _esc(investigation.get("name", "Investigation")),
-        _esc(investigation.get("name", "Investigation")),
-        _esc(investigation.get("description", "")),
-        _esc(investigation.get("status", "open")),
-        _esc(investigation.get("created_at", "")),
-        _esc(metadata.get("generated_at", "")),
-        len(entities),
-        entity_rows or "<tr><td colspan=\"5\">No entities linked.</td></tr>",
-        "Entities are analyst-entered records and are not independently verified.",
-        len(relationships),
-        relationship_rows
-        or "<tr><td colspan=\"5\">No relationships recorded.</td></tr>",
-        "Relationships are analyst-entered links; the verification status is "
-        "recorded per link.",
-        len(evidence),
-        evidence_rows or "<tr><td colspan=\"6\">No evidence recorded.</td></tr>",
-        "Digests confirm file identity only; they do not establish authenticity.",
-        len(sources),
-        source_rows or "<tr><td colspan=\"5\">No sources linked.</td></tr>",
-        "Sources record where information was consulted and when.",
-        len(observations),
-        observation_sections or "<p>No observations recorded.</p>",
-        len(indicator_sections),
-        "".join(indicator_sections) or "<li>No indicators detected.</li>",
-        len(correlations),
-        correlation_items or "<li>No repeated indicators detected.</li>",
-        record_class_items or "<li>No record classes reported.</li>",
-        limitation_items or "<li>No limitations recorded.</li>",
     )
 
 
@@ -523,5 +557,26 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         lines.extend(f"- {limitation}" for limitation in limitations)
     else:
         lines.append("_No limitations recorded._")
+    method = report.get("methodology")
+    if isinstance(method, dict):
+        lines.extend(["", "## Methodology", "", method.get("statement", ""), "",
+                      f"Recorded activity from {method['period']['first']} to {method['period']['last']}.", ""])
+        for row in method.get("sources_queried", []):
+            lines.append(f"- Source `{row['connector_id']}`: {row['runs']} query(ies), {row['findings']} finding(s), {row['error_rows']} error(s)")
+        for row in method.get("transforms", []):
+            lines.append(f"- Transform `{row['transform_id']}`: {row['runs']} run(s), {row['created']} new entities")
+    techniques = report.get("techniques")
+    if isinstance(techniques, list):
+        lines.extend(["", "## MITRE ATT&CK techniques", ""])
+        lines.extend(f"- `{row['technique_id']}` {row['name']} ({row['source']})" for row in techniques)
+        if not techniques:
+            lines.append("_No techniques linked._")
+    custody_rows = report.get("custody")
+    if isinstance(custody_rows, list):
+        lines.extend(["", "## Chain of custody", ""])
+        lines.extend(
+            f"- {row['title']}: {row['events']} event(s), chain {'intact' if row['intact'] else 'BROKEN'}, head `{row['head'][:16]}`"
+            for row in custody_rows
+        )
     lines.append("")
     return "\n".join(lines)

@@ -192,6 +192,78 @@
   }
 
   /* Small force pass used inside communities and for the force layout. */
+  /* Barnes-Hut: above this many nodes, repulsion from distant groups is
+     taken from their centre of mass (quadtree, theta 1.0), so a relaxation
+     step costs n log n instead of n². Smaller graphs keep the exact sum. */
+  const BARNES_HUT_FROM = 200;
+  const THETA = 1.0;
+
+  function cell(x, y, size) {
+    return { x, y, size, mass: 0, cx: 0, cy: 0, body: null, kids: null };
+  }
+
+  function insert(target, node, depth) {
+    target.cx = (target.cx * target.mass + node.x) / (target.mass + 1);
+    target.cy = (target.cy * target.mass + node.y) / (target.mass + 1);
+    target.mass += 1;
+    if (target.mass === 1) {
+      target.body = node;
+      return;
+    }
+    if (depth > 24) return; // coincident points stay together in this cell
+    if (!target.kids) {
+      target.kids = [null, null, null, null];
+      const previous = target.body;
+      target.body = null;
+      if (previous) place(target, previous, depth);
+    }
+    place(target, node, depth);
+  }
+
+  function place(parent, node, depth) {
+    const half = parent.size / 2;
+    const right = node.x >= parent.x + half ? 1 : 0;
+    const below = node.y >= parent.y + half ? 1 : 0;
+    const index = below * 2 + right;
+    if (!parent.kids[index]) parent.kids[index] = cell(parent.x + right * half, parent.y + below * half, half);
+    insert(parent.kids[index], node, depth + 1);
+  }
+
+  function quadtree(local) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const node of local) {
+      minX = Math.min(minX, node.x);
+      minY = Math.min(minY, node.y);
+      maxX = Math.max(maxX, node.x);
+      maxY = Math.max(maxY, node.y);
+    }
+    const root = cell(minX, minY, Math.max(maxX - minX, maxY - minY, 1) + 1);
+    for (const node of local) insert(root, node, 0);
+    return root;
+  }
+
+  function repel(target, node, strength) {
+    if (!target || !target.mass || target.body === node) return;
+    let dx = node.x - target.cx;
+    let dy = node.y - target.cy;
+    let distance = Math.hypot(dx, dy);
+    if (target.kids && target.size / Math.max(distance, 0.01) > THETA) {
+      for (const kid of target.kids) repel(kid, node, strength);
+      return;
+    }
+    if (distance < 0.5) {
+      dx = 0.5;
+      dy = 0.1;
+      distance = Math.hypot(dx, dy);
+    }
+    const force = (target.mass * strength) / distance;
+    node.vx += (dx / distance) * force;
+    node.vy += (dy / distance) * force;
+  }
+
   function relax(local, edges, size, iterations) {
     const ids = new Set(local.map((node) => node.id));
     const byId = new Map(local.map((node) => [node.id, node]));
@@ -204,7 +276,10 @@
         node.vx = 0;
         node.vy = 0;
       }
-      for (let i = 0; i < local.length; i += 1) {
+      if (local.length > BARNES_HUT_FROM) {
+        const tree = quadtree(local);
+        for (const node of local) repel(tree, node, k * k);
+      } else for (let i = 0; i < local.length; i += 1) {
         for (let j = i + 1; j < local.length; j += 1) {
           const a = local[i];
           const b = local[j];
@@ -254,7 +329,7 @@
   }
 
   function force(nodes, edges, options) {
-    const iterations = nodes.length > 300 ? 70 : nodes.length > 120 ? 160 : 240;
+    const iterations = nodes.length > 1000 ? 50 : nodes.length > 300 ? 70 : nodes.length > 120 ? 160 : 240;
     perComponent(nodes, edges, options, (members, local) => {
       if (local.length === 1) {
         local[0].x = 0;

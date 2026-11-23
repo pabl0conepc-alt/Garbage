@@ -97,12 +97,49 @@ class DnsTests(unittest.TestCase):
         self.assertTrue(all(len(item.response_sha256) == 64 for item in findings))
         self.assertTrue(all(call["allowed_hosts"] == ic.DOH_HOSTS for call in web.calls))
 
-    def test_email_queries_only_mail_exchangers_of_its_domain(self):
-        web = FakeWeb([doh_route("mail.example", "MX", ["10 mx.mail.example."])])
+    def test_email_queries_only_the_mail_setup_of_its_domain(self):
+        web = FakeWeb([
+            doh_route("mail.example", "MX", ["10 mx.mail.example."]),
+            doh_route("mail.example", "TXT", ['"v=spf1 include:_spf.mail.example -all"']),
+            doh_route("_dmarc.mail.example", "TXT", ['"v=DMARC1; p=reject"']),
+        ])
         with patch.object(ic, "FETCH", web):
             findings = ic._dns_connector(context("email", "a@mail.example"))
-        self.assertEqual([(item.result_type, item.value) for item in findings], [("dns-mx", "10 mx.mail.example")])
-        self.assertEqual(len(web.urls), 1)
+        self.assertEqual(
+            sorted((item.result_type, item.value) for item in findings),
+            [("dns-dmarc", "v=DMARC1; p=reject"), ("dns-mx", "10 mx.mail.example"), ("dns-txt", "v=spf1 include:_spf.mail.example -all")],
+        )
+        # MX, TXT, NS and DMARC of the domain; never the mailbox or the address itself.
+        self.assertEqual(len(web.urls), 4)
+        self.assertFalse(any("a%40" in url or "a@" in url for url in web.urls))
+
+    def test_rdap_walks_up_from_a_subdomain(self):
+        asked = []
+
+        def web(url, **options):
+            asked.append(url)
+            if url.endswith("/domain/example.com.br"):
+                return result(url, {"objectClassName": "domain", "ldhName": "example.com.br", "status": ["active"]})
+            return result(url, {"errorCode": 404}, status=404)
+
+        with patch.object(ic, "FETCH", web):
+            findings = ic._rdap_connector(context("domain", "mail.dev.example.com.br"))
+        self.assertEqual([url.rsplit("/domain/", 1)[1] for url in asked], ["mail.dev.example.com.br", "dev.example.com.br", "example.com.br"])
+        self.assertIn(("rdap-status", "active"), {(item.result_type, item.value) for item in findings})
+
+    def test_busy_source_is_retried_once(self):
+        calls = []
+
+        def flaky(url, **options):
+            calls.append(url)
+            return result(url, {"Status": 0, "Answer": []}, status=503 if len(calls) == 1 else 200)
+
+        with patch.object(ic, "FETCH", flaky), patch.object(ic, "SLEEP", lambda seconds: None):
+            data, _ = ic._get_json("https://cloudflare-dns.com/dns-query?name=x&type=A", hosts=ic.DOH_HOSTS)
+        self.assertEqual((len(calls), data["Status"]), (2, 0))
+        with patch.object(ic, "FETCH", lambda url, **options: result(url, {}, status=502)), patch.object(ic, "SLEEP", lambda seconds: None):
+            with self.assertRaises(ic.NetworkError):
+                ic._get_json("https://crt.sh/?q=x", hosts=("crt.sh",))
 
     def test_ip_url_has_no_host_to_resolve(self):
         with patch.object(ic, "FETCH", FakeWeb([])) as web:
@@ -282,6 +319,7 @@ class RegistrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             database = str(Path(directory) / "intel.sqlite3")
             initialize(database)
+            update_settings(database, {"intel.allow_network": "false"})
             intel.RATE_LIMITER.reset()
             web = FakeWeb([])
             with patch.object(ic, "FETCH", web):

@@ -23,13 +23,14 @@ from typing import Any
 from xml.etree import ElementTree
 
 from .. import native
-from ..db import _connection, new_id, record_activity, utc_now
+from ..db import _connection, module_enabled, new_id, record_activity, utc_now
 from ..errors import NotFoundError, ValidationError
 from ..validation import clean_text
+from . import antivirus, document_text, email_analysis
 from .embedded_scan import scan_signatures
+from .exif import parse_exif
 from .fuzzy_hash import similarity_digests, ssdeep_score, tlsh_compare
 from .hardening import describe_hardening
-from .exif import read_exif
 from .imaging import inspect_image
 from .indicators import extract_indicators
 from .yara_rules import scan_with_enabled
@@ -75,6 +76,7 @@ _FORMAT_LABELS = {
     "xls": "Excel 97-2003 workbook",
     "ppt": "PowerPoint 97-2003 presentation",
     "msg": "Outlook message",
+    "eml": "E-mail message",
     "msi": "Windows Installer package",
     "lnk": "Windows shortcut (LNK)",
     "iso": "ISO 9660 disc image",
@@ -117,6 +119,7 @@ _MEDIA_TYPES = {
     "xls": "application/vnd.ms-excel",
     "ppt": "application/vnd.ms-powerpoint",
     "msg": "application/vnd.ms-outlook",
+    "eml": "message/rfc822",
     "msi": "application/x-msi",
     "lnk": "application/x-ms-shortcut",
     "iso": "application/x-iso9660-image",
@@ -158,6 +161,7 @@ _EXTENSIONS = {
     "xls": {"xls", "xlt", "xla"},
     "ppt": {"ppt", "pps", "pot"},
     "msg": {"msg"},
+    "eml": {"eml", "txt"},
     "msi": {"msi", "msp"},
     "lnk": {"lnk"},
     "iso": {"iso", "img"},
@@ -851,6 +855,8 @@ def _text_kind(data: bytes) -> str | None:
             return "json"
         except (json.JSONDecodeError, ValueError):
             pass
+    if email_analysis.looks_like_email(text):
+        return "eml"
     if lower.startswith("<!doctype html") or lower.startswith("<html") or "<html" in lower[:512]:
         return "html"
     if stripped.startswith("<?xml") or re.match(r"<[A-Za-z][^>]*>", stripped[:200]):
@@ -1216,15 +1222,18 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         if image:
             structure = {"image": image}
             metadata["image"] = image
-        exif = read_exif(data) if kind == "jpeg" else None
+        exif = parse_exif(data)
         if exif:
             metadata["exif"] = exif
-            if "gps" in exif:
-                flags.append(
-                    f"photo carries a GPS position ({exif['gps']['latitude']}, {exif['gps']['longitude']})"
+            gps = exif.get("gps")
+            if gps and gps.get("valid"):
+                findings.append(
+                    {
+                        "level": "note",
+                        "code": "exif-gps",
+                        "message": f"The image carries GPS coordinates ({gps['latitude']}, {gps['longitude']}) written by the device. They can be stale, coarse or edited; treat them as a lead, not as where the file came from.",
+                    }
                 )
-            if exif.get("body_serial") or exif.get("camera_owner"):
-                flags.append("photo carries a camera serial number or owner name")
     elif kind in {"json", "xml", "html", "text"}:
         encoded = data[:4096].decode("utf-8", errors="replace")
         structure = {
@@ -1358,6 +1367,16 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
                 "message": "Structural notes: " + "; ".join(sorted(set(flags))),
             }
         )
+    if kind == "eml":
+        message = email_analysis.analyse(data)
+        structure["email"] = message
+        findings.extend(message["flags"])
+        extra_text.append("\n".join([message["origin_ip"], *(link["url"] for link in message["links"]), *(item["sha256"] for item in message["attachments"])]))
+        document = {"content": message["body"], "chars": len(message["body"]), "words": len(message["body"].split()), "method": "corpo do e-mail", "note": "", "truncated": False, "parts": 0}
+    else:
+        document = document_text.extract(data, kind)
+    if document and document["content"]:
+        extra_text.append(document["content"])
     indicators = _indicators_from_strings(strings, "\n".join(extra_text))
     hardening = describe_hardening(kind, data)
     similarity = similarity_digests(data)
@@ -1408,6 +1427,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
         "imports": imports,
         "hardening": hardening,
         "findings": findings,
+        "text": document,
         "limitations": [
             "Static, read-only inspection only; no execution, emulation or sandbox detonation.",
             "Archive members are listed, never extracted to disk.",
@@ -1416,6 +1436,7 @@ def analyze_bytes(data: bytes, filename: str = "") -> dict[str, Any]:
             "Hashes identify these exact bytes and do not establish safety or provenance.",
             "TLSH and ssdeep measure byte-level resemblance; a close digest is not shared authorship or intent.",
             "Embedded signatures mark where another format appears to start; they are not validated or carved.",
+            "Document text is read in memory; OCR, when installed, runs Tesseract (and pdftoppm for PDFs) on a temporary copy with a time limit, and can misread.",
         ],
         "analysis_engine": "python-stdlib",
     }
@@ -1444,9 +1465,31 @@ def _ensure_analysis_table(connection: Any) -> None:
         "ON file_analyses(investigation_id, created_at DESC)"
     )
     columns = {row[1] for row in connection.execute("PRAGMA table_info(file_analyses)")}
-    for column in ("tlsh", "ssdeep"):
+    for column in ("tlsh", "ssdeep", "phash", "dhash"):
         if column not in columns:
             connection.execute(f"ALTER TABLE file_analyses ADD COLUMN {column} TEXT")
+
+
+_HASH64 = re.compile(r"[0-9a-f]{16}")
+IMAGE_FORMATS = frozenset({"png", "jpeg", "gif", "webp", "bmp"})
+
+
+def _perceptual(value: object, kind: str) -> dict[str, str] | None:
+    """Validate perceptual hashes computed by the browser from the decoded image."""
+    if value in (None, {}):
+        return None
+    if not isinstance(value, dict) or set(value) - {"phash", "dhash"}:
+        raise ValidationError("perceptual must be an object with phash and dhash")
+    hashes = {key: str(value.get(key, "")).lower() for key in ("phash", "dhash")}
+    if not all(_HASH64.fullmatch(item) for item in hashes.values()):
+        raise ValidationError("phash and dhash must be 16 hexadecimal characters")
+    # A format the browser decodes but the analyser does not recognise as an
+    # image (AVIF, HEIC) keeps its analysis; the hashes are simply not stored.
+    return hashes if kind in IMAGE_FORMATS else None
+
+
+def hamming64(first: str, second: str) -> int:
+    return bin(int(first, 16) ^ int(second, 16)).count("1")
 
 
 def analyze_file(
@@ -1455,8 +1498,16 @@ def analyze_file(
     data: bytes,
     filename: str = "",
     investigation_id: str | None = None,
+    perceptual: object = None,
 ) -> dict[str, Any]:
     analysis = analyze_bytes(data, filename)
+    hashes = _perceptual(perceptual, analysis["format"])
+    if hashes:
+        analysis["perceptual"] = {
+            **hashes,
+            "computed_by": "browser",
+            "method": "pHash: DCT of a 32x32 greyscale copy, 8x8 low frequencies against their median; dHash: 9x8 greyscale, horizontal gradient; image as displayed (EXIF orientation applied)",
+        }
     yara = scan_with_enabled(database, data)
     if yara is not None:
         analysis["yara"] = yara
@@ -1477,6 +1528,20 @@ def analyze_file(
                     "code": "yara-error",
                     "message": "Some rule sets did not finish: " + ", ".join(failures[:5]) + ".",
                 }
+            )
+    with _connection(database) as connection:
+        scan_wanted = module_enabled(connection, "antivirus")
+    if scan_wanted:
+        verdict = antivirus.scan(data)
+        analysis["antivirus"] = verdict
+        if verdict["status"] == "infected":
+            analysis["findings"].insert(
+                0,
+                {
+                    "level": "warning",
+                    "code": "antivirus-detection",
+                    "message": f"ClamAV detected {verdict['signature']}. Treat the file as malicious; do not open it outside an isolated environment.",
+                },
             )
     if investigation_id:
         investigation_id = clean_text(
@@ -1502,8 +1567,8 @@ def analyze_file(
         connection.execute(
             """INSERT INTO file_analyses
                (id, investigation_id, file_name, format, media_type,
-                size_bytes, sha256, analysis_json, created_at, tlsh, ssdeep)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                size_bytes, sha256, analysis_json, created_at, tlsh, ssdeep, phash, dhash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 analysis_id,
                 investigation_id,
@@ -1516,6 +1581,8 @@ def analyze_file(
                 created_at,
                 analysis["hashes"]["tlsh"],
                 analysis["hashes"]["ssdeep"],
+                hashes["phash"] if hashes else "",
+                hashes["dhash"] if hashes else "",
             ),
         )
         record_activity(
@@ -1590,6 +1657,9 @@ def get_file_analysis(database: str, analysis_id: str) -> dict[str, Any]:
 
 SIMILARITY_SCAN_LIMIT = 5000
 TLSH_CLOSE_DISTANCE = 100
+# pHash bits that may differ for two images to count as visually similar
+# (resizing, recompression, small edits stay well under this).
+PHASH_CLOSE_DISTANCE = 10
 
 
 def similar_file_analyses(database: str, analysis_id: str, *, limit: int = 20) -> dict[str, Any]:
@@ -1602,13 +1672,13 @@ def similar_file_analyses(database: str, analysis_id: str, *, limit: int = 20) -
     with _connection(database) as connection:
         _ensure_analysis_table(connection)
         target = connection.execute(
-            "SELECT id, sha256, tlsh, ssdeep FROM file_analyses WHERE id = ?", (analysis_id,)
+            "SELECT id, sha256, tlsh, ssdeep, phash, dhash FROM file_analyses WHERE id = ?", (analysis_id,)
         ).fetchone()
         if target is None:
             raise NotFoundError(f"file analysis not found: {analysis_id}")
         rows = connection.execute(
             """SELECT a.id, a.investigation_id, a.file_name, a.format, a.size_bytes,
-                      a.sha256, a.tlsh, a.ssdeep, a.created_at, i.name AS investigation_name
+                      a.sha256, a.tlsh, a.ssdeep, a.phash, a.dhash, a.created_at, i.name AS investigation_name
                FROM file_analyses a
                LEFT JOIN investigations i ON i.id = a.investigation_id
                WHERE a.id != ?
@@ -1620,23 +1690,27 @@ def similar_file_analyses(database: str, analysis_id: str, *, limit: int = 20) -
         exact = row["sha256"] == target["sha256"]
         distance = tlsh_compare(target["tlsh"], row["tlsh"]) if target["tlsh"] and row["tlsh"] else None
         score = ssdeep_score(target["ssdeep"], row["ssdeep"]) if target["ssdeep"] and row["ssdeep"] else None
-        if not exact and (distance is None or distance > TLSH_CLOSE_DISTANCE) and not score:
+        visual = hamming64(target["phash"], row["phash"]) if target["phash"] and row["phash"] else None
+        gradient = hamming64(target["dhash"], row["dhash"]) if target["dhash"] and row["dhash"] else None
+        close_visual = visual is not None and visual <= PHASH_CLOSE_DISTANCE
+        if not exact and (distance is None or distance > TLSH_CLOSE_DISTANCE) and not score and not close_visual:
             continue
-        item = {key: row[key] for key in row.keys() if key not in {"tlsh", "ssdeep"}}
-        item.update({"exact": exact, "tlsh_distance": distance, "ssdeep_score": score})
+        item = {key: row[key] for key in row.keys() if key not in {"tlsh", "ssdeep", "phash", "dhash"}}
+        item.update({"exact": exact, "tlsh_distance": distance, "ssdeep_score": score, "phash_distance": visual, "dhash_distance": gradient})
         matches.append(item)
     matches.sort(
         key=lambda item: (
             not item["exact"],
+            item["phash_distance"] if item["phash_distance"] is not None else 64,
             item["tlsh_distance"] if item["tlsh_distance"] is not None else 10_000,
             -(item["ssdeep_score"] or 0),
         )
     )
     return {
         "analysis_id": analysis_id,
-        "has_digests": bool(target["tlsh"] or target["ssdeep"]),
+        "has_digests": bool(target["tlsh"] or target["ssdeep"] or target["phash"]),
         "compared": len(rows),
         "items": matches[:limit],
-        "thresholds": {"tlsh_max_distance": TLSH_CLOSE_DISTANCE, "ssdeep_min_score": 1},
-        "note": "Byte-level resemblance only; not shared authorship, purpose or verdict.",
+        "thresholds": {"tlsh_max_distance": TLSH_CLOSE_DISTANCE, "ssdeep_min_score": 1, "phash_max_distance": PHASH_CLOSE_DISTANCE},
+        "note": "Byte-level (TLSH, ssdeep) and visual (pHash) resemblance only; not shared authorship, purpose or verdict.",
     }

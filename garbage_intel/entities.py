@@ -764,6 +764,10 @@ def delete_relationship(database: str, relationship_id: str) -> dict[str, Any]:
     return {"deleted": True, "relationship_id": relationship_id}
 
 
+GRAPH_MAX_NODES = 5000
+GRAPH_MAX_EDGES = 15000
+
+
 def graph_payload(
     database: str,
     *,
@@ -801,42 +805,60 @@ def graph_payload(
         else:
             investigation = None
             investigation_payload = None
-        nodes = [
+        candidates = [
             dict(row)
             for row in connection.execute(
                 f"""SELECT e.id, e.entity_type, e.name, e.identifier,
                            e.description, e.verification_status, e.confidence,
                            e.created_at
                     FROM entities e {where}
-                    ORDER BY e.name, e.id
-                    LIMIT 500""",
+                    ORDER BY e.name, e.id""",
                 parameters,
             )
         ]
-        node_ids = {node["id"] for node in nodes}
-        if node_ids:
-            placeholders = ",".join("?" for _ in node_ids)
-            edges = [
-                dict(row)
-                for row in connection.execute(
-                    f"""SELECT r.id, r.source_entity_id, r.target_entity_id,
-                               r.relationship_type, r.description,
-                               r.verification_status, r.confidence,
-                               r.investigation_id, r.created_at
-                        FROM relationships r
-                        WHERE r.source_entity_id IN ({placeholders})
-                          AND r.target_entity_id IN ({placeholders})
-                        ORDER BY r.created_at, r.id
-                        LIMIT 1000""",
-                    [*node_ids, *node_ids],
-                )
-            ]
-        else:
-            edges = []
+        # A temporary table instead of "IN (?, ?, ...)": large scopes would
+        # pass SQLite's variable limit.
+        connection.execute("CREATE TEMP TABLE IF NOT EXISTS graph_scope (id TEXT PRIMARY KEY)")
+        connection.execute("DELETE FROM temp.graph_scope")
+        connection.executemany("INSERT INTO temp.graph_scope (id) VALUES (?)", ((node["id"],) for node in candidates))
+        all_edges = [
+            dict(row)
+            for row in connection.execute(
+                """SELECT r.id, r.source_entity_id, r.target_entity_id,
+                          r.relationship_type, r.description,
+                          r.verification_status, r.confidence,
+                          r.investigation_id, r.created_at
+                   FROM relationships r
+                   JOIN temp.graph_scope a ON a.id = r.source_entity_id
+                   JOIN temp.graph_scope b ON b.id = r.target_entity_id
+                   ORDER BY r.created_at, r.id"""
+            )
+        ]
+        connection.execute("DELETE FROM temp.graph_scope")
+    nodes, edges = candidates, all_edges
+    truncated = None
+    if len(candidates) > GRAPH_MAX_NODES or len(all_edges) > GRAPH_MAX_EDGES:
+        # Keep the most connected entities, so a cut graph still shows its
+        # structure instead of an alphabetical slice of leaves.
+        degree: dict[str, int] = {}
+        for edge in all_edges:
+            degree[edge["source_entity_id"]] = degree.get(edge["source_entity_id"], 0) + 1
+            degree[edge["target_entity_id"]] = degree.get(edge["target_entity_id"], 0) + 1
+        ranked = sorted(candidates, key=lambda node: -degree.get(node["id"], 0))[:GRAPH_MAX_NODES]
+        kept = {node["id"] for node in ranked}
+        nodes = [node for node in candidates if node["id"] in kept]
+        edges = [edge for edge in all_edges if edge["source_entity_id"] in kept and edge["target_entity_id"] in kept][:GRAPH_MAX_EDGES]
+        truncated = {
+            "nodes_total": len(candidates),
+            "edges_total": len(all_edges),
+            "nodes_shown": len(nodes),
+            "edges_shown": len(edges),
+        }
     return {
         "investigation": investigation_payload,
         "nodes": nodes,
         "edges": edges,
+        "truncated": truncated,
         "metrics": native.graph_metrics(nodes, edges),
         "analytics": native.graph_analytics(nodes, edges),
         "entity_types": entity_types(),

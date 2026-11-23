@@ -199,7 +199,7 @@ import tempfile
 from pathlib import Path
 
 from garbage_intel import intel
-from garbage_intel.modules.exif import read_exif
+from garbage_intel.modules.exif import parse_exif
 from garbage_intel.modules.file_intel import analyze_bytes
 from garbage_intel.store import initialize
 from garbage_intel.workspace import get_settings, update_settings
@@ -250,24 +250,24 @@ def jpeg_with_gps(latitude=(23, 33, 1.2), lat_ref=b"S", longitude=(46, 38, 2.5),
 
 class ExifTests(unittest.TestCase):
     def test_reads_camera_time_and_gps(self):
-        exif = read_exif(jpeg_with_gps())
+        exif = parse_exif(jpeg_with_gps())
         self.assertEqual(exif["make"], "Canon")
-        self.assertEqual(exif["taken_at"], "2024:05:01 10:20:30")
+        self.assertEqual(exif["captured_at"], "2024:05:01 10:20:30")
+        self.assertTrue(exif["gps"]["valid"])
         self.assertAlmostEqual(exif["gps"]["latitude"], -(23 + 33 / 60 + 1.2 / 3600), places=5)
         self.assertAlmostEqual(exif["gps"]["longitude"], -(46 + 38 / 60 + 2.5 / 3600), places=5)
-        self.assertIn("openstreetmap.org", exif["gps"]["map_url"])
 
     def test_no_exif_and_truncated_input(self):
-        self.assertIsNone(read_exif(b"\xff\xd8\xff\xd9"))
-        self.assertIsNone(read_exif(b"not a jpeg"))
+        self.assertIsNone(parse_exif(b"\xff\xd8\xff\xd9"))
+        self.assertIsNone(parse_exif(b"not a jpeg"))
         photo = jpeg_with_gps()
         for cut in range(4, len(photo), 7):
-            read_exif(photo[:cut])  # must never raise
+            parse_exif(photo[:cut])  # must never raise
 
     def test_file_analysis_reports_position(self):
         analysis = analyze_bytes(jpeg_with_gps(), "photo.jpg")
-        self.assertIn("gps", analysis["metadata"]["exif"])
-        self.assertIn("GPS position", json.dumps(analysis))
+        self.assertTrue(analysis["metadata"]["exif"]["gps"]["valid"])
+        self.assertIn("exif-gps", json.dumps(analysis))
 
 
 class UsernameTests(unittest.TestCase):
@@ -348,39 +348,3 @@ class HibpTests(unittest.TestCase):
     def test_not_breached(self):
         _, findings, _, _ = run("hibp", "email", "a@example.com", {}, api_key="hibp-key-1234")
         self.assertEqual(findings[0].value, "none")
-
-
-class WebhookTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.database = str(Path(self.tmp.name) / "w.db")
-        initialize(self.database)
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def test_setting_validation(self):
-        with self.assertRaises(ValidationError):
-            update_settings(self.database, {"intel.webhook_url": "http://example.com/hook"})
-        update_settings(self.database, {"intel.webhook_url": "https://example.com/hook"})
-        self.assertEqual(get_settings(self.database)["values"]["intel.webhook_url"], "https://example.com/hook")
-        update_settings(self.database, {"intel.webhook_url": ""})
-
-    def test_posts_summary_only_with_network_allowed(self):
-        sent = []
-
-        def fake(url, **options):
-            sent.append((url, options))
-            return reply(url, {})
-
-        update_settings(self.database, {"intel.webhook_url": "https://example.com/hook"})
-        with patch.object(intel, "WEBHOOK_FETCH", fake):
-            run_info = intel.run_query(self.database, value="discord:175928847299117063")
-            self.assertEqual(sent, [])
-            update_settings(self.database, {"intel.allow_network": "true"})
-            self.assertTrue(intel.notify_webhook(self.database, run_info["id"]))
-        url, options = sent[0]
-        self.assertEqual(options["method"], "POST")
-        body = json.loads(options["body"])
-        self.assertIn("discord-id", body["content"])
-        self.assertEqual(body["garbage"]["sources"].get("discord-snowflake"), 1)

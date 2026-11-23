@@ -21,6 +21,7 @@
     "first-epss": ["FIRST EPSS", "Probabilidade e percentil de exploração (EPSS) de uma CVE."],
     "tls-certificate": ["Certificado TLS", "Um handshake TLS na porta 443 do alvo: confiança, protocolo, titular, emissor, validade, SANs, chave, fingerprints e pin SPKI."],
     github: ["GitHub", "Metadados públicos de uma organização (site, repositórios) ou de um repositório a partir de uma URL do github.com. Contas pessoais não são coletadas."],
+    typosquat: ["Typosquatting", "Gera erros de digitação, caracteres parecidos, bits trocados e outros TLDs do domínio e pergunta a um resolvedor DNS-over-HTTPS quais existem. Nunca contata as variações."],
     "security-txt": ["security.txt", "O arquivo RFC 9116 que a organização publica: contatos de segurança, política, chave, validade e assinatura. Um GET HTTPS ao servidor do alvo."],
     "web-fingerprint": ["Impressão digital web", "Um GET HTTPS da página do alvo (e do favicon): status, redirecionamentos, cabeçalhos de segurança, cookies, título, tecnologias e hash do favicon."],
     "shodan-internetdb": ["Shodan InternetDB", "Portas abertas, nomes, CPEs, tags e CVEs que as varreduras do Shodan registraram para um IP."],
@@ -40,6 +41,25 @@
     urlhaus: ["URLhaus", "URLs de distribuição de malware ligadas a uma URL, host ou hash de payload."],
     threatfox: ["ThreatFox", "Indicadores de comprometimento ligados a famílias de malware e infraestrutura de botnets."],
     malwarebazaar: ["MalwareBazaar", "Registro de amostra de malware: família, tipo, entrega e hashes de semelhança."],
+    "br-documents": ["Documentos e telefones", "Dígitos verificadores de CPF e CNPJ, região fiscal, país, DDD e tipo de linha. Offline; não busca o dono."],
+    "brasilapi-cnpj": ["BrasilAPI CNPJ", "Cadastro público da Receita Federal: razão social, situação, atividades, endereço, porte e capital. Sem nomes de sócios."],
+    "minhareceita-cnpj": ["Minha Receita", "O mesmo cadastro público da Receita Federal por outro espelho. Sem nomes de sócios."],
+    "ransomware-live": ["Vítimas de ransomware (ransomware.live)", "Se a organização aparece como vítima em sites de vazamento de grupos de ransomware. Cada post é a alegação do grupo."],
+    "phishing-lists": ["Listas públicas de phishing", "OpenPhish, Phishing Army, Block List Project e Phishing.Database, baixadas inteiras e conferidas aqui; o domínio não é enviado."],
+    misp: ["MISP", "Eventos do seu MISP que contêm o valor."],
+    opencti: ["OpenCTI", "Observáveis do seu OpenCTI com o valor: pontuação, etiquetas, indicadores e relatórios."],
+    "reverse-ip": ["Domínios no mesmo IP (HackerTarget)", "Domínios cujo DNS aponta para o IP hoje (50 consultas grátis por dia)."],
+    "mnemonic-pdns": ["Histórico de DNS (Mnemonic)", "Para onde um domínio ou IP já apontou, com a primeira e a última vez vistos."],
+    "ip-lists": ["Listas públicas de IP", "Saída Tor, botnets do Feodo Tracker, Spamhaus DROP e faixas da AWS, Google Cloud, Cloudflare e Fastly. As listas são baixadas inteiras; o IP não é enviado."],
+    "dnsbl": ["Listas antispam (DNSBL)", "Sete listas de spam e abuso consultadas pelo DNS público."],
+    "hackertarget-hosts": ["HackerTarget", "Hosts do domínio e o IP de cada um, das bases de DNS da HackerTarget (50 consultas grátis por dia)."],
+    "otx-hosts": ["AlienVault OTX (hosts)", "Hosts e URLs do domínio vistos pela comunidade OTX."],
+    "subdomain-center": ["subdomain.center", "Subdomínios reunidos de bases públicas."],
+    "dns-common-names": ["Nomes comuns (DNS)", "Confere se uns cinquenta nomes comuns (www, mail, vpn, api, dev…) existem no domínio, pelo DNS público."],
+    "registrobr-cnpj": ["Registro.br", "Quantos domínios .br, blocos de IP e AS estão em nome do CNPJ, e os sites prováveis confirmados pelo titular. Contatos não são lidos."],
+    "contratos-cgu": ["Contratos e pagamentos federais (CGU)", "Contratos do governo federal com a empresa e os maiores pagamentos dos últimos dois anos. Usa a mesma chave gratuita."],
+    "sancoes-cgu": ["Sanções federais (CGU)", "CEIS, CNEP, CEPIM e acordos de leniência no Portal da Transparência. Precisa de uma chave gratuita."],
+    nominatim: ["OpenStreetMap", "Endereço para coordenadas ou coordenadas para endereço, com dados do OpenStreetMap."],
     "discord-snowflake": ["Discord: data do ID", "Data de criação embutida num ID do Discord. Nada sai da máquina."],
     "discord-user": ["Discord: usuário", "Perfil público de um usuário pelo ID: nome, nome de exibição, avatar, banner, insígnias e tag de servidor. Exige um token de bot seu."],
     "discord-invite": ["Discord: convite", "Servidor por trás de um convite: nome, ID, data de criação, descrição, recursos, membros e online, quem convidou e validade."],
@@ -82,7 +102,7 @@
     "open-port": "Porta aberta", hostname: "Nome de host", cpe: "CPE", tag: "Tag", cve: "CVE",
     "origin-asn": "ASN de origem", "as-holder": "Titular do AS", "announced-prefix": "Prefixo anunciado",
     routing: "Roteamento", "network-operator": "Operador de rede", "network-owner": "Dono da rede",
-    geolocation: "Localização da rede", "known-file": "Arquivo conhecido", scan: "Varredura urlscan",
+    geolocation: "Localização", "known-file": "Arquivo conhecido", scan: "Varredura urlscan",
     subdomain: "Subdomínio", certificate: "Certificado", "cve-record": "Registro da CVE",
     reference: "Referência", "affected-package": "Pacote afetado", alias: "Identificador alternativo",
     verdict: "Veredito dos motores", "threat-label": "Rótulo de ameaça", category: "Categoria",
@@ -96,6 +116,16 @@
     "security-contact": "Contato de segurança", "security-policy": "Política de divulgação",
     "security-encryption": "Chave de criptografia", "security-acknowledgments": "Agradecimentos",
     "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
+    typosquat: "Variação existente", "typosquat-summary": "Resumo de typosquatting",
+    validity: "Validade", "fiscal-region": "Região fiscal", establishment: "Estabelecimento", formatted: "Formato",
+    country: "País", "phone-region": "DDD", "line-type": "Tipo de linha", "check-digits": "Dígitos verificadores", "registrobr-holder": "Registro.br", "company-domain": "Site da empresa", sanction: "Sanção", "sanction-check": "Sanções", "observed-url": "URL vista", "misp-event": "Evento no MISP", "phishing-listed": "Lista de phishing", "ransomware-victim": "Vítima de ransomware", "ransomware-mention": "Citado em post de ransomware", "ransomware-check": "Ransomware", "phishing-under": "Nomes listados abaixo", "phishing-check": "Listas de phishing", "opencti-observable": "Observável no OpenCTI", "opencti-report": "Relatório no OpenCTI", "cohosted-domain": "Domínio no mesmo IP", "pdns-name": "Nome no histórico", "pdns-answer": "Resposta no histórico",
+    "tor-exit": "Saída Tor", "botnet-c2": "Botnet", "drop-listed": "Spamhaus DROP", "cloud-range": "Nuvem ou CDN", "lists-checked": "Listas conferidas",
+    blocklist: "Lista antispam", "blocklist-check": "Listas antispam", contract: "Contrato federal", "contracts-summary": "Contratos federais", payment: "Pagamento federal", "payments-summary": "Pagamentos federais",
+    "phone-format": "Formato para discar", state: "Estado", service: "Serviço", "phone-suggestion": "Com o 9", "trade-name": "Nome fantasia",
+    "registration-status": "Situação cadastral", founded: "Início das atividades", "main-activity": "Atividade principal",
+    "secondary-activity": "Atividade secundária", "legal-nature": "Natureza jurídica", "company-size": "Porte",
+    "share-capital": "Capital social", address: "Endereço", "company-phone": "Telefone da empresa",
+    partners: "Sócios", "tax-regime": "Regime tributário", coordinates: "Coordenadas",
     "created-at": "Criado em", username: "Nome de usuário", avatar: "Avatar", banner: "Banner",
     "accent-color": "Cor de destaque", badge: "Insígnia", "server-tag": "Tag de servidor", account: "Conta",
     server: "Servidor", "server-feature": "Recurso do servidor", "server-icon": "Ícone do servidor",
@@ -169,6 +199,8 @@
     location: "local", public_repos: "repositórios públicos", verified: "verificada", email: "e-mail",
     repository: "repositório", owner: "dono", expires: "expira", signed: "assinado", canonical: "canônico",
     preferred_languages: "idiomas", missing_expires: "sem Expires",
+    kind: "técnica", nameservers: "servidores de nomes", generated: "geradas", checked: "checadas",
+    existing: "existentes", unanswered: "sem resposta", engine: "motor",
   };
 
   const STATUS_TEXT = {
@@ -188,6 +220,7 @@
   const TYPE_LABELS = {
     domain: "Domínio", ipv4: "IPv4", ipv6: "IPv6", cidr: "CIDR", url: "URL", email: "E-mail",
     md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", asn: "ASN", cve: "CVE",
+    cnpj: "CNPJ", cpf: "CPF", phone: "Telefone", location: "Local",
     "discord-id": "ID do Discord", "discord-invite": "Convite do Discord", "roblox-user": "Roblox",
     username: "Username", telegram: "Telegram", minecraft: "Minecraft", steam: "Steam", topic: "Tema",
   };
@@ -220,8 +253,8 @@
     nvd: "Opcional: aumenta o limite de 5 para 50 consultas a cada 30 s.",
     ipinfo: "Opcional: sem token, o limite anônimo é menor.",
     discord: "Obrigatório para o perfil de usuário. Crie um bot no Developer Portal e cole o token dele.",
+    ai: "Para o assistente e o Investigador IA em endpoints com chave (OpenRouter, OpenAI, Anthropic…). Servidores locais como Ollama não precisam.",
     openalex: "Opcional: sem chave, as buscas dividem uma cota diária gratuita pequena por IP.",
-    ai: "Para o Investigador IA em endpoints com chave (OpenRouter, OpenAI, Anthropic…). Servidores locais como Ollama não precisam.",
     hibp: "Obrigatória e paga. Mostra só em quais vazamentos o e-mail apareceu.",
   };
 
@@ -326,71 +359,411 @@
     }
   }
 
+
   /* ---------------------------------------------------------------- */
-  /* Results                                                          */
+  /* Results: the dossier first, sources in one line, raw data last   */
   /* ---------------------------------------------------------------- */
 
-  function sourceList(run, connectorsById) {
-    const list = el("ol", { class: "source-list", "aria-label": "Status por fonte" });
-    const order = { pending: -1, ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4, "network-disabled": 5, "module-disabled": 6, unsupported: 7 };
-    const sources = [...run.sources].sort(
-      (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.connector_id.localeCompare(b.connector_id),
+  const LIST_PREVIEW = 12;
+  const RAW_PREVIEW = 40;
+  const SOURCE_ORDER = {
+    pending: -1, ok: 0, empty: 1, error: 2, "rate-limited": 3, "key-missing": 4,
+    "network-disabled": 5, "target-contact-disabled": 6, "module-disabled": 7, unsupported: 8,
+  };
+  const LOOKALIKE_KIND = {
+    "tld-swap": "outro TLD", omission: "letra omitida", insertion: "letra inserida", addition: "letra a mais",
+    transposition: "letras trocadas de lugar", replacement: "letra substituída", repetition: "letra repetida",
+    homoglyph: "caractere parecido", bitsquatting: "bit trocado", hyphenation: "hífen inserido", "vowel-swap": "vogal trocada",
+  };
+  /* A list that follows label/value rows gets a short caption. */
+  const LIST_CAPTION = {
+    hosting: "Endereços no DNS",
+    activity: "Atividades secundárias",
+    services: "Portas abertas",
+    host: "Endereços no DNS",
+    reputation: "Relatórios",
+    reports: "Relatórios",
+  };
+  const FLAG_LEVEL = {
+    high: ["alert", "Importante"],
+    medium: ["diamond", "Atenção"],
+    info: ["info", "Nota"],
+  };
+
+  /* "1 fonte respondeu" / "12 fontes responderam". */
+  function count(n, one, many) {
+    return `${G.formatNumber(n)} ${n === 1 ? one : many}`;
+  }
+
+  function copyIcon() {
+    return G.svgEl(
+      "svg",
+      {
+        class: "icon", viewBox: "0 0 24 24", width: 15, height: 15, fill: "none", stroke: "currentColor",
+        "stroke-width": "1.7", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false",
+      },
+      G.svgEl("path", { d: "M9.5 8.5h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2zM15.5 8.5V6.5a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" }),
     );
-    for (const source of sources) {
-      const connector = connectorsById[source.connector_id];
-      list.append(
-        el(
-          "li",
-          { class: `source-row status-${source.status}` },
+  }
+
+  async function copyText(text, done = "Copiado.") {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(done);
+    } catch {
+      const area = el("textarea", { class: "visually-hidden", "aria-hidden": "true", tabindex: "-1" });
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      }
+      area.remove();
+      toast(copied ? done : "Não foi possível copiar.", copied ? undefined : "error");
+    }
+  }
+
+  function copyButton(value, key) {
+    return el(
+      "button",
+      {
+        type: "button",
+        class: "dossier-copy",
+        "aria-label": `Copiar ${value}`,
+        "data-focus-key": key,
+        onClick: () => copyText(value, "Valor copiado."),
+      },
+      copyIcon(),
+    );
+  }
+
+  /* A value that starts a new search: link-styled, with an arrow on hover. */
+  function pivotControl(value, ctx, key, shown = value) {
+    const technique = /^T\d{4}(?:\.\d{3})?\b/.exec(value);
+    const content = [el("span", { class: "dossier-pivot-text" }, shown), G.icon("arrow", { size: 14, className: "dossier-pivot-icon" })];
+    if (ctx.attack && technique) {
+      return el(
+        "a",
+        { class: "dossier-pivot", href: `#/attack?technique=${encodeURIComponent(technique[0])}`, "aria-label": `Abrir ${shown} no ATT&CK`, "data-focus-key": key },
+        ...content,
+      );
+    }
+    return el(
+      "button",
+      { type: "button", class: "dossier-pivot", "aria-label": `Pesquisar ${shown}`, "data-focus-key": key, onClick: () => ctx.pivot(value) },
+      ...content,
+    );
+  }
+
+  /* Every finding is a small box: closed it shows what it is and its
+     value; a click opens the details (hint, sources, actions). The "+"
+     beside it puts it on the graph and opens the graph on it. */
+  function infoBox({ key, label, value, shown = value, meta, hint, sources, pivotValue, section, ctx, attack = false }) {
+    const open = ctx.ui.open.has(key);
+    const details = el(
+      "div",
+      { class: "info-box-details", hidden: !open },
+      hint ? el("p", { class: "info-box-hint" }, hint) : null,
+      meta ? el("p", { class: "info-box-hint" }, meta) : null,
+      sources?.length ? el("p", { class: "info-box-src" }, `${sources.length > 1 ? "Fontes" : "Fonte"}: ${sources.join(", ")}`) : null,
+      el(
+        "div",
+        { class: "info-box-actions" },
+        pivotValue ? pivotControl(pivotValue, { ...ctx, attack }, `${key}-pivot`, "Pesquisar") : null,
+        copyButton(value, `${key}-copy`),
+      ),
+    );
+    const head = el(
+      "button",
+      { type: "button", class: "info-box-head", "aria-expanded": String(open), "data-focus-key": key },
+      label ? el("span", { class: "info-box-label" }, label) : null,
+      el("span", { class: "info-box-value" }, shown),
+    );
+    const box = el("div", { class: `info-box${open ? " is-open" : ""}` });
+    head.addEventListener("click", () => {
+      const next = !ctx.ui.open.has(key);
+      if (next) ctx.ui.open.add(key);
+      else ctx.ui.open.delete(key);
+      box.classList.toggle("is-open", next);
+      head.setAttribute("aria-expanded", String(next));
+      details.hidden = !next;
+    });
+    const add = el(
+      "button",
+      { type: "button", class: "info-box-add", "aria-label": `Adicionar ${shown} ao grafo`, title: "Adicionar ao grafo", "data-focus-key": `${key}-add` },
+      G.icon("plus", { size: 16 }),
+    );
+    add.addEventListener("click", () => ctx.add?.({ label, value, pivot_value: pivotValue || "", hint, meta, sources, section: section.title }));
+    box.append(head, add, details);
+    return box;
+  }
+
+  function dossierRow(row, section, ctx) {
+    return infoBox({
+      key: `row-${section.id}-${row.label}`,
+      label: row.label,
+      value: row.value,
+      hint: row.hint,
+      sources: row.sources,
+      pivotValue: row.pivot ? row.value : "",
+      section,
+      ctx,
+    });
+  }
+
+  function dossierList(section, ctx) {
+    const list = section.list;
+    const items = list.items || [];
+    const pivotable = Boolean(list.pivot) || PIVOTABLE.has(section.id) || section.id === "others";
+    const attack = section.id === "techniques";
+    const long = items.length > LIST_PREVIEW;
+    const ui = ctx.ui;
+    const ul = el("ul", { class: "dossier-list", "aria-label": section.title });
+    const foot = el("div", { class: "dossier-list-foot" });
+
+    const item = (entry) => {
+      const value = pivotable ? cleanValue({ result_type: section.id, value: entry.value }) : entry.value;
+      const box = infoBox({
+        key: `item-${section.id}-${entry.value}`,
+        // Dialling formats read best with their name on the closed box.
+        label: section.id === "formats" ? entry.meta : "",
+        value: entry.value,
+        meta: entry.meta && section.id !== "formats" ? (section.id === "lookalikes" ? LOOKALIKE_KIND[entry.meta] || entry.meta : entry.meta) : "",
+        pivotValue: pivotable && value ? value : "",
+        section,
+        ctx,
+        attack,
+      });
+      return el("li", { class: "dossier-item-box" }, box);
+    };
+
+    const draw = () => {
+      const needle = (ui.filters[section.id] || "").trim().toLocaleLowerCase("pt-BR");
+      const matching = needle
+        ? items.filter((entry) => `${entry.value} ${entry.meta || ""}`.toLocaleLowerCase("pt-BR").includes(needle))
+        : items;
+      const expanded = ui.expanded.has(section.id);
+      const shown = needle || expanded ? matching : matching.slice(0, LIST_PREVIEW);
+      ul.replaceChildren(...shown.map(item));
+      if (!shown.length) ul.append(el("li", { class: "dossier-item-box is-empty" }, "Nada corresponde ao filtro."));
+      const parts = [];
+      if (needle) parts.push(el("span", { class: "dossier-muted" }, `${G.formatNumber(matching.length)} de ${G.formatNumber(items.length)}`));
+      else if (long) {
+        parts.push(
           el(
-            "div",
-            { class: "source-row-main" },
-            el("strong", {}, connectorName(source.connector_id, connector?.name)),
-            el(
-              "span",
-              { class: "source-row-meta" },
-              ...[
-                source.status === "ok" ? `${source.count} resultado(s)` : null,
-                source.elapsed_ms ? `${G.formatNumber(source.elapsed_ms)} ms` : null,
-                source.cached ? "cache" : null,
-                connector?.network ? "rede" : "local",
-              ]
-                .filter(Boolean)
-                .map((text) => el("span", {}, text)),
-            ),
+            "button",
+            {
+              type: "button",
+              class: "dossier-more",
+              "aria-expanded": String(expanded),
+              "data-focus-key": `more-${section.id}`,
+              onClick: () => {
+                if (ui.expanded.has(section.id)) ui.expanded.delete(section.id);
+                else ui.expanded.add(section.id);
+                draw();
+              },
+            },
+            expanded ? "Mostrar menos" : `Mostrar todos (${G.formatNumber(items.length)})`,
           ),
-          statusBadgeFor(source.status),
-          source.error ? el("p", { class: "source-row-error" }, G.translateError(source.error)) : null,
+        );
+      }
+      if (list.total > items.length) {
+        parts.push(el("span", { class: "dossier-muted" }, `A lista guarda os primeiros ${G.formatNumber(items.length)} de ${G.formatNumber(list.total)}.`));
+      }
+      foot.replaceChildren(...parts);
+      foot.hidden = !parts.length;
+    };
+
+    let tools = null;
+    if (long) {
+      const filter = el("input", {
+        class: "input dossier-filter",
+        type: "search",
+        autocomplete: "off",
+        spellcheck: "false",
+        "aria-label": `Filtrar ${section.title.toLocaleLowerCase("pt-BR")}`,
+        placeholder: "Filtrar",
+        "data-focus-key": `filter-${section.id}`,
+        value: ui.filters[section.id] || "",
+      });
+      filter.addEventListener("input", () => {
+        ui.filters[section.id] = filter.value;
+        draw();
+      });
+      tools = el(
+        "div",
+        { class: "dossier-list-tools" },
+        filter,
+        el(
+          "button",
+          {
+            type: "button",
+            class: "button button-secondary button-small",
+            "data-focus-key": `copyall-${section.id}`,
+            onClick: () => copyText(items.map((entry) => entry.value).join("\n"), `${G.formatNumber(items.length)} itens copiados.`),
+          },
+          "Copiar lista",
         ),
       );
     }
-    return list;
+    draw();
+    const caption = section.rows?.length ? LIST_CAPTION[section.id] : null;
+    return [caption ? el("p", { class: "dossier-list-caption" }, caption) : null, tools, ul, foot];
   }
 
-  function resultGroups(run, connectorsById, handlers) {
+  function dossierSection(section, ctx) {
+    const id = `dossier-${section.id}`;
+    const listed = section.list?.items?.length || 0;
+    return el(
+      "section",
+      { class: `dossier-block${listed > 6 ? " is-wide" : ""}`, "aria-labelledby": id },
+      el(
+        "h3",
+        { id, class: "dossier-block-title" },
+        section.title,
+        section.list && section.list.total > 1 ? el("span", { class: "dossier-count" }, G.formatNumber(section.list.total)) : null,
+      ),
+      section.rows?.length ? el("div", { class: "info-grid" }, ...section.rows.map((row) => dossierRow(row, section, ctx))) : null,
+      section.list && listed ? dossierList(section, ctx) : null,
+      section.note ? el("p", { class: "dossier-note" }, section.note) : null,
+    );
+  }
+
+  async function worldMap() {
+    if (!state.worldMap) state.worldMap = await api("/world.json");
+    return state.worldMap;
+  }
+
+  /* A small equirectangular map (the local Natural Earth outline of the
+     GEOINT screen) framed around the point. */
+  /* With network sources allowed, a street map (OpenStreetMap data, CARTO
+     tiles) replaces the outline map. It is kept between the redraws of a
+     running search so the tiles and the user's pan and zoom survive. */
+  function streetFrame(map, geocoded) {
+    const key = `${Number(map.lat).toFixed(6)},${Number(map.lon).toFixed(6)}`;
+    if (state.streetMap?.key !== key) {
+      state.streetMap = { key, element: G.streetMap({ lat: Number(map.lat), lon: Number(map.lon), zoom: geocoded ? 16 : 10, label: map.label }) };
+    }
+    return state.streetMap.element;
+  }
+
+  function dossierMap(map, streets = false) {
+    const geocoded = map.precision !== "rede (aproximada)";
+    const width = geocoded ? 36 : 64;
+    const height = width / 2;
+    const x = Math.max(-180, Math.min(180, Number(map.lon))) + 180;
+    const y = 90 - Math.max(-90, Math.min(90, Number(map.lat)));
+    const left = Math.min(360 - width, Math.max(0, x - width / 2));
+    const top = Math.min(180 - height, Math.max(0, y - height / 2));
+    const coords = `${Number(map.lat).toFixed(4)}, ${Number(map.lon).toFixed(4)}`;
+    const base = G.svgEl("g");
+    const svg = G.svgEl(
+      "svg",
+      {
+        class: "dmap",
+        viewBox: `${left} ${top} ${width} ${height}`,
+        preserveAspectRatio: "xMidYMid slice",
+        role: "img",
+        "aria-label": `Mapa com o ponto em ${map.label || coords}`,
+      },
+      base,
+      G.svgEl("circle", { class: "dmap-halo", cx: x, cy: y, r: width / (geocoded ? 30 : 14) }),
+      G.svgEl("circle", { class: "dmap-dot", cx: x, cy: y, r: width / 110 }),
+    );
+    const drawBase = (world) =>
+      base.replaceChildren(
+        G.svgEl("rect", { class: "dmap-ocean", x: 0, y: 0, width: 360, height: 180 }),
+        G.svgEl("path", { class: "dmap-land", d: world.land }),
+        G.svgEl("path", { class: "dmap-borders", d: world.borders }),
+      );
+    if (state.worldMap) drawBase(state.worldMap);
+    else worldMap().then(drawBase).catch(() => {});
+    return el(
+      "section",
+      { class: "dossier-block dossier-map", "aria-labelledby": "dossier-map-title" },
+      el("h3", { id: "dossier-map-title", class: "dossier-block-title" }, "Mapa"),
+      streets && G.streetMap ? streetFrame(map, geocoded) : el("div", { class: "dmap-frame" }, svg),
+      el(
+        "dl",
+        { class: "dossier-rows" },
+        map.label ? el("div", { class: "dossier-row" }, el("dt", {}, "Ponto"), el("dd", {}, el("span", { class: "dossier-value" }, map.label))) : null,
+        el(
+          "div",
+          { class: "dossier-row" },
+          el("dt", {}, "Precisão"),
+          el("dd", {}, el("span", { class: "dossier-value" }, map.precision || (geocoded ? "geocodificado" : "rede (aproximada)")),
+            el("span", { class: "dossier-hint" }, /cep/i.test(map.precision || "") ? "centro do CEP do endereço cadastrado, não o prédio" : geocoded ? "endereço convertido pelo OpenStreetMap" : "cidade ou região do bloco de IPs, não de uma pessoa")),
+        ),
+        el("div", { class: "dossier-row" }, el("dt", {}, "Coordenadas"), el("dd", {}, el("span", { class: "dossier-value" }, coords), copyButton(coords, "map-coords-copy"))),
+      ),
+      el(
+        "p",
+        { class: "dossier-links" },
+        ...(G.mapLinks
+          ? (() => {
+              const links = G.mapLinks(map.lat, map.lon, geocoded ? 17 : 11);
+              return [
+                el("a", { class: "dossier-link", href: links.osm, target: "_blank", rel: "noopener noreferrer" }, "Abrir no OpenStreetMap"),
+                el("a", { class: "dossier-link", href: links.google, target: "_blank", rel: "noopener noreferrer" }, "Abrir no Google Maps"),
+              ];
+            })()
+          : []),
+        el("a", { class: "dossier-link", href: "#/geoint" }, "Abrir no mapa GEOINT"),
+      ),
+    );
+  }
+
+  function sourceTable(run, connectorsById) {
+    const sources = [...run.sources].sort(
+      (a, b) => (SOURCE_ORDER[a.status] ?? 9) - (SOURCE_ORDER[b.status] ?? 9) || a.connector_id.localeCompare(b.connector_id),
+    );
+    return table({
+      columns: [
+        {
+          label: "Fonte",
+          render: (row) =>
+            el(
+              "div",
+              { class: "dossier-source-cell" },
+              el("strong", {}, connectorName(row.connector_id, connectorsById[row.connector_id]?.name)),
+              row.error ? el("span", { class: "source-row-error" }, G.translateError(row.error)) : null,
+            ),
+        },
+        { label: "Situação", render: (row) => statusBadgeFor(row.status) },
+        { label: "Resultados", cellClass: "numeric-col", render: (row) => (row.status === "ok" ? G.formatNumber(row.count) : "—") },
+        {
+          label: "Tempo",
+          render: (row) => (row.cached ? "cache" : row.elapsed_ms ? `${G.formatNumber(row.elapsed_ms)} ms` : "—"),
+        },
+      ],
+      rows: sources,
+    });
+  }
+
+  function resultGroups(run, connectorsById, handlers, ui) {
     const groups = new Map();
     for (const item of run.results) {
       if (!groups.has(item.connector_id)) groups.set(item.connector_id, []);
       groups.get(item.connector_id).push(item);
     }
-    if (!groups.size) {
-      return emptyState({
-        icon: "search",
-        title: "Nenhum resultado",
-        description: "Nenhuma fonte retornou dados para este artefato. Verifique o status de cada fonte ao lado.",
-      });
-    }
+    if (!groups.size) return el("p", { class: "dossier-muted" }, "Nenhuma fonte retornou dados.");
     const wrap = el("div", { class: "result-groups" });
     for (const [connectorId, items] of groups) {
       const connector = connectorsById[connectorId];
+      const name = connectorName(connectorId, connector?.name);
+      const full = ui.rawExpanded.has(connectorId);
+      const rows = full ? items : items.slice(0, RAW_PREVIEW);
       wrap.append(
         el(
           "section",
-          { class: "result-group", "aria-label": connectorName(connectorId, connector?.name) },
+          { class: "result-group", "aria-label": name },
           el(
             "header",
             { class: "result-group-head" },
-            el("h3", {}, connectorName(connectorId, connector?.name)),
+            el("h3", {}, name),
             el("span", { class: "result-group-count" }, `${items.length}`),
             items[0]?.source_url
               ? el(
@@ -402,9 +775,9 @@
           ),
           table({
             columns: [
-              { label: "TIPO", render: (row) => el("span", { class: "result-type" }, RESULT_LABELS[row.result_type] || row.result_type) },
-              { label: "VALOR", render: (row) => el("code", { class: "result-value" }, G.translateText(row.value)) },
-              { label: "DETALHES", render: (row) => el("span", { class: "result-data" }, dataSummary(row.data)) },
+              { label: "Tipo", render: (row) => el("span", { class: "result-type" }, RESULT_LABELS[row.result_type] || row.result_type) },
+              { label: "Valor", render: (row) => el("code", { class: "result-value" }, G.translateText(row.value)) },
+              { label: "Detalhes", render: (row) => el("span", { class: "result-data" }, dataSummary(row.data)) },
               {
                 label: "",
                 cellClass: "result-actions",
@@ -420,8 +793,25 @@
                 ),
               },
             ],
-            rows: items,
+            rows,
           }),
+          items.length > RAW_PREVIEW
+            ? el(
+                "button",
+                {
+                  type: "button",
+                  class: "dossier-more",
+                  "aria-expanded": String(full),
+                  onClick: (event) => {
+                    if (full) ui.rawExpanded.delete(connectorId);
+                    else ui.rawExpanded.add(connectorId);
+                    const group = event.currentTarget.closest(".result-groups");
+                    group.replaceWith(resultGroups(run, connectorsById, handlers, ui));
+                  },
+                },
+                full ? "Mostrar menos" : `Mostrar todos (${G.formatNumber(items.length)})`,
+              )
+            : null,
         ),
       );
     }
@@ -429,24 +819,239 @@
   }
 
   /* ---------------------------------------------------------------- */
-  /* View                                                             */
+  /* Sources and API keys (shown in Configurações)                    */
   /* ---------------------------------------------------------------- */
 
+  async function renderIntelConnectors(host) {
+    host.replaceChildren(loadingBlock("Carregando fontes…"));
+    let connectorData;
+    try {
+      connectorData = await api("/api/intel/connectors");
+    } catch (error) {
+      host.replaceChildren(G.inlineError(error.message));
+      return;
+    }
+    const refresh = () => renderIntelConnectors(host);
+    const actions = !connectorData.network_allowed
+      ? [button("Ativar rede", () => enableNetwork(refresh), { variant: "button-primary" })]
+      : !connectorData.target_contact_allowed
+        ? [button("Permitir contato com o alvo", () => enableTargetContact(refresh))]
+        : [];
+    host.replaceChildren(
+      panel(
+        {
+          title: "Fontes",
+          caption: connectorData.network_allowed ? "Rede ativada" : "Rede desativada",
+          actions,
+        },
+        table({
+          columns: [
+            {
+              label: "FONTE",
+              render: (row) =>
+                el(
+                  "strong",
+                  {
+                    tabindex: "0",
+                    "data-tooltip": [
+                      connectorDescription(row.connector_id, row.description),
+                      `${row.rate_per_minute}/min`,
+                      row.ttl_seconds ? `cache ${Math.round(row.ttl_seconds / 3600) || 1} h` : "sem cache",
+                    ].filter(Boolean).join(" · "),
+                  },
+                  connectorName(row.connector_id, row.name),
+                ),
+            },
+            { label: "ACEITA", render: (row) => row.accepts.map((type) => TYPE_LABELS[type] || type).join(", ") },
+            {
+              label: "ACESSO",
+              render: (row) =>
+                el(
+                  "div",
+                  { class: "connector-cell" },
+                  el("span", {}, row.contacts_target ? "Contata o alvo" : row.network ? "Rede" : "Local"),
+                  row.key_id
+                    ? el(
+                        "a",
+                        { class: "table-link", href: "#/settings/chaves" },
+                        row.key_configured ? "Chave salva" : row.requires_key ? "Precisa de chave" : "Chave opcional",
+                      )
+                    : null,
+                ),
+            },
+            { label: "ESTADO", render: (row) => statusBadgeFor(row.availability) },
+            {
+              label: "ÚLTIMA EXECUÇÃO",
+              render: (row) =>
+                row.status
+                  ? el(
+                      "div",
+                      { class: "connector-cell" },
+                      statusBadgeFor(row.status.last_status),
+                      el("span", {}, `${G.relativeTime(row.status.last_run_at)} · ${row.status.success_count} / ${row.status.error_count}`),
+                      row.today && (row.today.requests || row.today.cached)
+                        ? el("span", { class: "muted" }, `Hoje: ${row.today.requests} consulta(s) · ${row.today.errors} erro(s) · ${row.today.cached} do cache`)
+                        : null,
+                      row.status.last_error
+                        ? el("span", { class: "source-row-error" }, G.translateError(row.status.last_error))
+                        : null,
+                    )
+                  : el("span", { class: "muted" }, "Nunca"),
+            },
+          ],
+          rows: connectorData.items,
+        }),
+      ),
+    );
+    G.hydrateIcons(host);
+  }
+
+  async function renderIntelKeys(host) {
+    host.replaceChildren(loadingBlock("Carregando chaves…"));
+    let keys;
+    let connectorData;
+    try {
+      [keys, connectorData] = await Promise.all([api("/api/intel/keys"), api("/api/intel/connectors")]);
+    } catch (error) {
+      host.replaceChildren(G.inlineError(error.message));
+      return;
+    }
+    const refresh = () => renderIntelKeys(host);
+    const usedBy = {};
+    for (const item of connectorData.items) {
+      if (item.key_id) (usedBy[item.key_id] ||= []).push(connectorName(item.connector_id, item.name));
+    }
+    const row = (provider) => {
+      const input = el("input", {
+        class: "input key-input",
+        type: "password",
+        autocomplete: "off",
+        spellcheck: "false",
+        placeholder: provider.configured ? `Substituir (${provider.hint})` : "Cole a chave",
+        "aria-label": `Chave de API de ${provider.name}`,
+      });
+      const save = async () => {
+        if (!input.value.trim()) return;
+        try {
+          await api(`/api/intel/keys/${provider.provider_id}`, { method: "PUT", body: JSON.stringify({ key: input.value }) });
+          input.value = "";
+          toast(`Chave de ${provider.name} salva neste computador.`);
+          refresh();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      };
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") save();
+      });
+      const note = [PROVIDER_NOTE[provider.provider_id] || provider.note, `Usada por: ${(usedBy[provider.provider_id] || []).join(", ")}`]
+        .filter(Boolean)
+        .join(" · ");
+      return el(
+        "div",
+        { class: "key-row" },
+        el(
+          "div",
+          { class: "key-info" },
+          el("strong", { tabindex: "0", "data-tooltip": note }, provider.name),
+        ),
+        el(
+          "div",
+          { class: "key-state" },
+          provider.configured ? badge(`Salva ${provider.hint}`, "success") : badge("Não configurada", "neutral"),
+          el("a", { class: "table-link", href: provider.signup_url, target: "_blank", rel: "noopener noreferrer" }, "Obter chave"),
+        ),
+        el(
+          "div",
+          { class: "key-actions" },
+          input,
+          button("Salvar", save, { variant: "button-primary" }),
+          provider.configured
+            ? button("Remover", async () => {
+                const confirmed = await G.confirm({
+                  title: "Remover chave",
+                  message: `A chave de ${provider.name} será apagada deste computador. As fontes que dependem dela deixam de rodar.`,
+                  confirmLabel: "Remover",
+                  danger: true,
+                });
+                if (!confirmed) return;
+                try {
+                  await api(`/api/intel/keys/${provider.provider_id}`, { method: "DELETE" });
+                  toast(`Chave de ${provider.name} removida.`);
+                  refresh();
+                } catch (error) {
+                  toast(error.message, "error");
+                }
+              })
+            : null,
+        ),
+      );
+    };
+    host.replaceChildren(
+      panel(
+        {
+          title: "Chaves de API",
+          caption: `${keys.items.filter((item) => item.configured).length} de ${keys.total} salvas`,
+        },
+        el("p", { class: "panel-note" }, "Ficam só neste computador e vão apenas ao provedor de cada uma."),
+        el("div", { class: "key-list" }, ...keys.items.map(row)),
+      ),
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Search screen                                                    */
+  /* ---------------------------------------------------------------- */
+
+  function freshUi() {
+    return { expanded: new Set(), open: new Set(), filters: {}, rawExpanded: new Set(), sourcesOpen: false, rawOpen: false };
+  }
+
+  /* Coverage computed on the client when a run carries no dossier. */
+  function fallbackDossier(run) {
+    const sources = run.sources || [];
+    const names = (status) => sources.filter((item) => status.includes(item.status)).map((item) => connectorName(item.connector_id));
+    return {
+      type: run.query_type,
+      type_label: TYPE_LABELS[run.query_type] || run.query_type,
+      value: run.query_value,
+      title: run.query_value,
+      subtitle: "",
+      facts: [],
+      flags: [],
+      sections: [],
+      coverage: {
+        answered: names(["ok"]).length,
+        empty: names(["empty"]).length,
+        failed: names(["error", "rate-limited"]),
+        missing_key: names(["key-missing"]),
+        network_off: names(["network-disabled", "target-contact-disabled"]).length,
+        pending: names(["pending"]).length,
+      },
+    };
+  }
+
   async function renderMultiSearch(root, params = []) {
-    let [connectorData, runs] = await Promise.all([
-      api("/api/intel/connectors"),
-      api("/api/intel/runs?limit=15"),
-    ]);
+    // The source and key screens moved to Configurações.
+    const moved = { conectores: "conectores", chaves: "chaves" }[params[0]];
+    if (moved) {
+      location.hash = `#/settings/${moved}`;
+      return;
+    }
+    const connectorData = await api("/api/intel/connectors");
     await G.loadInvestigations?.();
     const investigations = (state.investigations || []).filter((item) => item.status === "open");
     const connectorsById = Object.fromEntries(connectorData.items.map((item) => [item.connector_id, item]));
     let detected = null;
-    let currentRun = null;
+    let detectedFor = null;
+    let detectError = "";
     let pollToken = 0;
-    let activeTab = { conectores: "connectors", chaves: "keys", cabecalhos: "headers", comparar: "compare" }[params[0]] || "search";
-    const keysHost = el("div");
     let detectTimer = null;
-    const selected = new Set(connectorData.items.map((item) => item.connector_id));
+    let ui = freshUi();
+    G.cleanupFns.push(() => {
+      pollToken += 1;
+      clearTimeout(detectTimer);
+    });
 
     const input = el("input", {
       class: "input query-input",
@@ -454,216 +1059,482 @@
       id: "multisearch-input",
       autocomplete: "off",
       spellcheck: "false",
-      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome>, t.me/<nome>, minecraft:<nome>, steam:<nome> ou topic:<termos>",
       "aria-label": "Artefato para consultar",
       maxlength: "2000",
     });
     const detectedNode = el("span", { class: "query-detected", "aria-live": "polite" });
     const caseSelect = el(
       "select",
-      { class: "input compact-select", "aria-label": "Associar a uma investigação" },
+      { class: "input compact-select query-case", "aria-label": "Associar a uma investigação" },
       el("option", { value: "" }, "Sem investigação"),
       ...investigations.map((item) => el("option", { value: item.id }, item.name)),
     );
     const cacheToggle = el("input", { type: "checkbox", checked: true, id: "multisearch-cache" });
     const runButton = el(
       "button",
-      { class: "button button-primary", type: "submit" },
+      { class: "button button-primary query-run", type: "submit" },
       el("span", { "data-icon": "search", "aria-hidden": "true" }),
       "Consultar",
     );
-    const connectorChips = el("div", { class: "connector-chips", role: "group", "aria-label": "Fontes a consultar" });
-    const resultArea = el("div", { class: "multisearch-results", "aria-live": "polite" });
-    const tabHost = el("div");
-    const tabStrip = el("div");
-
-    function chipsFor(type) {
-      connectorChips.replaceChildren();
-      for (const connector of connectorData.items) {
-        const applies = !type || connector.accepts.includes(type);
-        const blocked =
-          (connector.network && !connectorData.network_allowed) ||
-          (connector.contacts_target && !connectorData.target_contact_allowed);
-        const checkbox = el("input", {
-          type: "checkbox",
-          "aria-label": connectorName(connector.connector_id, connector.name),
-          checked: selected.has(connector.connector_id) && applies,
-          disabled: !applies,
-          onChange: (event) => {
-            if (event.target.checked) selected.add(connector.connector_id);
-            else selected.delete(connector.connector_id);
-          },
-        });
-        connectorChips.append(
-          el(
-            "label",
-            {
-              class: `connector-chip${applies ? "" : " is-unavailable"}${blocked ? " is-blocked" : ""}`,
-              "data-tooltip": connectorDescription(connector.connector_id, connector.description),
-            },
-            checkbox,
-            el("span", {}, connectorName(connector.connector_id, connector.name)),
-            connector.contacts_target
-              ? el("span", { class: "chip-flag is-target" }, blocked ? "alvo off" : "alvo")
-              : connector.network
-                ? el("span", { class: "chip-flag" }, blocked ? "rede off" : "rede")
-                : null,
-          ),
-        );
-      }
-    }
+    const resultArea = el("div", { class: "multisearch-results" });
 
     async function detect() {
       const value = input.value.trim();
+      clearTimeout(detectTimer);
       if (!value) {
         detected = null;
+        detectedFor = "";
+        detectError = "";
         detectedNode.replaceChildren();
-        chipsFor(null);
         return;
       }
       try {
-        detected = await api(`/api/intel/detect?value=${encodeURIComponent(value)}`);
+        const answer = await api(`/api/intel/detect?value=${encodeURIComponent(value)}`);
+        if (input.value.trim() !== value) return;
+        detected = answer;
+        detectError = "";
         detectedNode.replaceChildren(
           ...[
             badge(TYPE_LABELS[detected.type] || detected.type, "info"),
             detected.value !== value ? el("code", {}, detected.value) : null,
           ].filter(Boolean),
         );
-        chipsFor(detected.type);
       } catch (error) {
+        if (input.value.trim() !== value) return;
         detected = null;
+        detectError = error.message;
         detectedNode.replaceChildren(el("span", { class: "query-invalid" }, error.message));
-        chipsFor(null);
       }
+      detectedFor = value;
+    }
+
+    /* Re-render without losing the control the user is on (a filter being
+       typed into, a "Mostrar todos" just pressed) while sources arrive. */
+    function keepFocus(render) {
+      const active = document.activeElement;
+      const key = active && resultArea.contains(active) ? active.dataset?.focusKey : null;
+      const selection = key && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
+      render();
+      if (!key) return;
+      const next = [...resultArea.querySelectorAll("[data-focus-key]")].find((node) => node.dataset.focusKey === key);
+      if (!next) return;
+      next.focus({ preventScroll: true });
+      if (selection && next.setSelectionRange) next.setSelectionRange(...selection);
+    }
+
+    const handlers = {
+      pivot: (value) => {
+        input.value = value;
+        window.scrollTo({ top: 0, behavior: "auto" });
+        submit({ fromPivot: true });
+      },
+      entity: (row) =>
+        G.entityDialog(
+          {
+            entity_type: ENTITY_FROM_RESULT[row.result_type],
+            identifier: cleanValue(row),
+            name: cleanValue(row),
+            description: `${RESULT_LABELS[row.result_type] || row.result_type} obtido na consulta multifonte de ${row.run_value || input.value.trim()}.`,
+            source_reference: row.source_url || `note://garbage/intel-run/${row.run_id}`,
+            collection_basis: "public",
+          },
+          {},
+        ),
+    };
+
+    async function addToGraph(run, item = null) {
+      try {
+        const added = await api("/api/graph/add", {
+          method: "POST",
+          body: JSON.stringify({ run_id: run.id, item, investigation_id: caseSelect.value || run.investigation_id || null }),
+        });
+        G.state.graphFocus = added.entity_id;
+        G.state.graphRoot = added.root_id;
+        toast(item ? `${item.value} foi para o grafo.` : `${run.query_value} foi para o grafo.`);
+        G.go("graph", added.investigation_id || undefined);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    async function recordRun(run) {
+      const investigationId = caseSelect.value || run.investigation_id;
+      if (!investigationId) {
+        toast("Escolha uma investigação aberta, na barra de pesquisa, para registrar os resultados.", "warning");
+        caseSelect.focus();
+        return;
+      }
+      try {
+        const recorded = await api(`/api/intel/runs/${run.id}/record`, {
+          method: "POST",
+          body: JSON.stringify({ investigation_id: investigationId }),
+        });
+        toast(
+          `Observação registrada com ${recorded.finding_count} resultado(s)${recorded.truncated ? " (texto truncado no limite)" : ""}.`,
+        );
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    function header(run, dossier) {
+      const progress = run.progress || { total: run.sources.length, pending: dossier.coverage?.pending || 0 };
+      const running = run.status === "running" && progress.pending > 0;
+      const answered = progress.total - progress.pending;
+      const fill = el("span", { class: "dossier-progress-fill" });
+      fill.style.width = `${Math.round((answered / Math.max(1, progress.total)) * 100)}%`;
+      const facts = (dossier.facts || []).filter((fact) => fact && fact.value);
+      const flags = dossier.flags || [];
+      const caseId = caseSelect.value || run.investigation_id || "";
+      return el(
+        "header",
+        { class: "dossier-head" },
+        el(
+          "div",
+          { class: "dossier-head-top" },
+          el("span", { class: "dossier-type" }, dossier.type_label || TYPE_LABELS[run.query_type] || run.query_type),
+          el(
+            "div",
+            { class: "dossier-actions" },
+            button("Adicionar ao grafo", () => addToGraph(run), { variant: "button-primary" }),
+            button("Exportar JSON", () => downloadJson(`garbage-intel-${shortId(run.id)}.json`, run)),
+            button("Registrar no caso", () => recordRun(run), {
+              variant: caseId ? "button-primary" : "button-secondary",
+              disabled: !run.results.length,
+            }),
+          ),
+        ),
+        el("h2", { class: "dossier-title", tabindex: "-1", "data-focus-key": "title" }, dossier.title || run.query_value),
+        dossier.subtitle ? el("p", { class: "dossier-subtitle" }, dossier.subtitle) : null,
+        facts.length
+          ? el(
+              "dl",
+              { class: "dossier-facts" },
+              ...facts.map((fact) => el("div", { class: "dossier-fact" }, el("dt", {}, fact.label), el("dd", {}, fact.value))),
+            )
+          : null,
+        flags.length
+          ? el(
+              "ul",
+              { class: "dossier-flags", "aria-label": "Pontos de atenção" },
+              ...flags.map((flag) => {
+                const [glyph, label] = FLAG_LEVEL[flag.level] || FLAG_LEVEL.info;
+                return el(
+                  "li",
+                  { class: `dossier-flag level-${FLAG_LEVEL[flag.level] ? flag.level : "info"}` },
+                  G.icon(glyph, { size: 16, className: "dossier-flag-icon" }),
+                  el("span", { class: "visually-hidden" }, `${label}: `),
+                  el("span", {}, flag.text),
+                );
+              }),
+            )
+          : null,
+        running
+          ? el(
+              "div",
+              { class: "dossier-progress", role: "status" },
+              el("span", { class: "dossier-progress-track", "aria-hidden": "true" }, fill),
+              el("span", {}, `${answered} de ${progress.total} fontes responderam…`),
+              progress.pending <= 3
+                ? el(
+                    "span",
+                    { class: "dossier-muted" },
+                    `aguardando ${run.sources
+                      .filter((item) => item.status === "pending")
+                      .map((item) => connectorName(item.connector_id, connectorsById[item.connector_id]?.name))
+                      .join(", ")}`,
+                  )
+                : null,
+            )
+          : run.status === "interrupted"
+            ? el("p", { class: "dossier-progress", role: "status" }, "A consulta foi interrompida antes de todas as fontes responderem.")
+            : null,
+      );
+    }
+
+    /* One clear line when sources were left out by configuration. */
+    function configurationNotice(run) {
+      const network = run.sources.filter((item) => item.status === "network-disabled").length;
+      const target = run.sources.filter((item) => item.status === "target-contact-disabled").length;
+      const lines = [];
+      if (network) {
+        lines.push(
+          el(
+            "p",
+            { class: "dossier-alert", role: "note" },
+            G.icon("alert", { size: 16, className: "dossier-flag-icon" }),
+            el("span", {}, `A rede está desativada: ${count(network, "fonte não foi consultada", "fontes não foram consultadas")}.`),
+            el("a", { class: "dossier-link", href: "#/settings/conectores" }, "Ativar em Configurações › Conectores"),
+          ),
+        );
+      }
+      if (target) {
+        lines.push(
+          el(
+            "p",
+            { class: "dossier-alert", role: "note" },
+            G.icon("info", { size: 16, className: "dossier-flag-icon" }),
+            el("span", {}, `${count(target, "fonte que acessa", "fontes que acessam")} o próprio alvo ${target === 1 ? "ficou" : "ficaram"} de fora.`),
+            el("a", { class: "dossier-link", href: "#/settings/conectores" }, "Permitir em Configurações › Conectores"),
+          ),
+        );
+      }
+      return lines;
+    }
+
+    function coverageLine(run, dossier) {
+      const coverage = dossier.coverage || {};
+      const parts = [];
+      const waiting = run.status === "running" && coverage.pending > 0;
+      parts.push(el("span", {}, count(coverage.answered || 0, "fonte respondeu", "fontes responderam")));
+      if (coverage.empty) parts.push(el("span", {}, `${G.formatNumber(coverage.empty)} sem resultado`));
+      if (coverage.missing_key?.length) {
+        parts.push(
+          el("span", {}, `${G.formatNumber(coverage.missing_key.length)} sem chave (${coverage.missing_key.join(", ")})`),
+          el("a", { class: "dossier-link", href: "#/settings/chaves" }, "Configurar chaves"),
+        );
+      }
+      if (coverage.failed?.length) {
+        parts.push(
+          el("span", {}, `${G.formatNumber(coverage.failed.length)} ${coverage.failed.length === 1 ? "falhou" : "falharam"} (${coverage.failed.join(", ")})`),
+        );
+      }
+      if (coverage.network_off) parts.push(el("span", {}, `${G.formatNumber(coverage.network_off)} fora por configuração`));
+      if (waiting) parts.push(el("span", {}, `${G.formatNumber(coverage.pending)} ainda consultando`));
+      if (run.started_at) parts.push(el("span", { class: "dossier-muted" }, formatDate(run.started_at, { time: true })));
+      const line = [];
+      parts.forEach((part, index) => {
+        if (index) line.push(el("span", { class: "dossier-sep", "aria-hidden": "true" }, "·"));
+        line.push(part);
+      });
+      const tableHost = el("div", { class: "dossier-sources", id: "dossier-sources" });
+      const toggle = el("button", {
+        type: "button",
+        class: "dossier-more",
+        "aria-controls": "dossier-sources",
+        "data-focus-key": "sources-toggle",
+      });
+      const sync = () => {
+        toggle.setAttribute("aria-expanded", String(ui.sourcesOpen));
+        toggle.textContent = ui.sourcesOpen ? "Ocultar fontes" : "Ver fontes";
+        tableHost.hidden = !ui.sourcesOpen;
+        tableHost.replaceChildren(...(ui.sourcesOpen ? [sourceTable(run, connectorsById)] : []));
+      };
+      toggle.addEventListener("click", () => {
+        ui.sourcesOpen = !ui.sourcesOpen;
+        sync();
+      });
+      sync();
+      return el(
+        "section",
+        { class: "dossier-coverage", "aria-label": "Fontes consultadas" },
+        el("p", { class: "dossier-coverage-line" }, ...line, el("span", { class: "dossier-sep", "aria-hidden": "true" }, "·"), toggle),
+        tableHost,
+      );
+    }
+
+    function rawData(run) {
+      const host = el("div", { class: "dossier-raw-body" });
+      const fill = () => {
+        if (host.childElementCount) return;
+        const rowHandlers = {
+          pivot: handlers.pivot,
+          entity: (row) => handlers.entity({ ...row, run_value: run.query_value, run_id: run.id }),
+        };
+        host.append(resultGroups(run, connectorsById, rowHandlers, ui));
+        G.hydrateIcons(host);
+      };
+      const details = el(
+        "details",
+        { class: "dossier-raw", open: ui.rawOpen },
+        el(
+          "summary",
+          { "data-focus-key": "raw-summary" },
+          el("span", {}, "Dados brutos por fonte"),
+          el("span", { class: "dossier-count" }, G.formatNumber(run.results.length)),
+        ),
+        host,
+      );
+      details.addEventListener("toggle", () => {
+        ui.rawOpen = details.open;
+        if (details.open) fill();
+      });
+      if (ui.rawOpen) fill();
+      return details;
+    }
+
+    /* What stands in for the sections when there is nothing to show. */
+    function emptyAnswer(run, dossier) {
+      const coverage = dossier.coverage || {};
+      const pending = run.status === "running" && coverage.pending > 0;
+      if (pending) {
+        return el("p", { class: "dossier-waiting" }, "As respostas aparecem aqui conforme as fontes respondem.");
+      }
+      // Nothing to show: say why (failures, network off) before "not found".
+      if (coverage.failed?.length) {
+        return el(
+          "div",
+          { class: "dossier-empty", role: "status" },
+          el("h3", {}, coverage.answered ? "Nenhuma resposta útil" : "Nenhuma fonte conseguiu responder"),
+          el("p", {}, `${count(coverage.failed.length, "fonte falhou", "fontes falharam")}: ${coverage.failed.join(", ")}. Pode ser limite de taxa ou instabilidade do serviço; as outras não trouxeram dados.`),
+          button("Consultar de novo", () => {
+            input.value = run.query_value;
+            submit({ fresh: true });
+          }, { variant: "button-primary" }),
+        );
+      }
+      if (coverage.network_off) {
+        return el(
+          "div",
+          { class: "dossier-empty", role: "status" },
+          el("h3", {}, "Só as verificações locais rodaram"),
+          el("p", {}, `Elas não têm nada a dizer sobre ${run.query_value}. As outras fontes precisam de rede ou de contato com o alvo.`),
+        );
+      }
+      return el(
+        "div",
+        { class: "dossier-empty", role: "status" },
+        el("h3", {}, "Nenhuma fonte encontrou dados"),
+        el("p", {}, `As fontes consultadas não têm registros sobre ${run.query_value}.`),
+      );
+    }
+
+    /* Live check of a URL or domain: kept per value so the block survives
+       the redraws of a running search. */
+    function liveBlock(run) {
+      if (!["url", "domain"].includes(run.query_type) || !G.moduleEnabled("live-check")) return null;
+      const live = (state.liveChecks ||= {})[run.query_value] ||= { busy: false, result: null, error: "", screenshot: true, javascript: false };
+      const host = el("section", { class: "dossier-block is-wide live-block", "aria-label": "Verificação ao vivo" });
+      const draw = () => {
+        const shot = el("input", { type: "checkbox", checked: live.screenshot, id: "live-shot" });
+        const script = el("input", { type: "checkbox", checked: live.javascript, id: "live-js" });
+        shot.addEventListener("change", () => { live.screenshot = shot.checked; });
+        script.addEventListener("change", () => { live.javascript = script.checked; });
+        const go = button(live.busy ? "Verificando…" : live.result ? "Verificar de novo" : "Verificar ao vivo", async () => {
+          live.busy = true;
+          live.error = "";
+          draw();
+          try {
+            live.result = await api("/api/intelligence/live-checks", {
+              method: "POST",
+              body: JSON.stringify({ url: run.query_value, screenshot: live.screenshot, javascript: live.javascript, investigation_id: caseSelect.value || run.investigation_id || null }),
+            });
+          } catch (error) {
+            live.error = error.message;
+          } finally {
+            live.busy = false;
+            draw();
+          }
+        }, { variant: live.result ? "button-secondary" : "button-primary", disabled: live.busy });
+        const parts = [
+          el("h3", { class: "dossier-block-title" }, "Verificação ao vivo"),
+          el("div", { class: "live-controls" },
+            go,
+            el("label", { class: "toolbar-check", for: "live-shot" }, shot, "Captura de tela"),
+            el("label", { class: "toolbar-check", for: "live-js" }, script, "Permitir JavaScript na captura (mais fiel, mais arriscado)"),
+          ),
+          el("p", { class: "dossier-muted" }, "Acessa o site a partir deste computador: o site vê o seu IP. Segue os redirecionamentos, lê a página sem executá-la e tira a captura num navegador descartável."),
+        ];
+        if (live.error) parts.push(G.inlineError(live.error));
+        if (live.result) parts.push(...liveResult(live.result).filter(Boolean));
+        host.replaceChildren(...parts);
+      };
+      draw();
+      return host;
+    }
+
+    function liveResult(result) {
+      const page = result.page || {};
+      const flags = (result.flags || []).map((flag) => {
+        const [glyph, label] = FLAG_LEVEL[flag.level] || FLAG_LEVEL.info;
+        return el("li", { class: `dossier-flag level-${FLAG_LEVEL[flag.level] ? flag.level : "info"}` }, G.icon(glyph, { size: 16, className: "dossier-flag-icon" }), el("span", { class: "visually-hidden" }, `${label}: `), el("span", {}, flag.text));
+      });
+      const hops = el("ol", { class: "live-hops" }, ...(result.hops || []).map((hop) =>
+        el("li", {},
+          el("span", { class: "live-status" }, hop.status ? String(hop.status) : "erro"),
+          el("code", {}, hop.url),
+          el("span", { class: "dossier-muted" }, [hop.address, hop.server, hop.error].filter(Boolean).join(" · ")),
+        )));
+      const facts = [
+        ["Página final", result.final_url],
+        ["Título", page.title],
+        ["Tamanho", page.size ? G.formatBytes(page.size) : ""],
+        ["Tecnologias", (page.technologies || []).map((item) => item.name).join(", ")],
+      ].filter(([, value]) => value);
+      const forms = (page.forms || []).map((form) =>
+        el("li", {},
+          form.password ? G.badge("Pede senha", "warning") : null, " ",
+          el("code", {}, `${form.method.toUpperCase()} ${form.action}`),
+          el("span", { class: "dossier-muted" }, ` · ${form.fields} campo(s)${form.other_site ? " · envia para outro site" : ""}`),
+        ));
+      const hosts = (page.external_hosts || []).map((item) => {
+        const node = el("button", { type: "button", class: "dossier-pivot" }, el("span", { class: "dossier-pivot-text" }, item.host), G.icon("arrow", { size: 14, className: "dossier-pivot-icon" }));
+        node.addEventListener("click", () => handlers.pivot(item.host));
+        return el("li", { class: "dossier-item-box" }, node, el("span", { class: "dossier-muted" }, ` ${item.kinds.join(", ")}`));
+      });
+      const shot = result.screenshot;
+      return [
+        flags.length ? el("ul", { class: "dossier-flags" }, ...flags) : el("p", { class: "dossier-muted" }, "Nenhum sinal de alerta na página."),
+        el("h4", { class: "subhead" }, `Caminho (${(result.hops || []).length} passo(s))`),
+        hops,
+        facts.length ? el("dl", { class: "live-facts" }, ...facts.flatMap(([label, value]) => [el("dt", {}, label), el("dd", {}, value)])) : null,
+        forms.length ? el("h4", { class: "subhead" }, "Formulários") : null,
+        forms.length ? el("ul", { class: "live-forms" }, ...forms) : null,
+        hosts.length ? el("h4", { class: "subhead" }, `Outros sites que a página carrega (${hosts.length})`) : null,
+        hosts.length ? el("ul", { class: "dossier-list" }, ...hosts) : null,
+        shot ? el("h4", { class: "subhead" }, "Captura de tela") : null,
+        shot && shot.taken
+          ? el("a", { href: `/api/intelligence/live-checks/${result.id}/screenshot`, target: "_blank", rel: "noopener" },
+              el("img", { class: "live-shot", src: `/api/intelligence/live-checks/${result.id}/screenshot`, alt: `Captura de ${result.final_url}` }))
+          : shot ? el("p", { class: "dossier-muted" }, shot.note || "Sem captura.") : null,
+        shot && shot.taken ? el("p", { class: "dossier-muted" }, shot.note) : null,
+      ];
     }
 
     function showRun(run) {
-      currentRun = run;
-      const networkSkipped = run.sources.some((item) => item.status === "network-disabled");
-      const keyless = run.sources.filter((item) => item.status === "key-missing");
-      const caseId = caseSelect.value || run.investigation_id || "";
-      const summaryNodes = [
-        el(
-          "div",
-          { class: "run-summary" },
+      const dossier = run.dossier || fallbackDossier(run);
+      const sections = dossier.sections || [];
+      const blocks = sections.map((section) => dossierSection(section, { ui, pivot: handlers.pivot, add: (item) => addToGraph(run, item) }));
+      if (dossier.map && Number.isFinite(Number(dossier.map.lat)) && Number.isFinite(Number(dossier.map.lon))) {
+        const anchor = sections.findIndex((section) => ["location", "place", "network", "company", "contact"].includes(section.id));
+        const at = sections.findIndex((section) => ["location", "place"].includes(section.id));
+        blocks.splice((at >= 0 ? at : anchor >= 0 ? anchor : 0) + 1, 0, dossierMap(dossier.map, Boolean(connectorData.network_allowed)));
+      }
+      keepFocus(() => {
+        resultArea.replaceChildren(
           el(
-            "div",
-            {},
-            el("p", { class: "eyebrow" }, `CONSULTA ${shortId(run.id).toUpperCase()}`),
-            el(
-              "h2",
-              {},
-              badge(TYPE_LABELS[run.query_type] || run.query_type, "info"),
-              " ",
-              el("code", {}, run.query_value),
-            ),
-            el(
-              "p",
-              { class: "run-meta" },
-              run.status === "running"
-                ? `${formatDate(run.started_at, { time: true })} · ${run.progress.total - run.progress.pending} de ${run.progress.total} fonte(s) responderam · ${run.results.length} resultado(s) até agora`
-                : `${formatDate(run.started_at, { time: true })} · ${run.result_count} resultado(s) de ${run.sources.filter((item) => item.status === "ok").length} fonte(s)`,
-              run.status === "completed-with-errors" ? " · com erros em fontes" : "",
-              run.status === "interrupted" ? " · interrompida" : "",
-            ),
-          ),
-          el(
-            "div",
-            { class: "page-actions" },
-            button("Exportar JSON", () => downloadJson(`garbage-intel-${shortId(run.id)}.json`, run)),
-            button(
-              "Registrar no caso",
-              async () => {
-                const investigationId = caseSelect.value || run.investigation_id;
-                if (!investigationId) {
-                  toast("Escolha uma investigação aberta para registrar os resultados.", "warning");
-                  caseSelect.focus();
-                  return;
-                }
-                try {
-                  const recorded = await api(`/api/intel/runs/${run.id}/record`, {
-                    method: "POST",
-                    body: JSON.stringify({ investigation_id: investigationId }),
-                  });
-                  toast(
-                    `Observação registrada com ${recorded.finding_count} resultado(s)${recorded.truncated ? " (texto truncado no limite)" : ""}.`,
-                  );
-                } catch (error) {
-                  toast(error.message, "error");
-                }
-              },
-              { variant: caseId ? "button-primary" : "button-secondary", disabled: !run.results.length },
-            ),
-          ),
-        ),
-      ];
-      if (networkSkipped && !connectorData.network_allowed) {
-        summaryNodes.push(
-          el(
-              "div",
-              { class: "notice-bar", role: "note" },
-              el("span", {}, "Fontes de rede foram ignoradas porque os conectores de rede estão desativados."),
-              button("Ativar rede", () => enableNetwork(() => G.refreshView())),
+            "article",
+            { class: "dossier", "aria-label": `Resultado para ${run.query_value}` },
+            header(run, dossier),
+            ...configurationNotice(run),
+            liveBlock(run),
+            blocks.length ? el("div", { class: "dossier-grid" }, ...blocks) : emptyAnswer(run, dossier),
+            coverageLine(run, dossier),
+            run.results.length ? rawData(run) : null,
           ),
         );
-      }
-      if (keyless.length) {
-        summaryNodes.push(
-          el(
-            "div",
-            { class: "notice-bar is-quiet", role: "note" },
-            el(
-              "span",
-              {},
-              `${keyless.length} fonte(s) ficaram de fora por falta de chave: ` +
-                keyless.map((item) => connectorName(item.connector_id, item.connector_id)).join(", ") + ".",
-            ),
-            el("a", { class: "button button-secondary button-small", href: "#/multisearch/chaves" }, "Configurar chaves"),
-          ),
-        );
-      }
-      summaryNodes.push(
-        el(
-          "div",
-          { class: "multisearch-layout" },
-          el(
-            "aside",
-            { class: "multisearch-sources" },
-            el("h3", { class: "side-heading" }, "Fontes"),
-            sourceList(run, connectorsById),
-          ),
-          resultGroups(run, connectorsById, {
-            pivot: (value) => {
-              input.value = value;
-              detect().then(() => submit());
-            },
-            entity: (row) =>
-              G.entityDialog(
-                {
-                  entity_type: ENTITY_FROM_RESULT[row.result_type],
-                  identifier: cleanValue(row),
-                  name: cleanValue(row),
-                  description: `${RESULT_LABELS[row.result_type] || row.result_type} obtido na consulta multifonte de ${run.query_value}.`,
-                  source_reference: row.source_url || `note://garbage/intel-run/${run.id}`,
-                  collection_basis: "public",
-                },
-                {},
-              ),
-          }),
-        ),
-      );
-      resultArea.replaceChildren(...summaryNodes);
-      G.hydrateIcons(resultArea);
+        G.hydrateIcons(resultArea);
+      });
     }
 
-    /* Each source's results land as soon as it answers; poll until the run
-       is closed, re-rendering only when something changed. */
+    function showMessage(title, description) {
+      resultArea.replaceChildren(
+        el(
+          "div",
+          { class: "dossier" },
+          el("div", { class: "dossier-empty", role: "status" }, el("h2", {}, title), description ? el("p", {}, description) : null),
+        ),
+      );
+    }
+
+    /* Sources answer one by one: poll and redraw while any is pending. */
     async function follow(run, token) {
       let seen = run.progress?.pending;
-      while (run.status === "running" && token === pollToken && root.isConnected) {
+      while (run.status === "running" && token === pollToken) {
         await new Promise((resolve) => window.setTimeout(resolve, 700));
-        if (token !== pollToken || !root.isConnected) return;
+        if (token !== pollToken) return;
         run = await api(`/api/intel/runs/${run.id}`);
+        if (token !== pollToken) return;
         if (run.progress?.pending !== seen || run.status !== "running") {
           seen = run.progress?.pending;
           showRun(run);
@@ -671,49 +1542,79 @@
       }
     }
 
-    async function submit() {
+    async function submit({ fromPivot = false, fresh = false } = {}) {
       const value = input.value.trim();
       if (!value) {
         input.focus();
         return;
       }
-      const chosen = [...selected].filter(
-        (id) => !detected || connectorsById[id]?.accepts.includes(detected.type),
-      );
-      if (!chosen.length) {
-        toast("Selecione pelo menos uma fonte compatível com este artefato.", "warning");
+      if (detectedFor !== value) await detect();
+      if (!detected) {
+        showMessage("Não reconheci este artefato", detectError ? G.translateError(detectError) : "");
         return;
       }
+      // Every compatible source runs; there is no per-source choice.
+      const compatible = connectorData.items
+        .filter((item) => item.accepts.includes(detected.type))
+        .map((item) => item.connector_id);
+      if (!compatible.length) {
+        showMessage(
+          "Nenhuma fonte aceita este tipo de artefato",
+          `${detected.value} foi reconhecido como ${TYPE_LABELS[detected.type] || detected.type}, mas nenhuma fonte instalada consulta esse tipo.`,
+        );
+        return;
+      }
+      const token = ++pollToken;
       runButton.disabled = true;
       resultArea.replaceChildren(
-        loadingBlock(`Consultando ${chosen.length} fonte(s)… fontes de rede podem levar alguns segundos.`),
+        el(
+          "div",
+          { class: "dossier" },
+          el(
+            "header",
+            { class: "dossier-head" },
+            el("div", { class: "dossier-head-top" }, el("span", { class: "dossier-type" }, TYPE_LABELS[detected.type] || detected.type)),
+            el("h2", { class: "dossier-title", tabindex: "-1", "data-focus-key": "title" }, detected.value),
+            el("div", { class: "dossier-progress", role: "status" }, el("span", {}, `Consultando ${count(compatible.length, "fonte", "fontes")}…`)),
+          ),
+        ),
       );
-      const token = ++pollToken;
       try {
-        let run = await api("/api/intel/runs", {
+        const run = await api("/api/intel/runs", {
           method: "POST",
           body: JSON.stringify({
             value,
-            connectors: chosen,
+            connectors: compatible,
             investigation_id: caseSelect.value || null,
-            use_cache: cacheToggle.checked,
+            use_cache: fresh ? false : cacheToggle.checked,
             async: true,
           }),
         });
-        history.replaceState(null, "", `#/multisearch/${run.id}`);
+        if (token !== pollToken) return;
+        // Each search is a history entry: Back returns to the previous answer.
+        const target = `#/multisearch/${run.id}`;
+        if (location.hash !== target) history.pushState(null, "", target);
+        state.currentParams = [run.id];
+        ui = freshUi();
         showRun(run);
+        if (fromPivot) resultArea.querySelector(".dossier-title")?.focus({ preventScroll: true });
+        runButton.disabled = false;
         await follow(run, token);
-        renderHistory();
+        if (token === pollToken) renderHistory();
       } catch (error) {
-        resultArea.replaceChildren(G.inlineError(error.message));
+        if (token === pollToken) resultArea.replaceChildren(G.inlineError(error.message));
       } finally {
         runButton.disabled = false;
       }
     }
 
     const historyHost = el("div");
+    const historyPanel = panel({ title: "Consultas recentes" }, historyHost);
+    historyPanel.hidden = true;
     async function renderHistory() {
       const data = await api("/api/intel/runs?limit=15").catch(() => ({ items: [] }));
+      // Nothing to list yet: the search bar stands alone.
+      historyPanel.hidden = !data.items.length;
       historyHost.replaceChildren(
         table({
           columns: [
@@ -726,6 +1627,9 @@
           emptyMessage: "Nenhuma consulta ainda.",
           onRowClick: (row) => go("multisearch", row.id),
         }),
+        data.items.length > 1
+          ? el("p", { class: "field-hint" }, el("a", { class: "table-link", href: "#/compare" }, "Comparar duas consultas lado a lado"))
+          : null,
       );
     }
 
@@ -733,421 +1637,54 @@
       clearTimeout(detectTimer);
       detectTimer = window.setTimeout(detect, 250);
     });
+    // Enter always searches, even while a previous search is still running.
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      submit();
+    });
     const form = el(
       "form",
       {
         class: "query-bar",
+        role: "search",
         onSubmit: (event) => {
           event.preventDefault();
           submit();
+          input.focus();
         },
       },
-      el("div", { class: "query-field" }, input, detectedNode),
+      el("div", { class: "query-field" }, el("span", { class: "query-icon", "aria-hidden": "true" }, G.icon("search", { size: 18 })), input, detectedNode),
       caseSelect,
-      el("label", { class: "inline-check", for: "multisearch-cache" }, cacheToggle, "Usar cache"),
+      el(
+        "label",
+        { class: "query-cache", for: "multisearch-cache", "data-tooltip": "Reutilizar respostas recentes das fontes" },
+        cacheToggle,
+        el("span", {}, "Cache"),
+      ),
       runButton,
     );
 
-    function connectorsTab() {
-      return panel(
-        {
-          eyebrow: "CONECTORES",
-          title: "Status das fontes",
-          caption: connectorData.network_allowed ? "Rede ativada" : "Rede desativada",
-          actions: connectorData.network_allowed
-            ? []
-            : [button("Ativar rede", () => enableNetwork(() => G.refreshView()), { variant: "button-primary" })],
-        },
-        table({
-          columns: [
-            {
-              label: "FONTE",
-              render: (row) => el(
-                "div",
-                { class: "connector-cell" },
-                el("strong", {}, connectorName(row.connector_id, row.name)),
-                el("span", {}, connectorDescription(row.connector_id, row.description)),
-              ),
-            },
-            { label: "ACEITA", render: (row) => row.accepts.map((type) => TYPE_LABELS[type] || type).join(", ") },
-            {
-              label: "ACESSO",
-              render: (row) =>
-                el(
-                  "div",
-                  { class: "connector-cell" },
-                  el("span", {}, row.contacts_target ? "Contata o alvo" : row.network ? "Rede (passivo)" : "Local"),
-                  row.key_id
-                    ? el(
-                        "a",
-                        { class: "table-link", href: "#/multisearch/chaves" },
-                        row.key_configured ? "Chave salva" : row.requires_key ? "Precisa de chave" : "Chave opcional",
-                      )
-                    : null,
-                ),
-            },
-            { label: "DISPONIBILIDADE", render: (row) => statusBadgeFor(row.availability) },
-            {
-              label: "ÚLTIMA EXECUÇÃO",
-              render: (row) =>
-                row.status
-                  ? el(
-                      "div",
-                      { class: "connector-cell" },
-                      statusBadgeFor(row.status.last_status),
-                      el(
-                        "span",
-                        {},
-                        `${G.relativeTime(row.status.last_run_at)} · ${G.formatNumber(row.status.last_latency_ms)} ms`,
-                      ),
-                      row.status.last_error
-                        ? el("span", { class: "source-row-error" }, G.translateError(row.status.last_error))
-                        : null,
-                    )
-                  : el("span", { class: "muted" }, "Nunca executado"),
-            },
-            {
-              label: "SUCESSOS / ERROS",
-              cellClass: "numeric-col",
-              render: (row) => (row.status ? `${row.status.success_count} / ${row.status.error_count}` : "—"),
-            },
-            {
-              label: "HOJE",
-              cellClass: "numeric-col",
-              render: (row) =>
-                row.today && (row.today.requests || row.today.cached)
-                  ? el("span", { title: "Consultas feitas hoje · com erro · respondidas pelo cache" }, `${row.today.requests} · ${row.today.errors} erro(s) · ${row.today.cached} cache`)
-                  : "—",
-            },
-            {
-              label: "LIMITE · CACHE",
-              render: (row) =>
-                `${row.rate_per_minute}/min · ${row.ttl_seconds ? `${Math.round(row.ttl_seconds / 3600) || 1} h` : "sem cache"}`,
-            },
-          ],
-          rows: connectorData.items,
-        }),
-      );
-    }
-
-    async function keysTab() {
-      keysHost.replaceChildren(loadingBlock("Carregando chaves…"));
-      let keys;
-      try {
-        keys = await api("/api/intel/keys");
-      } catch (error) {
-        keysHost.replaceChildren(G.inlineError(error.message));
-        return;
-      }
-      const usedBy = {};
-      for (const item of connectorData.items) {
-        if (item.key_id) (usedBy[item.key_id] ||= []).push(connectorName(item.connector_id, item.name));
-      }
-      const row = (provider) => {
-        const input = el("input", {
-          class: "input key-input",
-          type: "password",
-          autocomplete: "off",
-          spellcheck: "false",
-          placeholder: provider.configured ? `Substituir a chave salva (${provider.hint})` : "Cole a chave aqui",
-          "aria-label": `Chave de API de ${provider.name}`,
-        });
-        const save = async () => {
-          if (!input.value.trim()) return;
-          try {
-            await api(`/api/intel/keys/${provider.provider_id}`, { method: "PUT", body: JSON.stringify({ key: input.value }) });
-            input.value = "";
-            toast(`Chave de ${provider.name} salva neste computador.`);
-            connectorData = await api("/api/intel/connectors");
-            keysTab();
-          } catch (error) {
-            toast(error.message, "error");
-          }
-        };
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") save();
-        });
-        return el(
-          "div",
-          { class: "key-row" },
-          el(
-            "div",
-            { class: "key-info" },
-            el("strong", {}, provider.name),
-            el("span", {}, PROVIDER_NOTE[provider.provider_id] || provider.note),
-            el("span", { class: "muted" }, `Usada por: ${(usedBy[provider.provider_id] || []).join(", ")}`),
-          ),
-          el(
-            "div",
-            { class: "key-state" },
-            provider.configured ? badge(`Salva ${provider.hint}`, "success") : badge("Não configurada", "neutral"),
-            el("a", { class: "table-link", href: provider.signup_url, target: "_blank", rel: "noopener noreferrer" }, "Obter chave"),
-          ),
-          el(
-            "div",
-            { class: "key-actions" },
-            input,
-            button("Salvar", save, { variant: "button-primary" }),
-            provider.configured
-              ? button("Remover", async () => {
-                  const confirmed = await G.confirm({
-                    title: "Remover chave",
-                    message: `A chave de ${provider.name} será apagada deste computador. As fontes que dependem dela deixam de rodar.`,
-                    confirmLabel: "Remover",
-                    danger: true,
-                  });
-                  if (!confirmed) return;
-                  try {
-                    await api(`/api/intel/keys/${provider.provider_id}`, { method: "DELETE" });
-                    toast(`Chave de ${provider.name} removida.`);
-                    connectorData = await api("/api/intel/connectors");
-                    keysTab();
-                  } catch (error) {
-                    toast(error.message, "error");
-                  }
-                })
-              : null,
-          ),
-        );
-      };
-      keysHost.replaceChildren(
-        panel(
-          {
-            eyebrow: "CHAVES DE API",
-            title: "Suas contas nos provedores",
-            caption: `${keys.items.filter((item) => item.configured).length} de ${keys.total} salvas`,
-          },
-          el(
-            "p",
-            { class: "panel-note" },
-            "As chaves ficam só no banco local deste workspace. A interface nunca recebe a chave de volta, apenas os 4 últimos caracteres. " +
-              "Cada chave vai apenas para o provedor dela, no cabeçalho que ele documenta, e é removida das mensagens de erro.",
-          ),
-          el("div", { class: "key-list" }, ...keys.items.map(row)),
-        ),
-      );
-    }
-
-    const compareHost = el("div");
-    function compareTab() {
-      const output = el("div");
-      const pickA = el("select", { class: "input", "aria-label": "Primeira consulta" });
-      const pickB = el("select", { class: "input", "aria-label": "Segunda consulta" });
-      const levelLabel = { strong: ["Forte", "danger"], moderate: ["Moderada", "warning"], weak: ["Fraca", "info"], none: ["Nenhuma", "neutral"] };
-      const signalLabel = {
-        "same-name": "Mesmo nome", "normalised-name": "Nome igual após normalizar", "similar-name": "Nome parecido",
-        "same-image": "Mesma imagem", "same-sites": "Mesmos sites", "shared-links": "Links em comum",
-        "similar-text": "Bio parecida", "shared-values": "Outros achados iguais",
-      };
-      const signalWhy = {
-        "same-name": "O mesmo nome ou identificador aparece nos dois.",
-        "normalised-name": "Os nomes batem depois de tirar separadores, números finais e leetspeak.",
-        "similar-name": "Os nomes são muito parecidos.",
-        "same-image": "Os dois usam a mesma URL de avatar, skin ou banner.",
-        "same-sites": "O nome existe nos mesmos sites (nomes comuns coincidem com frequência).",
-        "shared-links": "Os dois apontam para os mesmos hosts pouco comuns.",
-        "similar-text": "Bios ou descrições compartilham boa parte das palavras.",
-        "shared-values": "Outros achados idênticos (IPs, servidores de nome, certificados, grupos…).",
-      };
-      api("/api/intel/runs?limit=100").then((data) => {
-        const options = data.items.map((run) => [run.id, `${run.query_type} · ${run.query_value} · ${formatDate(run.started_at)}`]);
-        for (const pick of [pickA, pickB]) pick.replaceChildren(...options.map(([id, label]) => el("option", { value: id }, label)));
-        if (options.length > 1) pickB.value = options[1][0];
-        if (options.length < 2) output.replaceChildren(el("p", { class: "panel-empty" }, "Faça pelo menos duas consultas para comparar."));
-      });
-      async function run(event) {
-        event.preventDefault();
-        output.replaceChildren(loadingBlock("Comparando…"));
-        try {
-          const r = await api("/api/intel/compare", { method: "POST", body: JSON.stringify({ run_a: pickA.value, run_b: pickB.value }) });
-          const [label, tone] = levelLabel[r.level];
-          output.replaceChildren(
-            panel(
-              { eyebrow: "RESULTADO", title: `${r.a.query_value}  ×  ${r.b.query_value}`, caption: `Pontuação ${r.score}/100` },
-              el("p", {}, badge(`Correspondência ${label.toLowerCase()}`, tone)),
-              table({
-                columns: [
-                  { label: "SINAL", render: (x) => signalLabel[x.signal] || x.signal },
-                  { label: "PESO", cellClass: "numeric-col", render: (x) => `+${x.weight}` },
-                  { label: "POR QUÊ", render: (x) => signalWhy[x.signal] || x.detail },
-                  { label: "VALORES", render: (x) => x.evidence.join(", ") },
-                ],
-                rows: r.signals,
-                emptyMessage: "Nenhum sinal em comum.",
-              }),
-              el("p", { class: "field-hint" }, "Isto é uma pista para revisão manual, não uma identificação. Nomes comuns, hospedagem compartilhada e avatares padrão geram coincidências."),
-            ),
-          );
-        } catch (error) {
-          output.replaceChildren(G.inlineError(error.message));
-        }
-      }
-      compareHost.replaceChildren(
-        el("form", { class: "query-panel watch-form", onsubmit: run }, pickA, pickB, el("button", { class: "button button-primary", type: "submit" }, "Comparar")),
-        el("p", { class: "field-hint" }, "Compare duas consultas salvas lado a lado, por exemplo user:alice e user:alice_99, ou um perfil da Steam e um do Roblox. Cada sinal mostra o peso e os valores que o geraram."),
-        output,
-      );
-      return compareHost;
-    }
-    const headersHost = el("div");
-    function headersTab() {
-      if (headersHost.childElementCount) return headersHost;
-      const area = el("textarea", {
-        class: "input header-input",
-        rows: "12",
-        spellcheck: "false",
-        placeholder: "Cole aqui os cabeçalhos completos da mensagem (no Gmail: Mostrar original; no Outlook: Exibir origem da mensagem).",
-        "aria-label": "Cabeçalhos do e-mail",
-      });
-      const output = el("div");
-      const levelTone = { high: "danger", medium: "warning", low: "neutral" };
-      const levelLabel = { high: "Alto", medium: "Médio", low: "Baixo" };
-      async function analyse(event) {
-        event.preventDefault();
-        output.replaceChildren(loadingBlock("Analisando cabeçalhos…"));
-        try {
-          const r = await api("/api/intel/email-headers", { method: "POST", body: JSON.stringify({ headers: area.value }) });
-          const auth = r.authentication;
-          output.replaceChildren(
-            panel(
-              { eyebrow: "RESUMO", title: r.subject || "(sem assunto)", caption: `Risco: ${levelLabel[r.risk]}` },
-              G.kvList([
-                ["De", `${r.from.name ? r.from.name + " " : ""}<${r.from.address}>`],
-                ["Responder para", r.reply_to || null],
-                ["Return-Path", r.return_path || null],
-                ["Data", r.date || null],
-                ["IP de origem", r.origin_ip || null],
-                ["SPF / DKIM / DMARC", ["spf", "dkim", "dmarc"].map((m) => `${m.toUpperCase()}=${auth.verdicts[m] || "—"}`).join("  ")],
-                ["Alinhamento", `SPF ${auth.alignment.spf ? "alinhado" : "não alinhado"} · DKIM ${auth.alignment.dkim ? "alinhado" : "não alinhado"}`],
-                ["Assinaturas DKIM", auth.dkim_signatures.map((d) => `${d.domain} (s=${d.selector})`).join(", ") || null],
-              ]),
-            ),
-            panel(
-              { eyebrow: "SINAIS", title: `Observações (${r.signals.length})` },
-              r.signals.length
-                ? el("div", {}, ...r.signals.map((sig) => el("div", { class: "file-finding" }, badge(levelLabel[sig.level], levelTone[sig.level]), el("span", {}, sig.message))))
-                : el("p", { class: "panel-empty" }, "Nenhum sinal de alerta."),
-            ),
-            panel(
-              { eyebrow: "CAMINHO", title: `Saltos de entrega (${r.hops.length})`, caption: "Do primeiro servidor ao destino" },
-              table({
-                columns: [
-                  { label: "#", render: (h) => String(h.hop) },
-                  { label: "DE", render: (h) => h.from || "—" },
-                  { label: "IP", render: (h) => h.from_ip || "—" },
-                  { label: "POR", render: (h) => h.by || "—" },
-                  { label: "ATRASO", render: (h) => (h.delay_seconds !== undefined ? `${h.delay_seconds}s` : "—") },
-                ],
-                rows: r.hops,
-                emptyMessage: "Nenhum cabeçalho Received.",
-              }),
-            ),
-            panel(
-              { eyebrow: "INDICADORES", title: `Extraídos (${r.indicators.length})`, caption: "Clique para consultar na multibusca" },
-              r.indicators.length
-                ? el("div", { class: "chip-row" }, ...r.indicators.map((i) => el("button", { class: "button button-secondary button-small", type: "button", onclick: () => { input.value = i.value; activeTab = "search"; renderTab(); form.requestSubmit(); } }, `${i.type}: ${i.value}`)))
-                : el("p", { class: "panel-empty" }, "Nenhum indicador."),
-            ),
-            el("p", { class: "field-hint" }, r.limitations.join(" ")),
-          );
-        } catch (error) {
-          output.replaceChildren(G.inlineError(error.message));
-        }
-      }
-      headersHost.append(
-        el(
-          "form",
-          { class: "query-panel", onsubmit: analyse },
-          area,
-          el("button", { class: "button button-primary", type: "submit" }, "Analisar cabeçalhos"),
-          el("p", { class: "field-hint" }, "Tudo é analisado localmente; nenhum link é aberto e nada é consultado na internet."),
-        ),
-        output,
-      );
-      return headersHost;
-    }
-
-    function renderTab() {
-      tabStrip.replaceChildren(
-        G.tabs({
-          items: [
-            { key: "search", label: "Pesquisa" },
-            { key: "connectors", label: "Conectores", count: connectorData.total },
-            { key: "keys", label: "Chaves de API" },
-            { key: "headers", label: "Cabeçalhos de e-mail" },
-            { key: "compare", label: "Comparar" },
-          ],
-          active: activeTab,
-          onSelect: (key) => {
-            activeTab = key;
-            renderTab();
-          },
-        }),
-      );
-      if (activeTab === "keys") keysTab();
-      tabHost.replaceChildren(
-        activeTab === "keys"
-          ? keysHost
-          : activeTab === "headers"
-          ? headersTab()
-          : activeTab === "compare"
-          ? compareTab()
-          : activeTab === "connectors"
-          ? connectorsTab()
-          : el(
-              "div",
-              {},
-              el(
-                "section",
-                { class: "query-panel" },
-                form,
-                connectorChips,
-              ),
-              resultArea,
-              panel({ eyebrow: "HISTÓRICO", title: "Consultas recentes" }, historyHost),
-            ),
-      );
-      G.hydrateIcons(tabHost);
-    }
-
     root.append(
       ...[
-      pageHeader({
-        eyebrow: "INTELIGÊNCIA MULTIFONTE",
-        title: "Pesquisa multifonte",
-        description:
-          "Um artefato consultado em paralelo em todas as fontes compatíveis. Cada resultado guarda a fonte, o hash da resposta e o horário. Correlação não é atribuição.",
-      }),
-      connectorData.network_allowed
-        ? null
-        : el(
-            "div",
-            { class: "notice-bar", role: "note" },
-            el(
-              "span",
-              {},
-              "Conectores de rede desativados: só as fontes locais serão consultadas.",
+        pageHeader({
+          title: "Pesquisa multifonte",
+          description: "Um artefato, todas as fontes compatíveis.",
+        }),
+        connectorData.network_allowed
+          ? null
+          : el(
+              "div",
+              { class: "notice-bar", role: "note" },
+              el("span", {}, "Rede desativada: só fontes locais."),
+              button("Ativar rede", () => enableNetwork(() => G.refreshView())),
             ),
-            button("Ativar rede", () => enableNetwork(() => G.refreshView())),
-          ),
-      connectorData.network_allowed && !connectorData.target_contact_allowed
-        ? el(
-            "div",
-            { class: "notice-bar is-quiet", role: "note" },
-            el(
-              "span",
-              {},
-              "Fontes passivas ativas. Certificado TLS e Impressão digital web acessam o próprio alvo e estão desligados.",
-            ),
-            button("Permitir contato com o alvo", () => enableTargetContact(() => G.refreshView())),
-          )
-        : null,
-      tabStrip,
-      tabHost,
+        el("section", { class: "query-panel" }, form),
+        resultArea,
+        historyPanel,
       ].filter(Boolean),
     );
-    chipsFor(null);
-    renderTab();
+    G.hydrateIcons(root);
     renderHistory();
 
     const runId = params[0] && /^[0-9a-f-]{36}$/i.test(params[0]) ? params[0] : null;
@@ -1155,7 +1692,7 @@
       try {
         const run = await api(`/api/intel/runs/${runId}`);
         input.value = run.query_value;
-        await detect();
+        detect();
         showRun(run);
         if (run.status === "running") follow(run, ++pollToken).catch(() => {});
       } catch (error) {
@@ -1172,6 +1709,8 @@
   }
 
   G.views.multisearch = renderMultiSearch;
+  G.renderIntelConnectors = renderIntelConnectors;
+  G.renderIntelKeys = renderIntelKeys;
   G.connectorLabel = (id) => connectorName(id, id);
   G.resultTypeLabel = (type) => RESULT_LABELS[type] || type;
   G.sourceStatusLabel = (status) => (STATUS_TEXT[status] || [status])[0];

@@ -34,68 +34,95 @@ const displayToggle = document.querySelector("#display-toggle");
 const displayMenu = document.querySelector("#display-menu");
 const shortcutsButton = document.querySelector("#shortcuts-button");
 
+/* Navigation is grouped into a few areas. The dock shows one entry per
+   area; the routes inside an area appear as tabs at the top of its
+   screens. Every route keeps its own hash, renderer and module. */
 G.NAV = [
   {
-    label: "Workspace",
+    key: "overview",
+    label: "Visão geral",
+    icon: "overview",
     items: [
-      { view: "overview", label: "Visão geral", icon: "overview" },
-      { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations" },
-      { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log" },
+      { view: "overview", label: "Visão geral", tab: "Visão geral", icon: "overview" },
     ],
   },
   {
-    label: "Inteligência",
+    key: "search",
+    label: "Pesquisa",
+    icon: "radar",
     items: [
-      { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
-      { view: "watchlist", label: "Monitoramento", icon: "activity", module: "intel-orchestrator" },
-      { view: "ai", label: "Investigador IA", icon: "radar", module: "intel-orchestrator" },
-      { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
-      { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
-      { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
+      { view: "multisearch", label: "Pesquisa multifonte", tab: "Pesquisa", icon: "radar", module: "intel-orchestrator" },
+      { view: "graph", label: "Grafo de relacionamentos", tab: "Grafo", icon: "graph", module: "relationship-graph" },
+      { view: "monitors", label: "Monitoramento", tab: "Monitoramento", icon: "pulse", module: "monitoring" },
+      { view: "ai", label: "Investigador IA", tab: "Investigador IA", icon: "radar", module: "intel-orchestrator" },
+      { view: "indicators", label: "Pesquisa de inteligência", tab: "Indicadores", icon: "indicators", module: "indicator-engine" },
     ],
   },
   {
+    key: "records",
+    label: "Registros",
+    icon: "entities",
+    items: [
+      { view: "entities", label: "Inteligência de entidades", tab: "Entidades", icon: "entities", module: "entities" },
+      { view: "evidence", label: "Gerenciador de evidências", tab: "Evidências", icon: "evidence", module: "evidence" },
+      { view: "sources", label: "Gerenciador de fontes", tab: "Fontes", icon: "sources", module: "source-manager" },
+      { view: "files", label: "Análise de arquivos", tab: "Arquivos", icon: "files", module: "file-intelligence" },
+    ],
+  },
+  {
+    key: "analysis",
     label: "Análise",
+    icon: "chart",
     items: [
-      { view: "board", label: "Quadro de investigação", icon: "board", module: "investigation-board" },
-      { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
-      { view: "geo", label: "Mapa", icon: "graph", module: "investigations" },
-      { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
-      { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
+      { view: "board", label: "Quadro de investigação", tab: "Quadro", icon: "board", module: "investigation-board" },
+      { view: "analytics", label: "Painel analítico", tab: "Painel", icon: "chart", module: "analytics" },
+      { view: "resolution", label: "Resolução de entidades", tab: "Resolução", icon: "merge", module: "entity-resolution" },
+      { view: "geoint", label: "Mapa GEOINT", tab: "GEOINT", icon: "globe", module: "geoint" },
     ],
   },
   {
-    label: "Evidências",
+    key: "threats",
+    label: "Ameaças",
+    icon: "kev",
     items: [
-      { view: "evidence", label: "Gerenciador de evidências", icon: "evidence", module: "evidence" },
-      { view: "sources", label: "Gerenciador de fontes", icon: "sources", module: "source-manager" },
+      { view: "attack", label: "MITRE ATT&CK", tab: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
+      { view: "actors", label: "Atores de ameaça", tab: "Atores", icon: "radar", module: "attack-matrix" },
+      { view: "feeds", label: "Feeds CTI", tab: "Feeds CTI", icon: "feed", module: "taxii-feeds" },
+      { view: "kev", label: "CISA KEV", tab: "CISA KEV", icon: "kev", module: "cisa-kev" },
     ],
   },
   {
-    label: "Inteligência de ameaças",
+    key: "reports",
+    label: "Relatórios",
+    icon: "reports",
     items: [
-      { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
-      { view: "attack", label: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
+      { view: "reports", label: "Central de relatórios", tab: "Relatórios", icon: "reports", module: "report-center" },
     ],
   },
   {
-    label: "Saída",
+    key: "settings",
+    label: "Configurações",
+    icon: "settings",
+    bottom: true,
     items: [
-      { view: "reports", label: "Central de relatórios", icon: "reports", module: "report-center" },
-    ],
-  },
-  {
-    label: "Sistema",
-    items: [
-      { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager" },
-      { view: "settings", label: "Configurações", icon: "settings", module: "settings" },
+      { view: "settings", label: "Configurações", tab: "Configurações", icon: "settings", module: "settings" },
     ],
   },
 ];
 
-G.VIEW_LABELS = Object.fromEntries(
-  G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
-);
+/* Views reached from Configurações (and the command palette) rather than
+   the dock. `home` is the dock entry highlighted while they are open. */
+G.EXTRA_VIEWS = [
+  { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations", group: "Configurações", home: "settings" },
+  { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log", group: "Configurações", home: "settings" },
+  { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager", group: "Configurações", home: "settings" },
+  { view: "compare", label: "Comparar consultas", icon: "radar", module: "intel-orchestrator", group: "Pesquisa", home: "multisearch" },
+];
+
+G.VIEW_LABELS = Object.fromEntries([
+  ...G.NAV.flatMap((group) => group.items.map((item) => [item.view, item.label])),
+  ...G.EXTRA_VIEWS.map((item) => [item.view, item.label]),
+]);
 G.VIEW_GROUPS = Object.fromEntries(
   G.NAV.flatMap((group) => group.items.map((item) => [item.view, group.label])),
 );
@@ -236,54 +263,63 @@ G.el = el;
 G.svgEl = svgEl;
 
 /* ------------------------------------------------------------------ */
-/* Icons: one stroke language, 24px grid, 1.6 stroke                  */
+/* Icons: one soft stroke language — 24px grid, 1.7 stroke, round     */
+/* caps and joins, rounded corners, consistent optical size.         */
 /* ------------------------------------------------------------------ */
 
 const ICON_PATHS = {
-  overview: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
-  investigations: "M3 7.5V18a1.5 1.5 0 0 0 1.5 1.5H11M3 7.5V6a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8A1.5 1.5 0 0 1 20 8v3M3 7.5h17M16.5 19.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18.7 18.7 21 21",
-  activity: "M12 7v5l3 2M12 21a9 9 0 1 0-9-9M3 12h3M3 16.5l2-1",
-  entities: "M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9zM12 3v9M12 12l7.8-4.5M12 12l-7.8-4.5",
-  indicators: "M12 3v4M12 17v4M3 12h4M17 12h4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
-  files: "M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h4.5",
-  board: "M3 4.5h18v15H3zM7 8.5h4v3H7zM14 13h4v3h-4zM11 10l3 4.5",
-  chart: "M4 20h16M6 16v-5M10.5 16V6M15 16v-8M19.5 16v-3",
-  merge: "M6 4v4a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 4v4a6 6 0 0 1-6 6M12 14v6M4 6l2-2 2 2M16 6l2-2 2 2",
-  transform: "M4 12h10M10 7l5 5-5 5M18 5v14",
-  matrix: "M3.5 4h4.5v4.5H3.5zM9.75 4h4.5v4.5h-4.5zM16 4h4.5v4.5H16zM3.5 10.25h4.5v4.5H3.5zM9.75 10.25h4.5v4.5h-4.5zM3.5 16.5h4.5V21H3.5z",
-  graph: "M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 21.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8.3 6l7.4 2.2M16.4 10.6 9.6 17.4M6.4 7.5 7.6 16.5",
-  evidence: "M3.5 4h17v4h-17zM5 8v11.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8M10 12h4",
-  sources: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2",
-  kev: "M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6zM12 8v5M12 16.2v.3",
-  reports: "M7 3h10v5H7zM5 8h14a2 2 0 0 1 2 2v6h-4M7 16H3v-6a2 2 0 0 1 2-2M7 13h10v8H7z",
-  modules: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM16.75 13.5v6.5M13.5 16.75H20",
-  settings: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4",
-  search: "M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM16 16l5 5",
-  radar: "M12 12 19 5M12 21a9 9 0 1 1 6.4-15.4M12 17a5 5 0 1 1 3.5-8.5M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
-  plus: "M12 5v14M5 12h14",
-  close: "M6 6l12 12M18 6 6 18",
-  menu: "M4 7h16M4 12h16M4 17h16",
-  keyboard: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",
-  display: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18",
-  refresh: "M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4",
-  note: "M5 4h14v11l-5 5H5zM14 20v-5h5M8.5 9h7M8.5 12.5h4",
-  upload: "M12 16V4M7 9l5-5 5 5M4 16v3.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V16",
-  empty: "M4 8h16M6 8l1 12h10l1-12M9 8V5h6v3",
-  alert: "M12 3l9.5 17h-19zM12 10v4.5M12 17.5v.3",
-  hash: "M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16",
-  check: "M5 12.5l4.5 4.5L19 7.5",
-  circle: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z",
-  ban: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM6.4 6.4l11.2 11.2",
-  diamond: "M12 3.5 20.5 12 12 20.5 3.5 12z",
-  clock: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l2.5 2",
-  list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
-  dot: "M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
+  overview: "M5.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v3.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-3.6a2.2 2.2 0 0 1 2.2 -2.2zM15.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-.6a2.2 2.2 0 0 1 2.2 -2.2zM15.7 11.5h2.6a2.2 2.2 0 0 1 2.2 2.2v4.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-4.6a2.2 2.2 0 0 1 2.2 -2.2zM5.7 14.5h2.6a2.2 2.2 0 0 1 2.2 2.2v1.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-1.6a2.2 2.2 0 0 1 2.2 -2.2z",
+  investigations: "M20.5 10.5V9.4a2 2 0 0 0-2-2h-5.2a2 2 0 0 1-1.5-.7l-.9-1.1A2 2 0 0 0 9.4 5H5.5a2 2 0 0 0-2 2v10.5a2 2 0 0 0 2 2H11M13.3 15.8a3 3 0 1 0 6 0a3 3 0 1 0 -6 0zM18.5 18 20.5 20",
+  activity: "M3.5 12a8.5 8.5 0 1 0 2.5-6M6 2.9V6h3.1M12 7.8v4.4l3 1.9",
+  entities: "M12 3.2l7.3 4.1v8.4L12 20.8l-7.3-4.1V7.3zM4.9 7.5 12 11.6l7.1-4.1M12 11.6v9",
+  indicators: "M5.8 12a6.2 6.2 0 1 0 12.4 0a6.2 6.2 0 1 0 -12.4 0zM10.6 12a1.4 1.4 0 1 0 2.8 0a1.4 1.4 0 1 0 -2.8 0zM12 2.8v2.8M12 18.4v2.8M2.8 12h2.8M18.4 12h2.8",
+  files: "M13.5 3.5H7a2.5 2.5 0 0 0-2.5 2.5v12A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5V9.5zM13.5 3.5V8a1.5 1.5 0 0 0 1.5 1.5h4.5M8.5 13.5h7M8.5 17h4",
+  board: "M6.7 4h10.6a3.2 3.2 0 0 1 3.2 3.2v9.6a3.2 3.2 0 0 1 -3.2 3.2h-10.6a3.2 3.2 0 0 1 -3.2 -3.2v-9.6a3.2 3.2 0 0 1 3.2 -3.2zM8.1 7.8h2.3a1.1 1.1 0 0 1 1.1 1.1v1.4a1.1 1.1 0 0 1 -1.1 1.1h-2.3a1.1 1.1 0 0 1 -1.1 -1.1v-1.4a1.1 1.1 0 0 1 1.1 -1.1zM13.6 12.6h2.3a1.1 1.1 0 0 1 1.1 1.1v1.4a1.1 1.1 0 0 1 -1.1 1.1h-2.3a1.1 1.1 0 0 1 -1.1 -1.1v-1.4a1.1 1.1 0 0 1 1.1 -1.1zM11.5 9.6h1.7a1 1 0 0 1 1 1v2",
+  chart: "M3.5 20h17M7 16.5v-4M12 16.5V6.5M17 16.5V10",
+  merge: "M4.7 5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0zM15.7 5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0zM6.5 6.8V8a4 4 0 0 0 4 4h3a4 4 0 0 0 4-4V6.8M12 12v8.3M9.6 18 12 20.4l2.4-2.4",
+  transform: "M4 12h11.5M11.5 7.5 16 12l-4.5 4.5M20 5v14",
+  bell: "M12 3.2v1.6M6.2 17v-6a5.8 5.8 0 0 1 11.6 0v6l1.4 1.8H4.8zM10 21a2.2 2.2 0 0 0 4 0",
+  feed: "M4.3 18.4a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0zM4.5 11.5a8 8 0 0 1 8 8M4.5 4.5a15 15 0 0 1 15 15",
+  globe: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM3.5 12h17M12 3.5c2.4 2.3 3.6 5.2 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.2-3.6-8.5S9.6 5.8 12 3.5z",
+  matrix: "M4.9 3.5h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM11.1 3.5h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM17.3 3.5h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM4.9 9.7h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM11.1 9.7h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4zM4.9 15.9h1.8a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1 -1.4 1.4h-1.8a1.4 1.4 0 0 1 -1.4 -1.4v-1.8a1.4 1.4 0 0 1 1.4 -1.4z",
+  graph: "M3.6 6a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0zM15.6 9a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0zM6.6 18a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0zM8.3 6.6l7.4 1.8M16.3 10.8l-5.6 5.4M6.6 8.3l1.8 7.4",
+  evidence: "M5.1 4h13.8a1.6 1.6 0 0 1 1.6 1.6v1.3a1.6 1.6 0 0 1 -1.6 1.6h-13.8a1.6 1.6 0 0 1 -1.6 -1.6v-1.3a1.6 1.6 0 0 1 1.6 -1.6zM5 8.5v9A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5v-9M10 12.5h4",
+  sources: "M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1",
+  kev: "M12 3.2c2.3 1.4 4.6 2.2 7 2.5v5.6c0 4.4-2.9 8-7 9.5-4.1-1.5-7-5.1-7-9.5V5.7c2.4-.3 4.7-1.1 7-2.5zM12 8.5v4M12 15.8v.2",
+  reports: "M9 4.6H7.5A2.5 2.5 0 0 0 5 7.1v11A2.5 2.5 0 0 0 7.5 20.6h9a2.5 2.5 0 0 0 2.5-2.5v-11a2.5 2.5 0 0 0-2.5-2.5H15M10.2 3h3.6a1.2 1.2 0 0 1 1.2 1.2v.8a1.2 1.2 0 0 1 -1.2 1.2h-3.6a1.2 1.2 0 0 1 -1.2 -1.2v-.8a1.2 1.2 0 0 1 1.2 -1.2zM9 16.5v-2M12 16.5v-5M15 16.5V13",
+  modules: "M5.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v2.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-2.6a2.2 2.2 0 0 1 2.2 -2.2zM15.7 3.5h2.6a2.2 2.2 0 0 1 2.2 2.2v2.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-2.6a2.2 2.2 0 0 1 2.2 -2.2zM5.7 13.5h2.6a2.2 2.2 0 0 1 2.2 2.2v2.6a2.2 2.2 0 0 1 -2.2 2.2h-2.6a2.2 2.2 0 0 1 -2.2 -2.2v-2.6a2.2 2.2 0 0 1 2.2 -2.2zM17 14v6M14 17h6",
+  settings: "M4 7h9M17.4 7H20M4 17h2.6M11 17h9M13 7a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0zM6.6 17a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0z",
+  search: "M4.5 11a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0zM15.8 15.8 20 20",
+  radar: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM7.5 12a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0 -9 0zM12 12l5.2-5.2M11.1 12a.9 .9 0 1 0 1.8 0a.9 .9 0 1 0 -1.8 0z",
+  plus: "M12 5.5v13M5.5 12h13",
+  close: "M6.5 6.5l11 11M17.5 6.5l-11 11",
+  menu: "M4.5 7h15M4.5 12h15M4.5 17h15",
+  keyboard: "M6 6h12a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-6a3 3 0 0 1 3 -3zM7 10h.01M10.3 10h.01M13.7 10h.01M17 10h.01M8.5 14h7",
+  display: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 3.5v17M12 7a5 5 0 0 1 0 10",
+  refresh: "M19.5 11.5A7.5 7.5 0 0 0 6.4 7M4.5 12.5A7.5 7.5 0 0 0 17.6 17M6.4 3.5V7h3.5M17.6 20.5V17h-3.5",
+  note: "M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5V14l-5 5H7.5A2.5 2.5 0 0 1 5 16.5zM14 19v-3.5a1.5 1.5 0 0 1 1.5-1.5H19M8.5 8.5h7M8.5 12h4",
+  upload: "M12 15.5v-11M7.5 8.5 12 4l4.5 4.5M4.5 14.5v3A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-3",
+  empty: "M3.5 13.5 6 6.1A2 2 0 0 1 7.9 4.7h8.2A2 2 0 0 1 18 6.1l2.5 7.4v4A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5zM3.5 13.5h4.3l1.2 2.4h6l1.2-2.4h4.3",
+  alert: "M10.3 4.6a2 2 0 0 1 3.4 0l7 12.2a2 2 0 0 1-1.7 3H5a2 2 0 0 1-1.7-3zM12 9.5v4M12 16.8v.2",
+  hash: "M9.5 4 7.5 20M16.5 4l-2 16M4.5 9H20M4 15h15.5",
+  check: "M5 12.5l4.5 4.5 9.5-10",
+  circle: "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0z",
+  ban: "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0zM6.4 6.4l11.2 11.2",
+  diamond: "M12 3.8 20.2 12 12 20.2 3.8 12z",
+  clock: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 7.5V12l3 2",
+  list: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01",
+  dot: "M10.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0z",
+  info: "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0zM12 11v5.2M12 7.9v.2",
+  arrow: "M9.5 6.5 15 12l-5.5 5.5",
+  pulse: "M3.5 12.5h3.6l2.2-5.5 4.2 10.5 2.4-5h4.6",
+  robot: "M7.5 8.5h9a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h-9a3 3 0 0 1 -3 -3v-5a3 3 0 0 1 3 -3zM12 8.5V5.6M10.8 4.4a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0 -2.4 0zM9 13.2v.6M15 13.2v.6M10 16.6h4M2.5 13v2M21.5 13v2",
+  send: "M4.5 12 19.5 5l-4 14-3.5-5.5zM12 13.5l7.5-8.5",
+  stop: "M7.5 6h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1 -1.5 1.5h-9a1.5 1.5 0 0 1 -1.5 -1.5v-9a1.5 1.5 0 0 1 1.5 -1.5z",
+  trash: "M4.5 7h15M10 4.5h4M6.5 7l.9 11.2a2 2 0 0 0 2 1.8h5.2a2 2 0 0 0 2-1.8L17.5 7M10.3 11v5M13.7 11v5",
   minus: "M5 12h14",
   fit: "M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1 -1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15",
   undo: "M9 14 4.5 9.5 9 5M4.5 9.5H15a4.5 4.5 0 0 1 0 9h-3",
   redo: "M15 14l4.5-4.5L15 5M19.5 9.5H9a4.5 4.5 0 0 0 0 9h3",
-  send: "M4.5 12 19.5 5l-4 14-3.5-5.5zM12 13.5l7.5-8.5",
-  arrow: "M9.5 6.5 15 12l-5.5 5.5",
 };
 
 /* Legacy glyphs passed by views are mapped onto the icon set so every
@@ -294,7 +330,7 @@ const GLYPH_ICONS = {
   "☰": "list", "⎙": "reports", "⊞": "modules", "⚙": "settings", "＋": "plus",
   "▣": "evidence", "↻": "refresh", "◐": "display", "◌": "circle", "◨": "display",
   "⌘": "keyboard", "◈": "diamond", "○": "circle", "⊘": "ban", "◇": "diamond",
-  "·": "dot", "!": "alert",
+  "·": "dot", "!": "alert", "◎": "indicators",
 };
 
 function icon(name, { size = 18, className = "" } = {}) {
@@ -308,7 +344,7 @@ function icon(name, { size = 18, className = "" } = {}) {
       height: size,
       fill: "none",
       stroke: "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "1.7",
       "stroke-linecap": "round",
       "stroke-linejoin": "round",
       "aria-hidden": "true",
@@ -586,6 +622,19 @@ function fieldLabel_(field) {
 }
 
 const ERROR_PATTERNS = [
+  [/^add an OpenRouter key before using the assistant$/, () => "Adicione a chave do OpenRouter para usar o assistente"],
+  [/^choose a model before using the assistant$/, () => "Escolha um modelo para usar o assistente"],
+  [/^model must be an OpenRouter model id/, () => "Use o identificador de um modelo do OpenRouter, como provedor/nome-do-modelo"],
+  [/^the assistant is still working on this conversation$/, () => "O assistente ainda está trabalhando nesta conversa"],
+  [/^answer the pending confirmation first$/, () => "Responda primeiro ao pedido de confirmação"],
+  [/^stop the assistant before deleting this conversation$/, () => "Pare o assistente antes de apagar esta conversa"],
+  [/^this action is not waiting for confirmation$/, () => "Esta ação não está esperando confirmação"],
+  [/^OpenRouter refused the key/, () => "O OpenRouter recusou a chave"],
+  [/^the OpenRouter account has no credits left/, () => "A conta do OpenRouter está sem créditos"],
+  [/^OpenRouter rate-limited the request/, () => "O OpenRouter limitou as requisições; tente de novo em instantes"],
+  [/^OpenRouter answered HTTP (\d+)(.*)$/, (m) => `O OpenRouter respondeu HTTP ${m[1]}${m[2]}`],
+  [/^interrupted by a restart$/, () => "Interrompido porque o GARBAGE reiniciou"],
+  [/^the OpenRouter key was removed$/, () => "A chave do OpenRouter foi removida"],
   [/^refused by network policy: (.+)$/, (m) => `Bloqueado pela política de rede: ${translateError(m[1])}`],
   [/^TLS verification failed for (.+)$/, (m) => `Falha na verificação TLS de ${m[1]}`],
   [/^TLS handshake with (.+) failed$/, (m) => `Falha no handshake TLS com ${m[1]}`],
@@ -621,12 +670,46 @@ const ERROR_PATTERNS = [
   [/^transforms that do not accept (\S+): (.+)$/, (m) => `Transformações que não aceitam ${m[1]}: ${m[2]}`],
   [/^max_new_entities must be between (\d+) and (\d+)$/, (m) => `O limite de novas entidades deve ficar entre ${m[1]} e ${m[2]}`],
   [/^an entity cannot be merged into itself$/, () => "Uma entidade não pode ser fundida nela mesma"],
+  [/^the discovery URL must be an https URL$/, () => "A URL de descoberta deve ser https"],
+  [/^give both username and password, or neither$/, () => "Informe usuário e senha, ou nenhum dos dois"],
+  [/^the TAXII server refused the credentials \(HTTP (\d+)\)$/, (m) => `O servidor TAXII recusou as credenciais (HTTP ${m[1]})`],
+  [/^the TAXII server answered HTTP 404$/, () => "O servidor TAXII respondeu HTTP 404"],
+  [/^the DNS resolver did not answer$/, () => "O resolvedor DNS não respondeu"],
+  [/^the plugin did not finish within (\d+) s$/, (m) => `O plugin não terminou em ${m[1]} s`],
+  [/^the plugin exited without a result$/, () => "O plugin terminou sem resultado"],
+  [/^the plugin broke the protocol$/, () => "O plugin quebrou o protocolo"],
+  [/^the plugin failed: (.+)$/, (m) => `O plugin falhou: ${m[1]}`],
+  [/^the plugin changed after approval; approve it again$/, () => "O plugin foi alterado depois da aprovação; aprove de novo"],
+  [/^the plugin changed since it was listed; review it again$/, () => "O plugin mudou desde a listagem; revise de novo"],
+  [/^this plugin declared no network access$/, () => "Este plugin não declarou acesso à rede"],
+  [/^request limit of (\d+) reached$/, (m) => `Limite de ${m[1]} requisições atingido`],
+  [/^the plugin is invalid: (.+)$/, (m) => `O plugin é inválido: ${m[1]}`],
+  [/^choose at least one source$/, () => "Escolha pelo menos uma fonte"],
+  [/^sources that do not accept (\S+): (.+)$/, (m) => `Fontes que não aceitam ${m[1]}: ${m[2]}`],
+  [/^interval must be between (\d+) and (\d+) minutes$/, (m) => `O intervalo deve ficar entre ${m[1]} e ${m[2]} minutos`],
+  [/^monitor not found: .+$/, () => "Monitor não encontrado"],
+  [/^monitor is already running$/, () => "Este monitor já está rodando; aguarde terminar"],
+  [/^this is not a GARBAGE case package$/, () => "Este arquivo não é um pacote de caso do GARBAGE"],
+  [/^the case package was modified after export \(SHA-256 does not match\)$/, () => "O pacote foi alterado depois de exportado (o SHA-256 não confere)"],
+  [/^unsupported case package version: (.+)$/, (m) => `Versão de pacote não suportada: ${m[1]}`],
+  [/^file content does not match its recorded SHA-256$/, () => "o conteúdo do arquivo não confere com o SHA-256 registrado"],
+  [/^not in the local ATT&CK data; load ATT&CK first$/, () => "fora dos dados locais do ATT&CK; carregue o ATT&CK primeiro"],
+  [/^endpoint missing or unknown type$/, () => "ponta ausente ou tipo desconhecido"],
+  [/^unknown entity type$/, () => "tipo de entidade desconhecido"],
+  [/^evidence files exceed 48 MiB; export without files$/, () => "Os arquivos de evidência passam de 48 MiB; exporte sem os arquivos"],
+  [/^unknown report sections: (.+)$/, (m) => `Seções de relatório desconhecidas: ${m[1]}`],
+  [/^plugin\.json is missing$/, () => "Falta o plugin.json"],
+  [/^give a registrable domain such as example\.com$/, () => "Informe um domínio registrável, como example.com"],
+  [/^the selected objects have no simple observable patterns$/, () => "Os objetos escolhidos não têm padrões simples de observáveis"],
+  [/^the Sigma package could not be downloaded(.*)$/, (m) => `Não foi possível baixar o pacote Sigma${m[1]}`],
   [/^two different entity ids are required$/, () => "São necessárias duas entidades diferentes"],
   [/^a person, username or profile can only be merged with the same kind of entity$/, () => "Pessoa, nome de usuário ou perfil só pode ser fundido com o mesmo tipo de entidade"],
   [/^no CISA KEV cache; run an explicit refresh first$/, () => "Sem cache do CISA KEV; faça uma atualização explícita primeiro"],
   [/^the run has no findings to record$/, () => "A consulta não tem resultados para registrar"],
   [/^value was detected as (\w+), not (\w+)$/, (m) => `O valor foi detectado como ${m[1]}, não ${m[2]}`],
-  [/^value is not a supported artifact; .+$/, () => "Valor não suportado; use domínio, IP, CIDR, URL, e-mail, hash, ASN ou CVE"],
+  [/^value is not a supported artifact; .+$/, () => "Valor não reconhecido. Use domínio, IP, URL, e-mail, hash, ASN, CVE, CNPJ, CPF, telefone ou endereço; para um lugar só pelo nome, escreva local: antes (ex.: local: São Paulo)"],
+  [/^value does not match the type its prefix names$/, () => "O valor não corresponde ao tipo indicado no prefixo (cpf:, cnpj:, tel:, local:)"],
+  [/^network connectors cannot accept CPF or phone numbers$/, () => "Fontes de rede não podem receber CPF nem telefone"],
   [/^intel run not found: .+$/, () => "Consulta não encontrada"],
   [/^unknown connectors: (.+)$/, (m) => `Conectores desconhecidos: ${m[1]}`],
   [/^(.+) must not be empty$/, (m) => `${fieldLabel_(m[1])}: não pode ficar vazio`],
@@ -733,6 +816,20 @@ const ACTIVITY_PATTERNS = [
   [/^Transforms on (\S+) (.+): (\d+) run, (\d+) new entities$/, (m) => `Transformações em ${m[2]}: ${m[3]} executada(s), ${m[4]} entidade(s) nova(s)`],
   [/^Entity merged: (.+) into (.+)$/, "Entidade fundida: $1 em $2"],
   [/^Entity pair marked as distinct$/, "Par de entidades marcado como distinto"],
+  [/^TAXII server added: (.+)$/, "Servidor TAXII adicionado: $1"],
+  [/^TAXII server removed: (.+)$/, "Servidor TAXII removido: $1"],
+  [/^TAXII pull: (\d+) objects from (.+)$/, "Coleta TAXII: $1 objeto(s) de $2"],
+  [/^Sigma rules refreshed: (\S+), (\d+) rules$/, "Regras Sigma atualizadas: $1, $2 regras"],
+  [/^Plugin approved: (.+) \((\w+)\)$/, "Plugin aprovado: $1 ($2)"],
+  [/^Plugin disabled: (.+)$/, "Plugin desativado: $1"],
+  [/^Investigation archived: (.+)$/, "Investigação arquivada: $1"],
+  [/^Monitor created: (.+) \((\S+) (.+), every (\d+) min\)$/, "Monitor criado: $1 ($2 $3, a cada $4 min)"],
+  [/^Monitor deleted: (.+)$/, "Monitor excluído: $1"],
+  [/^Investigation restored: (.+)$/, "Investigação desarquivada: $1"],
+  [/^Investigation duplicated from (.+): (.+)$/, "Investigação duplicada de $1: $2"],
+  [/^Case package exported: (.+)$/, "Pacote do caso exportado: $1"],
+  [/^Case package imported: (.+) \((\w+)\)$/, "Pacote de caso importado: $1 ($2)"],
+  [/^Evidence note added: (.+)$/, "Anotação de evidência: $1"],
 ];
 
 const FORMAT_LABEL_PT = {
@@ -814,6 +911,15 @@ const TEXT_PT = {
   "the run was interrupted": "a consulta foi interrompida",
   "the run was interrupted by a restart": "a consulta foi interrompida por um reinício",
   "Full-text search index": "Índice de busca em texto completo",
+  "registered or delegated; not necessarily malicious": "registrado ou delegado; não necessariamente malicioso",
+  omission: "omissão", repetition: "repetição", transposition: "transposição", replacement: "tecla vizinha",
+  insertion: "inserção", homoglyph: "caractere parecido", hyphenation: "hífen", "vowel-swap": "troca de vogal",
+  bitsquatting: "bit trocado", addition: "acréscimo", subdomain: "subdomínio", "tld-swap": "outro TLD",
+  "TAXII feeds and Sigma rules": "Feeds TAXII e regras Sigma",
+  "Local plugin approvals": "Aprovações de plugins locais",
+  "Case objective and archive, evidence custody and notes": "Objetivo e arquivamento de casos, custódia e anotações de evidências",
+  "Monitors and notifications": "Monitores e notificações",
+  "Search index covers case objectives": "Pesquisa passa a cobrir o objetivo do caso",
 };
 
 function translateText(value) {
@@ -868,6 +974,10 @@ const MODULE_TEXT = {
   "file-intelligence": ["Análise de arquivos", "Inspeção estática limitada de documentos, pacotes, imagens e executáveis, com histórico persistente."],
   "source-manager": ["Gerenciador de fontes", "Fontes reutilizáveis vinculadas a investigações e entidades."],
   "indicator-engine": ["Motor de indicadores", "Extração de padrões e correlação por valor exato com proveniência."],
+  "live-check": ["Verificação ao vivo de URL", "Sob pedido, segue os redirecionamentos de uma URL, lê a página final e tira uma captura de tela."],
+  "cti-exchange": ["Troca com MISP e OpenCTI", "Envia casos ao seu MISP ou OpenCTI e procura valores neles pela pesquisa multifonte."],
+  antivirus: ["Antivírus (ClamAV)", "Passa cada arquivo analisado pelo ClamAV, quando ele está instalado; tudo local, nada sai da máquina."],
+  "ai-assistant": ["Assistente de IA", "Painel lateral em que um modelo escolhido no OpenRouter usa a estação pelas próprias ações, todas registradas."],
   "intel-orchestrator": ["Inteligência multifonte", "Consulta explícita de um artefato em todos os conectores registrados, com cache, limites de taxa, status das fontes e proveniência."],
   "cisa-kev": ["Conector CISA KEV", "Atualização explícita e somente leitura do catálogo público CISA KEV."],
   "report-center": ["Central de relatórios", "Relatórios estruturados em JSON, HTML, CSV e Markdown a partir de registros reais."],
@@ -881,6 +991,11 @@ const MODULE_TEXT = {
   "attack-matrix": ["MITRE ATT&CK", "Matriz Enterprise ATT&CK offline, detalhe de técnicas e técnicas vinculadas aos casos."],
   "yara-rules": ["Regras YARA", "Conjuntos locais de regras YARA verificados, testados e aplicados às análises de arquivos."],
   analytics: ["Painel analítico", "Gráficos do workspace e do caso calculados a partir dos registros salvos."],
+  "taxii-feeds": ["Feeds TAXII", "Cliente TAXII 2.1: descoberta, coleções e coleta paginada de objetos STIX, com indicadores registrados nos casos."],
+  "sigma-rules": ["Regras Sigma", "Regras de detecção do SigmaHQ baixadas sob demanda e indexadas por técnica ATT&CK."],
+  monitoring: ["Monitoramento", "Consultas multifonte salvas que rodam de novo num intervalo enquanto o servidor está ligado, com a diferença entre execuções e notificações na interface."],
+  plugins: ["Plugins locais", "Transformações escritas pelo analista, com manifesto, permissões declaradas e aprovação pelo hash do código, executadas em processo separado."],
+  geoint: ["Mapa GEOINT", "Mapa local das posições GPS do EXIF de imagens analisadas e da localização aproximada de redes vinda das consultas."],
   "cti-export": ["Exportação CTI", "Pacotes STIX 2.1, eventos MISP e CSV de IOCs gerados a partir dos registros do caso."],
   "media-forensics": ["Perícia de mídia", "Análise de mídia mais profunda planejada; hoje existem apenas hash e metadados."],
 };
@@ -899,7 +1014,7 @@ function moduleDescription(moduleId, fallback) {
 }
 
 const SETTING_TEXT = {
-  "interface.theme": ["Tema da interface", "Paleta escura da estação ou variante de alto contraste."],
+  "interface.theme": ["Tema da interface", "Tema claro ou variante escura de alto contraste."],
   "interface.density": ["Densidade de informação", "Espaçamento confortável ou layout compacto para telas menores."],
   "interface.reduce_motion": ["Reduzir movimento", "Desativa transições de painéis e telas."],
   "board.autosave_delay_ms": ["Atraso do salvamento automático do quadro", "Milissegundos de inatividade antes de salvar o estado do quadro."],
@@ -910,13 +1025,12 @@ const SETTING_TEXT = {
   "ai.provider": ["Provedor do modelo de IA", "Modelo usado pelo Investigador IA. openai-compatible serve para Ollama, LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI e similares; anthropic usa a API Messages."],
   "ai.base_url": ["Endpoint da IA", "URL base, por exemplo http://localhost:11434/v1 (Ollama), http://localhost:1234/v1 (LM Studio), https://openrouter.ai/api/v1, https://api.openai.com/v1 ou https://api.anthropic.com. Vazio usa o padrão do provedor. http:// só para esta máquina ou a rede local."],
   "ai.model": ["Nome do modelo de IA", "ID do modelo como o endpoint o chama, por exemplo llama3.1:8b, qwen2.5:14b, openai/gpt-4o-mini, anthropic/claude-sonnet-5-5 (OpenRouter) ou claude-opus-5-5."],
-  "intel.webhook_url": ["Webhook de consultas concluídas", "URL HTTPS que recebe um resumo quando uma consulta multifonte termina (webhooks do Discord funcionam direto). Vazio desativa; exige acesso à rede."],
   "intel.max_workers": ["Conectores em paralelo", "Número máximo de conectores consultados ao mesmo tempo para um artefato."],
   "report.include_raw_observations": ["Incluir observações completas", "Inclui o texto completo das observações nos relatórios HTML gerados."],
 };
 
 const VALUE_LABELS = {
-  dark: "Escuro", contrast: "Alto contraste", comfortable: "Confortável", compact: "Compacta",
+  dark: "Claro", contrast: "Alto contraste (escuro)", comfortable: "Confortável", compact: "Compacta",
   true: "Sim", false: "Não", force: "Força", circular: "Circular", grid: "Grade",
   unattributed: "Sem atribuição",
 };
@@ -1024,24 +1138,91 @@ function statusBadge(value) {
   return badge(statusLabel(value), STATUS_TONES[value] || "neutral");
 }
 
+let pageInfoCount = 0;
+
+/* Title first. A short line may sit under it; anything longer waits
+   behind a small info toggle. `eyebrow` is still accepted, not drawn. */
 function pageHeader({ eyebrow, title, description, actions = [] }) {
+  const text = typeof description === "string" ? description.trim() : description;
+  const short = typeof text === "string" && text.length <= 72;
+  let infoButton = null;
+  let descriptionNode = null;
+  if (text && short) {
+    descriptionNode = el("p", { class: "page-description" }, text);
+  } else if (text) {
+    const id = `page-info-${++pageInfoCount}`;
+    descriptionNode = el("p", { class: "page-description", id, hidden: true }, text);
+    infoButton = el(
+      "button",
+      {
+        class: "icon-button page-info",
+        type: "button",
+        "aria-label": "Sobre esta tela",
+        "aria-expanded": "false",
+        "aria-controls": id,
+        onClick: () => {
+          descriptionNode.hidden = !descriptionNode.hidden;
+          infoButton.setAttribute("aria-expanded", String(!descriptionNode.hidden));
+        },
+      },
+      icon("info", { size: 16 }),
+    );
+  }
   return el(
     "div",
     { class: "page-heading" },
     el(
       "div",
       { class: "page-heading-copy" },
-      eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
-      el("h1", {}, title),
-      description ? el("p", { class: "page-description" }, description) : null,
+      el("div", { class: "page-title-row" }, el("h1", {}, title), infoButton),
+      descriptionNode,
     ),
     actions.length ? el("div", { class: "page-actions" }, actions) : null,
   );
 }
 
+/* Secondary actions collapse into one "Mais" menu so each area keeps a
+   single clear primary action. */
+function moreMenu(items, label = "Mais") {
+  const list = el("div", { class: "more-menu-list" }, items.filter(Boolean));
+  const menu = el(
+    "details",
+    { class: "more-menu" },
+    el("summary", { class: "button button-secondary button-small" }, label),
+    list,
+  );
+  list.addEventListener("click", (event) => {
+    if (event.target.closest("button, a")) menu.open = false;
+  });
+  return menu;
+}
+
+document.addEventListener("click", (event) => {
+  document.querySelectorAll("details.more-menu[open]").forEach((menu) => {
+    if (!menu.contains(event.target)) menu.open = false;
+  });
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  document.querySelectorAll("details.more-menu[open]").forEach((menu) => {
+    menu.open = false;
+    menu.querySelector("summary")?.focus();
+  });
+});
+
+G.moreMenu = moreMenu;
+
+function sentenceCase(text) {
+  const lower = String(text).toLocaleLowerCase("pt-BR");
+  return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
+}
+
 function panel({ eyebrow, title, caption, actions = [], className = "" }, ...children) {
+  if (!title && eyebrow) title = sentenceCase(eyebrow);
+  eyebrow = null;
+  if (typeof caption === "string" && caption.length > 48) caption = null;
   const heading =
-    title || eyebrow || actions.length
+    title || actions.length
       ? el(
           "div",
           { class: "panel-heading" },
@@ -1067,17 +1248,12 @@ function panel({ eyebrow, title, caption, actions = [], className = "" }, ...chi
   );
 }
 
-function metric({ label, value, foot }) {
+function metric({ label, value }) {
   return el(
     "article",
     { class: "metric-card" },
-    el(
-      "div",
-      { class: "metric-top" },
-      el("span", {}, label),
-    ),
     el("div", { class: "metric-value" }, value),
-    foot ? el("div", { class: "metric-foot" }, foot) : null,
+    el("div", { class: "metric-top" }, el("span", {}, sentenceCase(label))),
   );
 }
 
@@ -1086,7 +1262,7 @@ function emptyState({ icon: glyph = "empty", title, description, action = null }
     "div",
     { class: "empty-state" },
     el("span", { class: "empty-icon" }, icon(glyph, { size: 20 })),
-    el("h3", {}, title),
+    el("h2", {}, title),
     description ? el("p", {}, description) : null,
     action || null,
   );
@@ -1097,7 +1273,7 @@ function errorState({ title = "Não foi possível carregar esta tela", message, 
     "div",
     { class: "error-state", role: "alert" },
     el("span", { class: "error-icon" }, icon("alert", { size: 20 })),
-    el("h3", {}, title),
+    el("h2", {}, title),
     el("p", {}, message || "A API local retornou um erro."),
     retry
       ? el("button", { class: "button button-secondary", type: "button", onClick: retry }, "Tentar novamente")
@@ -1122,6 +1298,8 @@ function dataTable({ columns, rows, emptyMessage = "Nenhum registro.", onRowClic
   );
   const tbody = el("tbody");
   if (!rows.length) {
+    // An empty list is one quiet line, without column headings.
+    table.classList.add("is-empty");
     tbody.append(
       el(
         "tr",
@@ -1348,7 +1526,7 @@ function formDialog({
             "aria-label": "Fechar diálogo",
             onClick: () => dialog.close("cancel"),
           },
-          "×",
+          icon("close"),
         ),
       ),
       ...fields.map(fieldNode),
@@ -1461,32 +1639,56 @@ G.confirm = confirmDialog;
 /* Navigation                                                         */
 /* ------------------------------------------------------------------ */
 
+function navLink(group, items) {
+  return el(
+    "a",
+    {
+      class: "nav-link",
+      href: `#/${items[0].view}`,
+      "aria-label": group.label,
+      dataset: { area: group.key, views: items.map((item) => item.view).join(" "), tooltip: group.label },
+    },
+    el("span", { class: "nav-icon" }, icon(group.icon, { size: 20 })),
+    el("span", { class: "nav-label", "aria-hidden": "true" }, group.label),
+  );
+}
+
 function renderNav() {
   const container = document.querySelector("#nav-groups");
   container.replaceChildren();
+  const section = el("section", { class: "nav-section", "aria-label": "Áreas" });
+  const bottom = document.querySelector("#nav-bottom");
+  bottom?.replaceChildren();
   for (const group of G.NAV) {
     const items = group.items.filter((item) => moduleEnabled(item.module));
     if (!items.length) continue;
-    const labelId = `nav-group-${G.NAV.indexOf(group)}`;
-    const section = el("section", { class: "nav-section", "aria-labelledby": labelId });
-    section.append(el("div", { class: "nav-section-label", id: labelId }, group.label));
-    for (const item of items) {
-      section.append(
-        el(
-          "a",
-          {
-            class: "nav-link",
-            href: `#/${item.view}`,
-            "aria-label": item.label,
-            dataset: { view: item.view, tooltip: item.label },
-          },
-          el("span", { class: "nav-icon" }, icon(item.icon, { size: 20 })),
-          el("span", { class: "nav-label", "aria-hidden": "true" }, item.label),
-        ),
-      );
-    }
-    container.append(section);
+    if (group.bottom && bottom) bottom.append(navLink(group, items));
+    else section.append(navLink(group, items));
   }
+  container.append(section);
+}
+
+/* Underline tabs between the routes of one area, above the screen. */
+function areaTabs(view) {
+  const group = G.NAV.find((entry) => entry.items.some((item) => item.view === view));
+  if (!group) return null;
+  const items = group.items.filter((item) => moduleEnabled(item.module));
+  if (items.length < 2) return null;
+  return el(
+    "nav",
+    { class: "area-tabs", "aria-label": group.label },
+    ...items.map((item) =>
+      el(
+        "a",
+        {
+          class: `area-tab${item.view === view ? " is-active" : ""}`,
+          href: `#/${item.view}`,
+          "aria-current": item.view === view ? "page" : null,
+        },
+        item.tab || item.label,
+      ),
+    ),
+  );
 }
 
 function renderShellState() {
@@ -1500,8 +1702,12 @@ function renderShellState() {
 }
 
 function markActiveNav(view) {
+  const extra = G.EXTRA_VIEWS.find((item) => item.view === view);
+  // An open case belongs to the main flow; the case index to Configurações.
+  const params = G.state.currentParams || [];
+  const home = view === "investigations" && params.length ? "overview" : extra?.home || view;
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const active = link.dataset.view === view;
+    const active = (link.dataset.views || "").split(" ").includes(home);
     link.classList.toggle("is-active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -1510,9 +1716,8 @@ function markActiveNav(view) {
 
 function setBreadcrumb(view) {
   const label = G.VIEW_LABELS[view] || titleCase(view);
-  document.querySelector("#page-breadcrumb").textContent = label;
-  const group = document.querySelector("#breadcrumb-group");
-  if (group) group.textContent = G.VIEW_GROUPS[view] || "Workspace";
+  const crumb = document.querySelector("#page-breadcrumb");
+  if (crumb) crumb.textContent = label;
   document.title = `${label} · GARBAGE`;
 }
 
@@ -1534,7 +1739,8 @@ async function route() {
       /* cleanup is best effort */
     }
   }
-  const raw = location.hash.replace(/^#\/?/, "");
+  // "?key=value" after the path is read by the view itself (hashQuery).
+  const raw = location.hash.replace(/^#\/?/, "").split("?")[0];
   const segments = raw.split("/").filter(Boolean);
   const candidate = segments[0] || "overview";
   const view = G.views[candidate] ? candidate : "overview";
@@ -1549,6 +1755,11 @@ async function route() {
   setLoading(true);
   viewRoot.replaceChildren();
   try {
+    const tabHost = document.querySelector("#area-tabs-host");
+    if (tabHost) {
+      tabHost.dataset.view = view;
+      tabHost.replaceChildren(...[areaTabs(view)].filter(Boolean));
+    }
     await G.views[view](viewRoot, params);
   } catch (error) {
     viewRoot.replaceChildren(
@@ -1564,6 +1775,7 @@ async function route() {
     window.requestAnimationFrame(() => viewRoot.classList.add("is-ready"));
   }
   window.scrollTo({ top: 0, behavior: "auto" });
+  viewRoot.scrollTop = 0;
 }
 
 G.go = go;
@@ -1599,7 +1811,15 @@ G.newInvestigation = async function newInvestigation() {
         label: "Descrição",
         type: "textarea",
         rows: 3,
-        placeholder: "Escopo, contexto ou objetivo do analista",
+        placeholder: "Escopo e contexto",
+      },
+      {
+        name: "objective",
+        label: "Objetivo",
+        type: "textarea",
+        rows: 2,
+        maxlength: 2000,
+        placeholder: "A pergunta que o caso precisa responder",
       },
     ],
     submitLabel: "Criar investigação",
@@ -1725,7 +1945,11 @@ function commandActions() {
 }
 
 function commandNavItems() {
-  return G.NAV.flatMap((group) =>
+  const groups = [
+    ...G.NAV,
+    { label: "Configurações", items: G.EXTRA_VIEWS },
+  ];
+  return groups.flatMap((group) =>
     group.items
       .filter((item) => moduleEnabled(item.module))
       .map((item) => ({
@@ -2008,8 +2232,8 @@ function renderDisplayMenu() {
       el("span", {}, "Salvo neste workspace"),
     ),
     displayGroup("TEMA", [
-      displayChoice("Escuro", "interface.theme", "dark", theme === "dark"),
-      displayChoice("Alto contraste", "interface.theme", "contrast", theme === "contrast"),
+      displayChoice("Claro", "interface.theme", "dark", theme === "dark"),
+      displayChoice("Alto contraste (escuro)", "interface.theme", "contrast", theme === "contrast"),
     ]),
     displayGroup("DENSIDADE", [
       displayChoice("Confortável", "interface.density", "comfortable", density === "comfortable"),
@@ -2067,24 +2291,35 @@ function closeDisplayMenu() {
 /* Keyboard shortcuts                                                */
 /* ------------------------------------------------------------------ */
 
+const SHORTCUT_ROWS = [
+  ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
+  ["/", "Focar a pesquisa"],
+  ["N", "Nova investigação"],
+  ["T", "Triar texto colado"],
+  ["M", "Pesquisa multifonte"],
+  ["R", "Atualizar tela atual"],
+  ["?", "Este guia de atalhos"],
+  ["Esc", "Fechar diálogo, menu ou painel"],
+  ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
+  ["Grafo · Shift + arrastar", "Selecionar uma área"],
+  ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
+  ["Grafo · P", "Fixar ou soltar a seleção"],
+  ["Grafo · H ou Delete", "Ocultar a seleção"],
+  ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
+];
+
+G.shortcutList = function shortcutList() {
+  return el(
+    "div",
+    { class: "shortcut-list" },
+    ...SHORTCUT_ROWS.map(([keys, label]) =>
+      el("div", { class: "shortcut-row" }, el("span", {}, label), el("kbd", {}, keys)),
+    ),
+  );
+};
+
 G.openShortcuts = function openShortcuts() {
   if (document.querySelector(".shortcuts-dialog")) return;
-  const rows = [
-    ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
-    ["/", "Focar a pesquisa"],
-    ["N", "Nova investigação"],
-    ["T", "Triar texto colado"],
-    ["M", "Pesquisa multifonte"],
-    ["R", "Atualizar tela atual"],
-    ["?", "Este guia de atalhos"],
-    ["Esc", "Fechar diálogo, menu ou painel"],
-    ["Grafo · Shift + clique", "Adicionar ou tirar um nó da seleção"],
-    ["Grafo · Shift + arrastar", "Selecionar uma área"],
-    ["Grafo · Ctrl / ⌘ A", "Selecionar todos os nós visíveis"],
-    ["Grafo · P", "Fixar ou soltar a seleção"],
-    ["Grafo · H ou Delete", "Ocultar a seleção"],
-    ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
-  ];
   const dialog = el(
     "dialog",
     { class: "app-dialog shortcuts-dialog", "aria-label": "Atalhos de teclado" },
@@ -2097,32 +2332,15 @@ G.openShortcuts = function openShortcuts() {
         el(
           "div",
           {},
-          el("p", { class: "eyebrow" }, "TECLADO"),
-          el("h2", {}, "Navegue sem o mouse"),
-          el(
-            "p",
-            { class: "dialog-description" },
-            "Os atalhos são ignorados enquanto você digita em um campo.",
-          ),
+          el("h2", {}, "Atalhos de teclado"),
         ),
         el(
           "button",
           { class: "icon-button", type: "button", "aria-label": "Fechar", onClick: () => dialog.close() },
-          "×",
+          icon("close"),
         ),
       ),
-      el(
-        "div",
-        { class: "shortcut-list" },
-        ...rows.map(([keys, label]) =>
-          el(
-            "div",
-            { class: "shortcut-row" },
-            el("span", {}, label),
-            el("kbd", {}, keys),
-          ),
-        ),
-      ),
+      G.shortcutList(),
       el(
         "div",
         { class: "dialog-actions" },
@@ -2156,10 +2374,13 @@ function bindShell() {
   document.querySelector("#nav-groups").addEventListener("click", (event) => {
     if (event.target.closest("a.nav-link")) setMobileNav(false);
   });
-  newInvestigationButton.addEventListener("click", () => {
+  newInvestigationButton?.addEventListener("click", () => {
     G.newInvestigation().catch((error) => toast(error.message, "error"));
   });
-  searchButton.addEventListener("click", openSearch);
+  searchButton?.addEventListener("click", () => {
+    setMobileNav(false);
+    openSearch();
+  });
   mobileNavToggle?.addEventListener("click", () => {
     setMobileNav(!document.body.classList.contains("nav-open"));
   });

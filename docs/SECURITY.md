@@ -54,6 +54,36 @@ Out of scope:
   limitation instead of crashing the request.
 - Indicators are syntactic. The UI labels them as not reputation-checked.
 
+### Live URL check
+
+- Runs only on an explicit request with network sources allowed; the site
+  sees this machine's IP. Redirect hops go through the SSRF-safe fetch one
+  at a time (private and local destinations refused) with a browser-like
+  User-Agent, since phishing kits hide from tools.
+- The page is parsed as text; nothing on it runs in GARBAGE. The screenshot
+  uses a headless Chromium or Firefox with a temporary profile deleted
+  afterwards, a 45-second limit and JavaScript off by default. A real browser
+  loads the page's resources: with JavaScript on, a hostile page runs code in
+  that browser, so turn it on only for pages you accept that risk for.
+
+### MISP and OpenCTI
+
+- Requests go only to the configured host. Private, loopback, http and other
+  ports are accepted only when the analyst marks the server as internal, and
+  never without that host allowlist; link-local (cloud metadata), multicast
+  and unspecified addresses stay refused. Redirects stay on the same host.
+- The keys are stored with the other API keys, never returned, and scrubbed
+  from error messages. Sending a case follows the same personal-data rules
+  as the MISP export (people's records are left out).
+
+### Antivirus
+
+- ClamAV is optional. The bytes go to a clamd on this machine (a local socket
+  or a loopback TCP port; other hosts are refused) or to `clamscan` on its
+  standard input. Nothing is written to disk and nothing leaves the machine.
+- A detection is shown first among the findings; a clean result means only
+  that the installed signatures did not match.
+
 ### Evidence
 
 - Evidence is capped at 4 MiB.
@@ -62,6 +92,26 @@ Out of scope:
 - Downloads and previews use explicit content types and attachment disposition
   where appropriate.
 - Preview does not execute HTML or SVG as active content.
+
+### AI assistant
+
+- Off until the analyst stores an OpenRouter key and picks a model. The key
+  sits with the other API keys, is sent only to `openrouter.ai` and is scrubbed
+  from errors; the API never returns it.
+- Conversation text and tool results (search dossiers, case and entity
+  records the model reads) are sent to OpenRouter and the chosen model. The
+  panel says so before the first message.
+- The model has no direct database, file-system or network access. It can
+  only call the listed tools, which use the workstation's own functions and
+  their validation; it cannot create person, username or profile records,
+  and searches keep the orchestrator's limits (CPF and phone offline only).
+- Tool results are framed to the model as data; destructive tools
+  (`delete_entity`, `delete_file`) wait for the analyst's confirmation, so a
+  prompt injected through a search result cannot delete anything by itself.
+- Its files are limited to one folder, plain names, `.md/.txt/.json/.csv`,
+  1 MiB each and 200 in total, and are always served as downloads.
+- Every tool call is stored with its arguments and outcome; writes are also
+  recorded in the activity log.
 
 ### Data handling
 
@@ -81,9 +131,11 @@ Out of scope:
 - **No CSRF token.** Origin checks reduce browser-driven cross-origin requests,
   but they are not a substitute for authentication.
 - **No antivirus or sandbox.** Static analysis does not prove a file is safe.
-- **Remote connectors are opt-in.** Third-party lookups run only with
-  `intel.allow_network`; contact with the artifact's own servers also needs
-  `intel.allow_target_contact`. All requests go through the SSRF-safe client in
+- **Passive lookups are on by default; target contact is opt-in.** Third-party
+  lookups run while `intel.allow_network` is true (the default for a new
+  workspace): those services see the searched value. Contact with the
+  artifact's own servers also needs `intel.allow_target_contact`, off by
+  default. All requests go through the SSRF-safe client in
   `net.py`.
 - **API keys are stored in plaintext** in the workspace database, like every
   other record. They are never returned by the API, are sent only to their own

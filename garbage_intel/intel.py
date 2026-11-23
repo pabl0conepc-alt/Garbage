@@ -28,13 +28,11 @@ from .db import (
     require_module,
     setting_bool,
     setting_int,
-    setting_value,
     utc_now,
 )
 from .errors import NotFoundError, ValidationError
 from .intel_keys import get_secret
 from .modules.indicator_tools import inspect_value
-from . import net
 from .net import NetworkError, NetworkPolicyError
 from .validation import clean_text
 
@@ -50,12 +48,21 @@ INDICATOR_TYPES = (
     "sha256",
     "asn",
     "cve",
+    "cnpj",
+    "cpf",
+    "phone",
+    "location",
 )
 # Public platform accounts, written with a prefix (discord:<id>, roblox:<id or
 # name>, user:<name>, telegram:<name>) or as their profile/invite URL so they
 # never collide with indicators.
 ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram", "minecraft", "steam", "topic")
 ARTIFACT_TYPES = INDICATOR_TYPES + ACCOUNT_TYPES
+# Types the structural and workspace connectors understand.
+CORE_ARTIFACT_TYPES = INDICATOR_TYPES[:11]
+# Identify or reach a person: only offline connectors may take them, so no
+# source is ever asked who owns a CPF or a phone number.
+PERSONAL_ARTIFACT_TYPES = ("cpf", "phone")
 RESULT_STATUSES = (
     "pending",
     "ok",
@@ -180,6 +187,8 @@ def register_connector(connector: Connector) -> Connector:
     unknown = set(connector.accepts) - set(ARTIFACT_TYPES)
     if unknown:
         raise ValueError(f"unknown artifact types: {', '.join(sorted(unknown))}")
+    if connector.network and set(connector.accepts) & set(PERSONAL_ARTIFACT_TYPES):
+        raise ValueError("network connectors cannot accept CPF or phone numbers")
     with _REGISTRY_LOCK:
         _REGISTRY[connector.connector_id] = connector
     return connector
@@ -220,6 +229,8 @@ def _disabled_connectors(connection: Any, selected: list[Connector]) -> set[str]
 
 def detect_artifact(raw: object) -> dict[str, str]:
     """Classify one artifact without contacting any service."""
+    from .modules.intel_br_connectors import PREFIX, detect, looks_like_address
+
     value = clean_text(raw, "value", max_length=2000, required=True)
     cve = _CVE.fullmatch(value.strip())
     if cve:
@@ -227,19 +238,31 @@ def detect_artifact(raw: object) -> dict[str, str]:
     account = _detect_account(value.strip())
     if account:
         return account
+    # An explicit "cpf:", "cnpj:", "tel:" or "local:" prefix decides the type.
+    if PREFIX.match(value.strip()):
+        forced = detect(value)
+        if forced is None:
+            raise ValidationError("value does not match the type its prefix names")
+        return forced
     try:
         inspection = inspect_value(value)
-    except ValueError as exc:
-        raise ValidationError(str(exc)) from exc
+    except ValueError:
+        inspection = {}
     kind = inspection.get("kind", "")
     canonical = inspection.get("canonical", "")
-    if kind not in ARTIFACT_TYPES or not canonical:
-        raise ValidationError(
-            "value is not a supported artifact; use a domain, IP, CIDR, URL, "
-            "email, hash, ASN, CVE, discord:<id>, a Discord invite, roblox:<id or name>, "
-            "user:<name>, telegram:<name>, minecraft:<name>, steam:<name or id> or topic:<terms>"
-        )
-    return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
+    if kind in CORE_ARTIFACT_TYPES and canonical:
+        return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
+    found = detect(value)
+    if found:
+        return found
+    if looks_like_address(value):
+        return {"type": "location", "value": " ".join(value.split()), "label": "Endereço"}
+    raise ValidationError(
+        "value is not a supported artifact; use a domain, IP, CIDR, URL, "
+        "email, hash, ASN, CVE, CNPJ, CPF, phone number, address (prefix a place name with local:), "
+        "discord:<id>, a Discord invite, roblox:<id or name>, user:<name>, telegram:<name>, "
+        "minecraft:<name>, steam:<name or id> or topic:<terms>"
+    )
 
 
 def _detect_account(value: str) -> dict[str, str] | None:
@@ -460,7 +483,6 @@ def run_query(
     investigation_id: object = None,
     use_cache: bool = True,
     wait: bool = True,
-    notify: bool = True,
 ) -> dict[str, Any]:
     """Fan one artifact out to every compatible connector and persist the run.
 
@@ -556,7 +578,7 @@ def run_query(
             _write_outcome(connection, run_id, connector, ("pending", [], "", 0, False), kind, detected["value"], ran=False)
 
     job = partial(
-        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers, notify
+        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers
     )
     if wait:
         job()
@@ -644,7 +666,6 @@ def _execute(
     context: ConnectorContext,
     secrets: dict[str, str],
     workers: int,
-    notify: bool = True,
 ) -> None:
     """Run the connectors and write each one's outcome as it completes."""
     finished: set[str] = set()
@@ -676,74 +697,6 @@ def _execute(
                 (run_id,),
             )
             _finish_run(connection, run_id, kind, value, case_id)
-        if notify:
-            notify_webhook(database, run_id)
-
-
-WEBHOOK_FETCH: Callable[..., Any] = net.fetch
-
-
-def post_webhook(database: str, content: str, details: dict[str, Any], target_id: str) -> bool:
-    """POST {content, garbage} to the configured webhook; False when unset or failed."""
-    with _connection(database) as connection:
-        url = setting_value(connection, "intel.webhook_url", "")
-        if not url or not setting_bool(connection, "intel.allow_network", False):
-            return False
-    try:
-        result = WEBHOOK_FETCH(
-            url,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-            body=json.dumps({"content": content[:1900], "garbage": details}).encode("utf-8"),
-            max_bytes=64 * 1024,
-            timeout=10.0,
-        )
-        delivered = result.status < 400
-        error = "" if delivered else f"HTTP {result.status}"
-    except (NetworkError, NetworkPolicyError) as exc:
-        delivered, error = False, str(exc)
-    if not delivered:
-        with _connection(database) as connection:
-            record_activity(
-                connection,
-                action="intel-webhook",
-                target_type="webhook",
-                target_id=target_id,
-                summary=f"Webhook delivery failed: {error[:200]}",
-            )
-    return delivered
-
-
-def notify_webhook(database: str, run_id: str) -> bool:
-    """POST a short summary of a finished run to the configured webhook.
-
-    Sent only with network access allowed. Failures are recorded in the
-    activity log and never affect the run.
-    """
-    with _connection(database) as connection:
-        if not setting_value(connection, "intel.webhook_url", "") or not setting_bool(connection, "intel.allow_network", False):
-            return False
-        run = connection.execute("SELECT * FROM intel_runs WHERE id = ?", (run_id,)).fetchone()
-        rows = connection.execute(
-            """SELECT connector_id, COUNT(*) AS findings FROM intel_results
-               WHERE run_id = ? AND status = 'ok' AND (value <> '' OR result_type <> '')
-               GROUP BY connector_id ORDER BY findings DESC""",
-            (run_id,),
-        ).fetchall()
-    if run is None:
-        return False
-    sources = {row["connector_id"]: row["findings"] for row in rows}
-    lines = [f"**GARBAGE** · {run['query_type']} `{run['query_value'][:200]}` → {run['result_count']} findings ({run['status']})"]
-    lines += [f"• {connector}: {count}" for connector, count in list(sources.items())[:15]]
-    details = {
-        "run_id": run_id,
-        "query_type": run["query_type"],
-        "query_value": run["query_value"],
-        "status": run["status"],
-        "result_count": run["result_count"],
-        "sources": sources,
-    }
-    return post_webhook(database, "\n".join(lines), details, run_id)
 
 
 def recover_interrupted_runs(database: str) -> int:
@@ -803,7 +756,7 @@ def get_run(database: str, run_id: str) -> dict[str, Any]:
         if item["value"] or item["result_type"]:
             entry["count"] += 1
     ordered = sorted(sources.values(), key=lambda item: item["connector_id"])
-    return {
+    payload = {
         **dict(run),
         "progress": {
             "total": len(ordered),
@@ -812,6 +765,10 @@ def get_run(database: str, run_id: str) -> dict[str, Any]:
         "sources": ordered,
         "results": [item for item in results if item["value"] or item["result_type"]],
     }
+    from .dossier import build as build_dossier
+
+    payload["dossier"] = build_dossier(payload)
+    return payload
 
 
 def list_runs(database: str, *, limit: int = 25) -> dict[str, Any]:
@@ -933,6 +890,7 @@ PROMOTABLE_TYPES = {
     "security-contact-email": "email",
     "security-contact-url": "url",
     "security-policy": "url",
+    "typosquat": "domain",
 }
 MAX_PROMOTIONS = 50
 
@@ -1167,7 +1125,7 @@ register_connector(
         connector_id="local-structure",
         name="Structural facts",
         description="Syntax, canonical form and structural facts of the artifact; nothing leaves the machine.",
-        accepts=INDICATOR_TYPES,
+        accepts=CORE_ARTIFACT_TYPES,
         run=_structure_connector,
     )
 )
@@ -1176,7 +1134,7 @@ register_connector(
         connector_id="local-workspace",
         name="Local workspace",
         description="Exact matches in local entities, evidence, file analyses and indicator index.",
-        accepts=tuple(item for item in INDICATOR_TYPES if item != "cve"),
+        accepts=tuple(item for item in CORE_ARTIFACT_TYPES if item != "cve"),
         run=_workspace_connector,
     )
 )
@@ -1192,3 +1150,10 @@ from .modules import intel_account_connectors as _intel_account_connectors  # no
 from .modules import intel_posture_connectors as _intel_posture_connectors  # noqa: E402,F401
 from .modules import intel_web_surface as _intel_web_surface  # noqa: E402,F401
 from .modules import intel_research_connectors as _intel_research_connectors  # noqa: E402,F401
+from .modules import intel_host_connectors as _intel_host_connectors  # noqa: E402,F401
+from .modules import intel_ip_connectors as _intel_ip_connectors  # noqa: E402,F401
+from .modules import intel_list_connectors as _intel_list_connectors  # noqa: E402,F401
+from .modules import intel_ransomware_connectors as _intel_ransomware_connectors  # noqa: E402,F401
+from . import cti_platforms as _cti_platforms  # noqa: E402,F401
+from .modules import typosquat as _typosquat  # noqa: E402,F401
+from .modules import intel_br_connectors as _intel_br_connectors  # noqa: E402,F401
