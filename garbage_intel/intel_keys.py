@@ -40,6 +40,9 @@ PROVIDERS: dict[str, Provider] = {
         Provider("ai", "AI model", "https://openrouter.ai/keys", "Key for the AI investigator endpoint (OpenRouter, OpenAI, Anthropic, ...). Local servers such as Ollama need none."),
         Provider("openalex", "OpenAlex", "https://openalex.org/settings/api", "Optional: without a key, searches share a small free daily budget per IP."),
         Provider("hibp", "Have I Been Pwned", "https://haveibeenpwned.com/API/Key", "Paid key; returns only which breaches an address appeared in, never the leaked data."),
+        Provider("portaltransparencia", "Portal da Transparência (CGU)", "https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email", "Free key by e-mail; used for a CNPJ's federal sanctions (CEIS, CNEP, CEPIM, leniency), contracts and payments."),
+        Provider("misp", "MISP (your server)", "https://www.misp-project.org/", "Automation key from your MISP profile; the server address is set in Feeds CTI."),
+        Provider("opencti", "OpenCTI (your server)", "https://docs.opencti.io/", "API token from your OpenCTI profile; the server address is set in Feeds CTI."),
     )
 }
 

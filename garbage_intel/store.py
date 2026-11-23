@@ -341,13 +341,15 @@ def import_archive(database: str | Path, archive: object) -> dict[str, Any]:
 
 
 def create_investigation(
-    database: str | Path, name: str, description: str = ""
+    database: str | Path, name: str, description: str = "", objective: str = ""
 ) -> dict[str, Any]:
     name = _required_text(name, "name")
     investigation = {
         "id": new_id(),
         "name": name,
         "description": description.strip(),
+        "objective": objective.strip()[:2000],
+        "archived_at": "",
         "created_at": utc_now(),
         "status": "open",
         "updated_at": utc_now(),
@@ -355,12 +357,13 @@ def create_investigation(
     with _connection(database) as connection:
         connection.execute(
             """INSERT INTO investigations
-               (id, name, description, created_at, status, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (id, name, description, objective, created_at, status, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 investigation["id"],
                 investigation["name"],
                 investigation["description"],
+                investigation["objective"],
                 investigation["created_at"],
                 investigation["status"],
                 investigation["updated_at"],
@@ -380,8 +383,8 @@ def create_investigation(
 def list_investigations(database: str | Path) -> list[dict[str, Any]]:
     with _connection(database) as connection:
         rows = connection.execute(
-            """SELECT i.id, i.name, i.description, i.created_at, i.updated_at,
-                      i.status,
+            """SELECT i.id, i.name, i.description, i.objective, i.archived_at,
+                      i.created_at, i.updated_at, i.status,
                       (SELECT COUNT(*) FROM observations o
                        WHERE o.investigation_id = i.id) AS observation_count,
                       (SELECT COUNT(*) FROM investigation_entities ie
@@ -398,7 +401,7 @@ def list_investigations(database: str | Path) -> list[dict[str, Any]]:
 def get_investigation(database: str | Path, investigation_id: str) -> dict[str, Any]:
     with _connection(database) as connection:
         row = connection.execute(
-            """SELECT id, name, description, created_at, updated_at, status
+            """SELECT id, name, description, objective, archived_at, created_at, updated_at, status
                FROM investigations WHERE id = ?""",
             (investigation_id,),
         ).fetchone()
@@ -414,9 +417,10 @@ def update_investigation(
     name: str | None = None,
     description: str | None = None,
     status: str | None = None,
+    objective: str | None = None,
 ) -> dict[str, Any]:
-    if name is None and description is None and status is None:
-        raise ValidationError("at least one of name, description or status is required")
+    if name is None and description is None and status is None and objective is None:
+        raise ValidationError("at least one of name, description, objective or status is required")
     if name is not None:
         name = _required_text(name, "name")
     if status is not None and status not in INVESTIGATION_STATUSES:
@@ -433,19 +437,19 @@ def update_investigation(
         now = utc_now()
         next_name = name if name is not None else current["name"]
         next_status = status if status is not None else current["status"]
-        if description is None:
+        connection.execute(
+            "UPDATE investigations SET name = ?, status = ?, updated_at = ? WHERE id = ?",
+            (next_name, next_status, now, investigation_id),
+        )
+        if description is not None:
             connection.execute(
-                """UPDATE investigations
-                   SET name = ?, status = ?, updated_at = ?
-                   WHERE id = ?""",
-                (next_name, next_status, now, investigation_id),
+                "UPDATE investigations SET description = ? WHERE id = ?",
+                (description.strip(), investigation_id),
             )
-        else:
+        if objective is not None:
             connection.execute(
-                """UPDATE investigations
-                   SET name = ?, description = ?, status = ?, updated_at = ?
-                   WHERE id = ?""",
-                (next_name, description.strip(), next_status, now, investigation_id),
+                "UPDATE investigations SET objective = ? WHERE id = ?",
+                (objective.strip()[:2000], investigation_id),
             )
         if status is not None and status != current["status"]:
             connection.execute(
@@ -462,7 +466,7 @@ def update_investigation(
                 investigation_id=investigation_id,
                 summary=f"Investigation status changed to {status}",
             )
-        elif name is not None or description is not None:
+        elif name is not None or description is not None or objective is not None:
             record_activity(
                 connection,
                 action="update",
@@ -472,7 +476,7 @@ def update_investigation(
                 summary=f"Investigation details updated: {next_name}",
             )
         row = connection.execute(
-            """SELECT id, name, description, created_at, updated_at, status
+            """SELECT id, name, description, objective, archived_at, created_at, updated_at, status
                FROM investigations WHERE id = ?""",
             (investigation_id,),
         ).fetchone()
@@ -528,6 +532,19 @@ def delete_investigation(
             )
         ]
         name = investigation["name"]
+        from .custody import record as custody_record
+
+        for evidence in connection.execute(
+            "SELECT id, sha256, title FROM evidence WHERE investigation_id = ?", (investigation_id,)
+        ).fetchall():
+            custody_record(
+                connection,
+                evidence_id=evidence["id"],
+                investigation_id=investigation_id,
+                action="deleted",
+                sha256=evidence["sha256"],
+                detail=f"Deleted with investigation '{name}'",
+            )
         connection.execute(
             "DELETE FROM investigations WHERE id = ?", (investigation_id,)
         )
@@ -591,7 +608,7 @@ def set_investigation_status(
                 summary=f"Investigation status changed to {status}",
             )
         row = connection.execute(
-            """SELECT id, name, description, created_at, updated_at, status
+            """SELECT id, name, description, objective, archived_at, created_at, updated_at, status
                FROM investigations WHERE id = ?""",
             (investigation_id,),
         ).fetchone()
@@ -742,10 +759,15 @@ def _linked_sources(
     return [dict(row) for row in rows]
 
 
-def build_report(database: str | Path, investigation_id: str) -> dict[str, Any]:
+LEGACY_SECTIONS = ("summary", "entities", "relationships", "evidence", "sources", "observations", "indicators", "correlations", "limitations")
+
+
+def build_report(database: str | Path, investigation_id: str, sections: tuple[str, ...] | None = None) -> dict[str, Any]:
+    """The case report. ``sections`` (see report_sections.SECTIONS) chooses
+    what is rendered; the default keeps the original set."""
     with _connection(database) as connection:
         investigation = connection.execute(
-            """SELECT id, name, description, created_at, updated_at, status
+            """SELECT id, name, description, objective, archived_at, created_at, updated_at, status
                FROM investigations WHERE id = ?""",
             (investigation_id,),
         ).fetchone()
@@ -800,7 +822,22 @@ def build_report(database: str | Path, investigation_id: str) -> dict[str, Any]:
             "The indicator engine is disabled in the module registry; indicators "
             "and correlations were not computed."
         )
+    chosen = tuple(sections) if sections is not None else LEGACY_SECTIONS
+    extras: dict[str, Any] = {}
+    if any(name in chosen for name in ("methodology", "techniques", "custody", "graph")):
+        from . import report_sections
+
+        if "methodology" in chosen:
+            extras["methodology"] = report_sections.methodology(str(database), investigation_id)
+        if "techniques" in chosen:
+            extras["techniques"] = report_sections.techniques(str(database), investigation_id)
+        if "custody" in chosen:
+            extras["custody"] = report_sections.custody_summary(str(database), evidence)
+        if "graph" in chosen:
+            extras["graph_svg"] = report_sections.graph_svg(entities, relationships)
     return {
+        "sections": list(chosen),
+        **extras,
         "investigation": dict(investigation),
         "observations": observation_records,
         "indicators": indicator_findings,

@@ -170,7 +170,7 @@ def _run(database: str, session_id: str) -> None:
             else:
                 done_queries.add(value.lower())
                 try:
-                    run = intel.run_query(database, value=value, investigation_id=session["investigation_id"], wait=True, notify=False)
+                    run = intel.run_query(database, value=value, investigation_id=session["investigation_id"], wait=True)
                     step.update(status="ok", run_id=run["id"], findings=run["result_count"])
                     result_text = _summarise(run)
                 except ValidationError as exc:

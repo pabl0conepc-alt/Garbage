@@ -9,7 +9,7 @@
   ``SHA256SUMS`` file and a standard-library ``verify.py`` so anyone can
   check the package without GARBAGE.
 - ``verify_all`` re-hashes every stored file; the scheduler runs it daily and
-  mismatches are logged and sent to the webhook.
+  mismatches are logged and sent to the monitoring webhook.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
-from . import intel, net
+from . import custody, net
 from .db import _connection, record_activity, require_module, setting_bool, utc_now
 from .errors import NotFoundError, ValidationError
 from .evidence import MAX_EVIDENCE_BYTES, _read_stored_file, add_evidence, verify_evidence
@@ -135,15 +135,6 @@ def export_package(database: str, investigation_id: str) -> tuple[bytes, str]:
         if case is None:
             raise NotFoundError("investigation not found")
         rows = connection.execute("SELECT * FROM evidence WHERE investigation_id = ? ORDER BY recorded_at", (investigation_id,)).fetchall()
-        custody = connection.execute(
-            """SELECT target_id, action, summary, actor, created_at FROM activities
-               WHERE target_type = 'evidence' AND target_id IN (SELECT id FROM evidence WHERE investigation_id = ?)
-               ORDER BY created_at""",
-            (investigation_id,),
-        ).fetchall()
-    events: dict[str, list[dict[str, Any]]] = {}
-    for row in custody:
-        events.setdefault(row["target_id"], []).append({key: row[key] for key in ("action", "summary", "actor", "created_at")})
     buffer = io.BytesIO()
     items = []
     sums = []
@@ -169,7 +160,14 @@ def export_package(database: str, investigation_id: str) -> tuple[bytes, str]:
                     if actual != row["sha256"]:
                         item["export_note"] = "file hash differs from the hash recorded at acquisition"
                     sums.append(f"{actual}  {name}")
-            item["custody"] = events.get(row["id"], [])
+            log = custody.chain(database, row["id"])
+            item["custody"] = {
+                "intact": log["intact"],
+                "events": [
+                    {key: event.get(key) for key in ("sequence", "action", "actor", "detail", "sha256", "occurred_at", "previous_hash", "entry_hash")}
+                    for event in log["events"]
+                ],
+            }
             items.append(item)
         manifest = {
             "format": "garbage-evidence-package/1",
@@ -178,7 +176,7 @@ def export_package(database: str, investigation_id: str) -> tuple[bytes, str]:
             "items": items,
             "notes": [
                 "sha256 is the hash recorded when the evidence was acquired; sha256_at_export is the hash of the file in this package.",
-                "Custody lists every logged action on each item, oldest first.",
+                "Custody is the hash-chained event log of each item (each entry_hash covers the previous one); intact=false means it was altered.",
                 "Run `python3 verify.py` in the unzipped folder to check every file.",
             ],
         }
@@ -188,6 +186,10 @@ def export_package(database: str, investigation_id: str) -> tuple[bytes, str]:
         archive.writestr("SHA256SUMS", "\n".join(sums) + "\n")
         archive.writestr("verify.py", VERIFY_SCRIPT)
     with _connection(database) as connection:
+        for item in items:
+            if item["file"]:
+                custody.record(connection, evidence_id=item["id"], investigation_id=investigation_id, action="exported",
+                               sha256=item.get("sha256_at_export", ""), detail="verifiable evidence package")
         record_activity(connection, action="export", target_type="investigation", target_id=investigation_id,
                         investigation_id=investigation_id, summary=f"Evidence package exported ({len(items)} items)")
     safe_name = "".join(char if char.isalnum() or char in "-_" else "_" for char in case["name"])[:60] or "case"
@@ -208,12 +210,11 @@ def verify_all(database: str) -> dict[str, Any]:
         with _connection(database) as connection:
             record_activity(connection, action="integrity-alert", target_type="evidence",
                             summary=f"Integrity check: {len(problems)} item(s) failed")
-        intel.post_webhook(
-            database,
-            "**GARBAGE evidence integrity**\n" + "\n".join(f"• {item['title'][:80]}: {item['status']}" for item in problems[:15]),
-            {"problems": problems},
-            "evidence",
-        )
+        from .monitoring import notify_webhook
+
+        notify_webhook(database, {"event": "integrity", "monitor": "", "value": "",
+                                  "added": [f"{item['title'][:80]}: {item['status']}" for item in problems[:15]],
+                                  "removed": [], "error": "", "time": utc_now()})
     return {"checked": len(ids), "counts": counts, "problems": problems, "checked_at": utc_now()}
 
 

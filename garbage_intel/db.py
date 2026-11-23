@@ -16,7 +16,7 @@ from typing import Any, Iterator
 from .errors import ModuleDisabledError
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 17
 
 COLLECTION_BASES = ("public", "authorized", "user-provided")
 INVESTIGATION_STATUSES = ("open", "closed", "cancelled")
@@ -218,6 +218,38 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "enabled",
     ),
     (
+        "live-check",
+        "Live URL check",
+        "On request, follows a URL's redirects, reads the final page (forms, loaded hosts, obfuscation, downloads) and takes a screenshot with a headless browser.",
+        "Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "cti-exchange",
+        "MISP and OpenCTI exchange",
+        "Send cases to your MISP or OpenCTI and look values up in them from the multi-source search.",
+        "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "antivirus",
+        "Antivirus scan",
+        "ClamAV scan of analysed files when ClamAV is installed (clamd socket or clamscan); local, nothing leaves the machine.",
+        "Evidence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "ai-assistant",
+        "AI assistant",
+        "Side panel where a model chosen on OpenRouter works the workstation through its own logged actions.",
+        "Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
         "intel-orchestrator",
         "Multi-source intelligence",
         "Explicit fan-out of one artifact to registered connectors, with cache, rate limits, source status and provenance.",
@@ -322,6 +354,46 @@ DEFAULT_MODULES: tuple[tuple[str, str, str, str, str, str], ...] = (
         "enabled",
     ),
     (
+        "taxii-feeds",
+        "TAXII feeds",
+        "TAXII 2.1 client: discovery, collections and paged pulls of STIX objects, with indicators written into cases.",
+        "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "sigma-rules",
+        "Sigma rules",
+        "SigmaHQ detection rules downloaded on request and indexed by ATT&CK technique.",
+        "Threat Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "plugins",
+        "Local plugins",
+        "Analyst-written transforms with a manifest, declared permissions and approval by code digest, run in a separate process.",
+        "System",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "monitoring",
+        "Monitoring",
+        "Saved multi-source queries re-run on a schedule while the server runs, with differences between runs and in-app notifications.",
+        "Intelligence",
+        "1.0.0",
+        "enabled",
+    ),
+    (
+        "geoint",
+        "GEOINT map",
+        "Local map of EXIF GPS positions from analysed images and approximate network locations from queries.",
+        "Analysis",
+        "1.0.0",
+        "enabled",
+    ),
+    (
         "cti-export",
         "CTI export",
         "STIX 2.1 bundles, MISP events and IOC CSV built from case records.",
@@ -347,10 +419,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "search.result_limit": "6",
     "report.include_limitations": "true",
     "report.include_raw_observations": "true",
-    "intel.allow_network": "false",
+    "intel.allow_network": "true",
     "intel.allow_target_contact": "false",
     "intel.max_workers": "4",
-    "intel.webhook_url": "",
     "ai.provider": "disabled",
     "ai.base_url": "",
     "ai.model": "",
@@ -409,7 +480,7 @@ SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
     {
         "key": "intel.allow_network",
         "label": "Allow intelligence connectors to use the network",
-        "description": "When false, connectors that contact external services are skipped; local connectors still run.",
+        "description": "On by default: public sources (registries, certificate logs, reputation services) receive the queried value. When false, only local connectors run.",
         "type": "boolean",
         "options": ["false", "true"],
     },
@@ -426,13 +497,6 @@ SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
         "description": "Maximum connectors queried at the same time for one artifact.",
         "type": "integer",
         "options": ["1", "16"],
-    },
-    {
-        "key": "intel.webhook_url",
-        "label": "Webhook for finished queries",
-        "description": "HTTPS URL that receives a summary when a multi-source query finishes (Discord webhooks work as-is). Empty disables it; requires network access.",
-        "type": "url",
-        "options": [""],
     },
     {
         "key": "ai.provider",
@@ -1029,25 +1093,202 @@ def _migrate_search_index(connection: sqlite3.Connection) -> None:
            )"""
     )
     for kind, table, title, body in SEARCH_SOURCES:
-        new_title, new_body = title.format(r="NEW."), body.format(r="NEW.")
-        connection.executescript(
-            f"""CREATE TRIGGER IF NOT EXISTS search_{table}_insert AFTER INSERT ON {table} BEGIN
-                    INSERT INTO search_index (kind, ref_id, title, body)
-                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
-                END;
-                CREATE TRIGGER IF NOT EXISTS search_{table}_update AFTER UPDATE ON {table} BEGIN
-                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
-                    INSERT INTO search_index (kind, ref_id, title, body)
-                    VALUES ('{kind}', NEW.id, {new_title}, {new_body});
-                END;
-                CREATE TRIGGER IF NOT EXISTS search_{table}_delete AFTER DELETE ON {table} BEGIN
-                    DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
-                END;"""
-        )
-        connection.execute(
-            f"""INSERT INTO search_index (kind, ref_id, title, body)
-                SELECT '{kind}', id, {title.format(r="")}, {body.format(r="")} FROM {table}"""
-        )
+        _index_source(connection, kind, table, title, body)
+
+
+def _index_source(connection: sqlite3.Connection, kind: str, table: str, title: str, body: str) -> None:
+    """(Re)create the triggers that keep one table in the search index and
+    reindex its rows."""
+    new_title, new_body = title.format(r="NEW."), body.format(r="NEW.")
+    connection.executescript(
+        f"""DROP TRIGGER IF EXISTS search_{table}_insert;
+            DROP TRIGGER IF EXISTS search_{table}_update;
+            DROP TRIGGER IF EXISTS search_{table}_delete;
+            CREATE TRIGGER search_{table}_insert AFTER INSERT ON {table} BEGIN
+                INSERT INTO search_index (kind, ref_id, title, body)
+                VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+            END;
+            CREATE TRIGGER search_{table}_update AFTER UPDATE ON {table} BEGIN
+                DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+                INSERT INTO search_index (kind, ref_id, title, body)
+                VALUES ('{kind}', NEW.id, {new_title}, {new_body});
+            END;
+            CREATE TRIGGER search_{table}_delete AFTER DELETE ON {table} BEGIN
+                DELETE FROM search_index WHERE kind = '{kind}' AND ref_id = OLD.id;
+            END;"""
+    )
+    connection.execute("DELETE FROM search_index WHERE kind = ?", (kind,))
+    connection.execute(
+        f"""INSERT INTO search_index (kind, ref_id, title, body)
+            SELECT '{kind}', id, {title.format(r="")}, {body.format(r="")} FROM {table}"""
+    )
+
+
+def _migrate_search_objective(connection: sqlite3.Connection) -> None:
+    """Version 14: the case objective (version 12) joins the case's searchable
+    text. Without FTS5 there is no index and the LIKE search covers it."""
+    exists = connection.execute("SELECT 1 FROM sqlite_master WHERE name = 'search_index'").fetchone()
+    if exists:
+        _index_source(connection, "investigations", "investigations", "{r}name", "{r}description || ' ' || {r}objective")
+
+
+def _migrate_cti_feeds(connection: sqlite3.Connection) -> None:
+    """Version 10: TAXII servers and objects, Sigma rules."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS taxii_servers (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               discovery_url TEXT NOT NULL,
+               username TEXT NOT NULL DEFAULT '',
+               password TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               last_pull_at TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS taxii_objects (
+               server_id TEXT NOT NULL REFERENCES taxii_servers(id) ON DELETE CASCADE,
+               collection_id TEXT NOT NULL,
+               object_id TEXT NOT NULL,
+               type TEXT NOT NULL,
+               name TEXT NOT NULL DEFAULT '',
+               pattern TEXT NOT NULL DEFAULT '',
+               modified TEXT NOT NULL DEFAULT '',
+               raw_json TEXT NOT NULL,
+               fetched_at TEXT NOT NULL,
+               PRIMARY KEY (server_id, collection_id, object_id)
+           );
+           CREATE INDEX IF NOT EXISTS taxii_objects_type ON taxii_objects(type);
+           CREATE TABLE IF NOT EXISTS taxii_pulls (
+               id TEXT PRIMARY KEY,
+               server_id TEXT NOT NULL,
+               collection_id TEXT NOT NULL,
+               started_at TEXT NOT NULL,
+               finished_at TEXT NOT NULL,
+               object_count INTEGER NOT NULL DEFAULT 0,
+               page_count INTEGER NOT NULL DEFAULT 0,
+               status TEXT NOT NULL,
+               error TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS sigma_rules (
+               id TEXT PRIMARY KEY,
+               title TEXT NOT NULL,
+               status TEXT NOT NULL DEFAULT '',
+               level TEXT NOT NULL DEFAULT '',
+               description TEXT NOT NULL DEFAULT '',
+               tags TEXT NOT NULL DEFAULT '',
+               techniques TEXT NOT NULL DEFAULT '',
+               product TEXT NOT NULL DEFAULT '',
+               category TEXT NOT NULL DEFAULT '',
+               service TEXT NOT NULL DEFAULT '',
+               references_json TEXT NOT NULL DEFAULT '[]',
+               falsepositives_json TEXT NOT NULL DEFAULT '[]',
+               date TEXT NOT NULL DEFAULT '',
+               modified TEXT NOT NULL DEFAULT '',
+               path TEXT NOT NULL DEFAULT '',
+               raw TEXT NOT NULL DEFAULT ''
+           );
+           CREATE TABLE IF NOT EXISTS sigma_meta (
+               version TEXT NOT NULL,
+               source_url TEXT NOT NULL,
+               sha256 TEXT NOT NULL,
+               rule_count INTEGER NOT NULL,
+               fetched_at TEXT NOT NULL
+           );"""
+    )
+
+
+def _migrate_plugins(connection: sqlite3.Connection) -> None:
+    """Version 11: approvals of local plugins."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS plugin_registry (
+               id TEXT PRIMARY KEY,
+               enabled INTEGER NOT NULL DEFAULT 0,
+               approved_sha256 TEXT NOT NULL DEFAULT '',
+               approved_manifest_json TEXT NOT NULL DEFAULT '{}',
+               approved_at TEXT NOT NULL DEFAULT '',
+               last_error TEXT NOT NULL DEFAULT ''
+           );"""
+    )
+
+
+def _migrate_cases(connection: sqlite3.Connection) -> None:
+    """Version 12: case objective and archive flag, evidence custody chain
+    and evidence notes."""
+    _ensure_column(connection, "investigations", "objective", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(connection, "investigations", "archived_at", "TEXT NOT NULL DEFAULT ''")
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS evidence_events (
+               id TEXT PRIMARY KEY,
+               evidence_id TEXT NOT NULL,
+               investigation_id TEXT NOT NULL,
+               sequence INTEGER NOT NULL,
+               action TEXT NOT NULL,
+               actor TEXT NOT NULL DEFAULT 'analyst',
+               detail TEXT NOT NULL DEFAULT '',
+               sha256 TEXT NOT NULL DEFAULT '',
+               occurred_at TEXT NOT NULL,
+               previous_hash TEXT NOT NULL,
+               entry_hash TEXT NOT NULL,
+               UNIQUE (evidence_id, sequence)
+           );
+           CREATE INDEX IF NOT EXISTS evidence_events_evidence ON evidence_events(evidence_id, sequence);
+           CREATE TABLE IF NOT EXISTS evidence_notes (
+               id TEXT PRIMARY KEY,
+               evidence_id TEXT NOT NULL REFERENCES evidence(id) ON DELETE CASCADE,
+               body TEXT NOT NULL,
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS evidence_notes_evidence ON evidence_notes(evidence_id, created_at);"""
+    )
+    from .custody import backfill
+
+    backfill(connection)
+
+
+def _migrate_monitoring(connection: sqlite3.Connection) -> None:
+    """Version 13: monitors, their runs and notifications."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS monitors (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               query_type TEXT NOT NULL,
+               query_value TEXT NOT NULL,
+               connectors_json TEXT NOT NULL,
+               interval_minutes INTEGER NOT NULL,
+               investigation_id TEXT REFERENCES investigations(id) ON DELETE SET NULL,
+               enabled INTEGER NOT NULL DEFAULT 1,
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL,
+               next_run_at TEXT NOT NULL,
+               last_run_at TEXT NOT NULL DEFAULT '',
+               last_status TEXT NOT NULL DEFAULT ''
+           );
+           CREATE INDEX IF NOT EXISTS monitors_due ON monitors(enabled, next_run_at);
+           CREATE TABLE IF NOT EXISTS monitor_runs (
+               id TEXT PRIMARY KEY,
+               monitor_id TEXT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+               intel_run_id TEXT NOT NULL DEFAULT '',
+               trigger TEXT NOT NULL,
+               status TEXT NOT NULL,
+               added_count INTEGER NOT NULL DEFAULT 0,
+               removed_count INTEGER NOT NULL DEFAULT 0,
+               diff_json TEXT NOT NULL DEFAULT '{}',
+               error TEXT NOT NULL DEFAULT '',
+               started_at TEXT NOT NULL,
+               finished_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS monitor_runs_monitor ON monitor_runs(monitor_id, started_at);
+           CREATE TABLE IF NOT EXISTS notifications (
+               id TEXT PRIMARY KEY,
+               kind TEXT NOT NULL,
+               monitor_id TEXT REFERENCES monitors(id) ON DELETE CASCADE,
+               monitor_run_id TEXT NOT NULL DEFAULT '',
+               title TEXT NOT NULL,
+               body TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               read_at TEXT NOT NULL DEFAULT ''
+           );
+           CREATE INDEX IF NOT EXISTS notifications_unread ON notifications(read_at, created_at);"""
+    )
 
 
 def _migrate_workspace(connection: sqlite3.Connection) -> None:
@@ -1063,40 +1304,69 @@ def _migrate_workspace(connection: sqlite3.Connection) -> None:
     )
 
 
-def _migrate_watchlists(connection: sqlite3.Connection) -> None:
-    """Version 10: watchlists and their alerts."""
+def _migrate_assistant(connection: sqlite3.Connection) -> None:
+    """Version 15: assistant conversations; tool messages double as the action log."""
     connection.executescript(
-        """CREATE TABLE IF NOT EXISTS watches (
+        """CREATE TABLE IF NOT EXISTS assistant_conversations (
                id TEXT PRIMARY KEY,
-               value TEXT NOT NULL,
-               query_type TEXT NOT NULL,
-               label TEXT NOT NULL DEFAULT '',
-               interval_minutes INTEGER NOT NULL,
-               enabled INTEGER NOT NULL DEFAULT 1,
-               fingerprint_json TEXT NOT NULL DEFAULT '',
-               warnings_json TEXT NOT NULL DEFAULT '[]',
-               last_run_id TEXT NOT NULL DEFAULT '',
-               last_checked_at TEXT NOT NULL DEFAULT '',
-               last_error TEXT NOT NULL DEFAULT '',
+               title TEXT NOT NULL,
+               model TEXT NOT NULL DEFAULT '',
+               status TEXT NOT NULL DEFAULT 'idle',
+               error TEXT NOT NULL DEFAULT '',
                created_at TEXT NOT NULL,
-               UNIQUE (query_type, value)
+               updated_at TEXT NOT NULL
            );
-           CREATE TABLE IF NOT EXISTS watch_alerts (
-               id TEXT PRIMARY KEY,
-               watch_id TEXT NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
-               run_id TEXT NOT NULL DEFAULT '',
-               kind TEXT NOT NULL,
-               summary TEXT NOT NULL,
-               details_json TEXT NOT NULL DEFAULT '{}',
-               read INTEGER NOT NULL DEFAULT 0,
+           CREATE TABLE IF NOT EXISTS assistant_messages (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               conversation_id TEXT NOT NULL REFERENCES assistant_conversations(id) ON DELETE CASCADE,
+               role TEXT NOT NULL,
+               content TEXT NOT NULL DEFAULT '',
+               tool_calls_json TEXT NOT NULL DEFAULT '',
+               tool_call_id TEXT NOT NULL DEFAULT '',
+               tool_name TEXT NOT NULL DEFAULT '',
+               action_json TEXT NOT NULL DEFAULT '',
                created_at TEXT NOT NULL
            );
-           CREATE INDEX IF NOT EXISTS watch_alerts_created ON watch_alerts(created_at DESC);"""
+           CREATE INDEX IF NOT EXISTS assistant_messages_conversation
+               ON assistant_messages(conversation_id, id);"""
+    )
+
+
+
+def _migrate_cti_pushes(connection: sqlite3.Connection) -> None:
+    """Version 16: the remote event or report each case was last sent to."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS cti_pushes (
+               platform TEXT NOT NULL,
+               investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+               remote_id TEXT NOT NULL,
+               link TEXT NOT NULL DEFAULT '',
+               object_count INTEGER NOT NULL DEFAULT 0,
+               pushed_at TEXT NOT NULL,
+               PRIMARY KEY (platform, investigation_id)
+           );"""
+    )
+
+
+
+def _migrate_live_checks(connection: sqlite3.Connection) -> None:
+    """Version 17: live URL checks and their screenshots."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS live_checks (
+               id TEXT PRIMARY KEY,
+               url TEXT NOT NULL,
+               final_url TEXT NOT NULL DEFAULT '',
+               result_json TEXT NOT NULL,
+               screenshot BLOB,
+               investigation_id TEXT REFERENCES investigations(id) ON DELETE SET NULL,
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS live_checks_url ON live_checks(url, created_at);"""
     )
 
 
 def _migrate_geo_points(connection: sqlite3.Connection) -> None:
-    """Version 11: map points added by the analyst."""
+    """Version 18: map points added by the analyst."""
     connection.executescript(
         """CREATE TABLE IF NOT EXISTS geo_points (
                id TEXT PRIMARY KEY,
@@ -1114,7 +1384,7 @@ def _migrate_geo_points(connection: sqlite3.Connection) -> None:
 
 
 def _migrate_ai_sessions(connection: sqlite3.Connection) -> None:
-    """Version 12: AI investigator sessions."""
+    """Version 19: AI investigator sessions."""
     connection.executescript(
         """CREATE TABLE IF NOT EXISTS ai_sessions (
                id TEXT PRIMARY KEY,
@@ -1142,23 +1412,35 @@ MIGRATIONS = (
     (7, "Offline MITRE ATT&CK and case techniques", _migrate_attack),
     (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
     (9, "Full-text search index", _migrate_search_index),
-    (10, "Watchlists and alerts", _migrate_watchlists),
-    (11, "Analyst map points", _migrate_geo_points),
-    (12, "AI investigator sessions", _migrate_ai_sessions),
+    (10, "TAXII feeds and Sigma rules", _migrate_cti_feeds),
+    (11, "Local plugin approvals", _migrate_plugins),
+    (12, "Case objective and archive, evidence custody and notes", _migrate_cases),
+    (13, "Monitors and notifications", _migrate_monitoring),
+    (14, "Search index covers case objectives", _migrate_search_objective),
+    (15, "AI assistant conversations and action log", _migrate_assistant),
+    (16, "Cases sent to MISP and OpenCTI", _migrate_cti_pushes),
+    (17, "Live URL checks with screenshots", _migrate_live_checks),
+    (18, "Analyst map points", _migrate_geo_points),
+    (19, "AI investigator sessions", _migrate_ai_sessions),
 )
 
 
 def initialize(database: str | Path) -> None:
     with _connection(database) as connection:
         connection.executescript(BASE_SCHEMA)
-        applied = {
-            row["version"]
-            for row in connection.execute("SELECT version FROM schema_migrations")
-        }
+        # Two development lines once numbered different migrations 10-12, so a
+        # migration counts as applied by its description, and a recorded version
+        # held by another migration moves the new record past the defined range.
+        rows = connection.execute("SELECT version, description FROM schema_migrations").fetchall()
+        applied = {row["description"] for row in rows}
+        taken = {row["version"] for row in rows}
         for version, description, apply in MIGRATIONS:
-            if version in applied:
+            if description in applied:
                 continue
             apply(connection)
+            if version in taken:
+                version = max(max(taken), MIGRATIONS[-1][0]) + 1
+            taken.add(version)
             connection.execute(
                 """INSERT INTO schema_migrations (version, description, applied_at)
                    VALUES (?, ?, ?)""",

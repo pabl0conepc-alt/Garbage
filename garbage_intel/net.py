@@ -91,9 +91,15 @@ def is_public_address(value: str) -> bool:
 
 
 def validate_url(
-    url: str, *, allowed_hosts: Iterable[str] | None = None, allow_http: bool = False
+    url: str, *, allowed_hosts: Iterable[str] | None = None, allow_http: bool = False, allow_private: bool = False
 ) -> tuple[str, str, int, str]:
-    """Return (scheme, host, port, request_target) or raise NetworkPolicyError."""
+    """Return (scheme, host, port, request_target) or raise NetworkPolicyError.
+
+    ``allow_private`` is for a server the analyst registered by hand (an
+    internal MISP or OpenCTI): private and loopback addresses and any port
+    are accepted, but only together with an explicit host allowlist."""
+    if allow_private and not allowed_hosts:
+        raise NetworkPolicyError("private destinations need an explicit host allowlist")
     if not isinstance(url, str) or len(url) > 4096:
         raise NetworkPolicyError("url must be a string of at most 4096 characters")
     if any(ord(character) < 33 for character in url):
@@ -111,15 +117,15 @@ def validate_url(
         port = parts.port or ALLOWED_PORTS[scheme]
     except ValueError as exc:
         raise NetworkPolicyError("url has an invalid port") from exc
-    if port != ALLOWED_PORTS[scheme]:
+    if port != ALLOWED_PORTS[scheme] and not allow_private:
         raise NetworkPolicyError(f"port is not allowed: {port}")
     try:
         literal = ipaddress.ip_address(host.strip("[]"))
     except ValueError:
         literal = None
-    if literal is not None and not is_public_address(str(literal)):
+    if literal is not None and not (is_public_address(str(literal)) or (allow_private and _private_ok(str(literal)))):
         raise NetworkPolicyError("destination address is not publicly routable")
-    if host in {"localhost"} or host.endswith((".localhost", ".local", ".internal")):
+    if not allow_private and (host in {"localhost"} or host.endswith((".localhost", ".local", ".internal"))):
         raise NetworkPolicyError("destination host is local")
     if allowed_hosts is not None:
         allowed = {item.lower() for item in allowed_hosts}
@@ -131,11 +137,20 @@ def validate_url(
     return scheme, host, port, target
 
 
-def _resolve_public(host: str, port: int, resolver: Resolver) -> str:
+def _private_ok(value: str) -> bool:
+    """Private or loopback, never link-local (cloud metadata), multicast or unspecified."""
+    try:
+        address = ipaddress.ip_address(value.split("%", 1)[0])
+    except ValueError:
+        return False
+    return (address.is_private or address.is_loopback) and not (address.is_link_local or address.is_multicast or address.is_unspecified)
+
+
+def _resolve_public(host: str, port: int, resolver: Resolver, allow_private: bool = False) -> str:
     addresses = list(dict.fromkeys(resolver(host, port)))
     if not addresses:
         raise NetworkError(f"could not resolve host: {host}")
-    blocked = [address for address in addresses if not is_public_address(address)]
+    blocked = [address for address in addresses if not (is_public_address(address) or (allow_private and _private_ok(address)))]
     if blocked:
         # One private answer is enough to refuse: a mixed answer set is the
         # usual shape of a rebinding attempt.
@@ -203,7 +218,9 @@ def fetch(
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     allowed_hosts: Iterable[str] | None = None,
     allow_http: bool = False,
+    allow_private: bool = False,
     max_redirects: int = MAX_REDIRECTS,
+    follow_redirects: bool = True,
     keep_all_headers: bool = False,
     resolver: Resolver | None = None,
     connection_factory: ConnectionFactory | None = None,
@@ -232,9 +249,9 @@ def fetch(
     redirects: list[str] = []
     while True:
         scheme, host, port, target = validate_url(
-            current, allowed_hosts=allowed, allow_http=allow_http
+            current, allowed_hosts=allowed, allow_http=allow_http, allow_private=allow_private
         )
-        address = _resolve_public(host, port, resolver)
+        address = _resolve_public(host, port, resolver, allow_private)
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise NetworkError("request exceeded its time budget")
@@ -253,7 +270,7 @@ def fetch(
                 value = value[:4096]
                 # Repeated headers (Set-Cookie) are kept line by line.
                 kept[name] = f"{kept[name]}\n{value}" if name in kept else value
-            if status in _REDIRECT_STATUSES and "location" in kept:
+            if status in _REDIRECT_STATUSES and "location" in kept and follow_redirects:
                 response.read(64 * 1024)
                 if len(redirects) >= max_redirects:
                     raise NetworkError("too many redirects")
@@ -279,7 +296,8 @@ def fetch(
             raise NetworkError(f"connection to {host} failed") from exc
         finally:
             connection.close()
-        kept.pop("location", None)
+        if follow_redirects:
+            kept.pop("location", None)
         return FetchResult(
             url=url,
             final_url=current,

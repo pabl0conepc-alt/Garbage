@@ -86,7 +86,7 @@
     return `layer-${TYPE_LAYER_CLASS[type] || "other"}`;
   }
 
-  function updatePath(source, target, radiusOf) {
+  function cardPath(source, target, cardSize) {
     const dx = target.x - source.x;
     const dy = target.y - source.y;
     const distance = Math.max(1, Math.hypot(dx, dy));
@@ -99,11 +99,55 @@
     return `M ${x1} ${y1} L ${x2} ${y2}`;
   }
 
+  /* Nodes are cards: a compact box (icon, kind, name) that opens to show
+     what is recorded about the entity. Edges run between card borders as
+     curves, top-to-bottom when one card sits under the other. */
+  const CARD_W = 212;
+  const CARD_H = 54;
+  const CARD_LINE = 16;
+  const CARD_SPREAD_X = 2;
+  const CARD_SPREAD_Y = 1.7;
+
+  function wrap(text, width = 34, limit = 10) {
+    const lines = [];
+    for (const paragraph of String(text || "").split("\n")) {
+      let line = "";
+      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+        if ((line + " " + word).trim().length > width && line) {
+          lines.push(line);
+          line = word.length > width ? `${word.slice(0, width - 1)}…` : word;
+        } else line = `${line} ${word}`.trim();
+      }
+      if (line) lines.push(line);
+      if (lines.length >= limit) break;
+    }
+    return lines.length > limit ? [...lines.slice(0, limit - 1), "…"] : lines;
+  }
+
+  function cardPath(source, target, sizeOf) {
+    const a = sizeOf(source);
+    const b = sizeOf(target);
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    if (Math.abs(dy) > (a.h + b.h) / 2 + 12) {
+      const down = dy > 0;
+      const y1 = source.y + (down ? a.h / 2 : -a.h / 2);
+      const y2 = target.y + (down ? -b.h / 2 - 4 : b.h / 2 + 4);
+      const middle = (y1 + y2) / 2;
+      return `M ${source.x} ${y1} C ${source.x} ${middle}, ${target.x} ${middle}, ${target.x} ${y2}`;
+    }
+    const right = dx > 0;
+    const x1 = source.x + (right ? a.w / 2 : -a.w / 2);
+    const x2 = target.x + (right ? -b.w / 2 - 4 : b.w / 2 + 4);
+    const middle = (x1 + x2) / 2;
+    return `M ${x1} ${source.y} C ${middle} ${source.y}, ${middle} ${target.y}, ${x2} ${target.y}`;
+  }
+
   async function renderGraph(root, params) {
     let investigationId = params[0] || "";
     let entityType = "";
     let query = "";
-    let layout = "force";
+    let layout = "hierarchical";
     let graph = { nodes: [], edges: [], investigation: null };
     let selectedId = null;
     let focusedId = null;
@@ -128,6 +172,8 @@
     let pinned = new Map();
     let hidden = new Set();
     let marquee = null;
+    let expanded = new Set();
+    let lastPointer = null;
     const tools = G.graphTools;
     const history = new tools.ViewHistory();
     const enrichment = new Map();
@@ -137,10 +183,11 @@
       class: "graph-svg",
       width: "100%",
       height: "100%",
-      role: "img",
+      role: "group",
       "aria-label": "Grafo de relacionamentos entre entidades",
     });
     const legendHost = el("div", { class: "graph-legend" });
+    const truncatedNotice = el("p", { class: "graph-truncated", role: "status", hidden: true });
     const defs = svgEl("defs");
     const arrow = svgEl("marker", {
       id: "graph-arrow",
@@ -204,42 +251,133 @@
       );
     }
 
-    const shell = el(
+    const actionButtons = el(
       "div",
-      { class: "graph-shell" },
-      el(
-        "div",
-        { class: "graph-stage" },
-        canvas,
-        el(
-          "div",
-          { class: "graph-controls" },
-          button("−", () => zoomBy(0.85), { title: "Diminuir zoom" }),
-          button("＋", () => zoomBy(1.18), { title: "Aumentar zoom" }),
-          button("Ajustar", () => fit(), { title: "Ajustar grafo à tela" }),
-          undoButton,
-          redoButton,
-          exportMenu,
-          button("Importar", () => importDialog(), { title: "Importar GraphML ou JSON, ou restaurar um layout exportado" }),
-          hiddenButton,
-          button("Redefinir", () => {
-            record();
-            focusedId = null;
-            selectedId = null;
-            selection = new Set();
-            pinned = new Map();
-            hidden = new Set();
-            persistView();
-            layoutNodes();
-            fit();
-            render();
-          }, { title: "Soltar fixações, mostrar ocultos e refazer o layout" }),
-        ),
-        legendHost,
-        map.element,
-      ),
-      inspector,
+      { class: "graph-dock-actions" },
+      button("−", () => zoomBy(0.85), { title: "Diminuir zoom (-)" }),
+      button("＋", () => zoomBy(1.18), { title: "Aumentar zoom (+)" }),
+      button("Ajustar", () => fit(), { title: "Ajustar grafo à tela (F)" }),
+      button("Nova entidade", () => newEntity(null), { title: "Nova entidade (N ou duplo clique no vazio)" }),
+      button("Ligar", () => linkSelected(), { title: "Ligar as duas caixas selecionadas (L)" }),
+      button("Expandir infraestrutura", () => autoPivot(1), { title: "Pivô automático da caixa selecionada: IPs, servidores, AS e DNS passivo (X; Shift+X vai dois níveis)" }),
+      undoButton,
+      redoButton,
+      exportMenu,
+      button("Importar", () => importDialog(), { title: "Importar GraphML ou JSON, ou restaurar um layout exportado" }),
+      hiddenButton,
+      button("Redefinir", () => {
+        record();
+        focusedId = null;
+        selectedId = null;
+        selection = new Set();
+        pinned = new Map();
+        hidden = new Set();
+        expanded = new Set();
+        persistView();
+        layoutNodes();
+        fit();
+        render();
+      }, { title: "Soltar fixações, fechar caixas, mostrar ocultos e refazer o layout" }),
     );
+    const stage = el("div", { class: "graph-stage" }, canvas, truncatedNotice, map.element);
+    const shell = el("div", { class: "graph-shell graph-full" }, stage);
+    const dock = el("aside", { class: "graph-dock", "aria-label": "Controles do grafo" });
+    const dockEdge = el("div", { class: "graph-dock-edge", "aria-hidden": "true" });
+    const layoutList = el("div", { class: "graph-dock-layouts", role: "group", "aria-label": "Tipo de grafo" });
+    const dockPin = el("button", { class: "graph-dock-pin", type: "button", "aria-pressed": "false", title: "Manter o painel aberto (D)" }, "Fixar");
+    dockPin.addEventListener("click", () => toggleDockPin());
+    let placeAt = null;
+
+    function toggleDockPin(force) {
+      const pinnedOpen = force ?? !shell.classList.contains("dock-pinned");
+      shell.classList.toggle("dock-pinned", pinnedOpen);
+      dockPin.setAttribute("aria-pressed", String(pinnedOpen));
+      dockPin.textContent = pinnedOpen ? "Soltar" : "Fixar";
+    }
+
+    function setLayout(key) {
+      if (!G.graphLayouts[key]) return;
+      layoutSelect.value = key;
+      layoutSelect.dispatchEvent(new Event("change"));
+    }
+
+    function renderLayoutList() {
+      layoutList.replaceChildren(
+        ...Object.entries(G.graphLayouts).map(([key, item], index) => {
+          const node = el(
+            "button",
+            { type: "button", class: `graph-dock-layout${key === layout ? " is-active" : ""}`, "aria-pressed": String(key === layout) },
+            el("kbd", {}, String(index + 1)),
+            el("span", {}, item.label),
+          );
+          node.addEventListener("click", () => setLayout(key));
+          return node;
+        }),
+      );
+    }
+
+    function centerOn(node) {
+      const rect = canvas.getBoundingClientRect();
+      viewport.zoom = Math.max(viewport.zoom, 0.9);
+      viewport.x = Math.round((rect.width || 960) / 2 - node.x * viewport.zoom);
+      viewport.y = Math.round((rect.height || 620) / 2 - node.y * viewport.zoom);
+      applyTransform();
+    }
+
+    async function newEntity(point) {
+      await G.entityDialog({}, {
+        onSaved: async (entity) => {
+          if (investigationId) {
+            try {
+              await api(`/api/investigations/${investigationId}/entities`, { method: "POST", body: JSON.stringify({ entity_id: entity.id }) });
+            } catch {
+              /* already in the case */
+            }
+          }
+          placeAt = point ? { id: entity.id, x: point.x, y: point.y } : null;
+          selectedId = entity.id;
+          selection = new Set([entity.id]);
+          await loadGraph({ keepPositions: true });
+        },
+      });
+    }
+
+    /* Automatic infrastructure pivot: DNS, AS, reverse name and recent
+       passive DNS become linked cards around the chosen domain or IP. */
+    async function autoPivot(depth = 1) {
+      const node = nodes.find((item) => item.id === (selectedId || [...selection][0]));
+      if (!node || !["domain", "ipv4", "ipv6"].includes(node.entity_type)) {
+        toast("Selecione a caixa de um domínio ou IP e aperte X.", "warning");
+        return;
+      }
+      toast(`Expandindo ${node.name}…`);
+      try {
+        const result = await api("/api/graph/pivot", {
+          method: "POST",
+          body: JSON.stringify({ entity_id: node.id, depth, investigation_id: investigationId || null }),
+        });
+        toast(`${result.created} caixa(s) nova(s), ${result.reused} já existente(s), ${result.relationships} ligação(ões)${result.skipped ? `; ${result.skipped} deixada(s) de fora pelo limite` : ""}.`);
+        await loadGraph({ keepPositions: true });
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+
+    async function linkSelected() {
+      const ids = [...selection];
+      if (ids.length !== 2) {
+        toast("Selecione duas caixas (Shift + clique) e aperte L.", "warning");
+        return;
+      }
+      const chosen = ids.map((id) => nodes.find((node) => node.id === id)).filter(Boolean);
+      await G.relationshipDialog({
+        investigationId,
+        entities: chosen,
+        sourceId: chosen[0].id,
+        targetId: chosen[1].id,
+        onSaved: async () => loadGraph({ keepPositions: true }),
+      });
+    }
 
     const caseSelect = el(
       "select",
@@ -278,6 +416,7 @@
       { class: "input compact-select", "aria-label": "Layout do grafo" },
       ...Object.entries(G.graphLayouts).map(([key, item]) => el("option", { value: key }, item.label)),
     );
+    layoutSelect.value = layout;
     const sizeSelect = el(
       "select",
       { class: "input compact-select", "aria-label": "Tamanho dos nós" },
@@ -318,6 +457,11 @@
         const data = await api(`/api/graph?${parameters}`);
         if (token !== requestToken) return;
         graph = data;
+        const cut = data.truncated;
+        truncatedNotice.hidden = !cut;
+        truncatedNotice.textContent = cut
+          ? `Mostrando as ${cut.nodes_shown} entidades mais conectadas de ${cut.nodes_total} e ${cut.edges_shown} de ${cut.edges_total} relacionamentos. Filtre por tipo ou pesquise para ver o restante.`
+          : "";
         nodes = data.nodes.map((node) => ({ ...node, degree: 0 }));
         const byId = new Map(nodes.map((node) => [node.id, node]));
         edges = data.edges.filter(
@@ -340,6 +484,12 @@
         if (previous) {
           placeAround(previous);
           enrichment.clear();
+          const placed = placeAt && byId.get(placeAt.id);
+          if (placed) {
+            placed.x = placeAt.x;
+            placed.y = placeAt.y;
+          }
+          placeAt = null;
         } else {
           history.clear();
           fit();
@@ -380,6 +530,12 @@
         rootId: selectedId,
         analytics: graph.analytics,
       });
+      const centerX = nodes.reduce((sum, node) => sum + node.x, 0) / nodes.length;
+      const centerY = nodes.reduce((sum, node) => sum + node.y, 0) / nodes.length;
+      for (const node of nodes) {
+        node.x = centerX + (node.x - centerX) * CARD_SPREAD_X;
+        node.y = centerY + (node.y - centerY) * CARD_SPREAD_Y;
+      }
       for (const node of nodes) {
         const pin = pinned.get(node.id);
         if (pin) {
@@ -414,7 +570,7 @@
         const index = placed.get(anchorId) || 0;
         placed.set(anchorId, index + 1);
         const angle = index * 2.399963;
-        const distance = 120 + 22 * Math.floor(index / 7);
+        const distance = 260 + 40 * Math.floor(index / 7);
         node.x = anchor.x + Math.cos(angle) * distance;
         node.y = anchor.y + Math.sin(angle) * distance;
       }
@@ -553,6 +709,35 @@
       } catch (error) {
         toast("O navegador não permitiu copiar para a área de transferência.", "warning");
       }
+    }
+
+    function kindOf(node) {
+      if (node.entity_type === "other" && node.description) return node.description.split("\n")[0].slice(0, 30);
+      return entityTypeLabel(node.entity_type);
+    }
+
+    function cardLines(node) {
+      const lines = [];
+      if (node.identifier && node.identifier !== node.name) lines.push(...wrap(node.identifier, 31, 2));
+      const description = node.entity_type === "other" ? (node.description || "").split("\n").slice(1).join("\n") : node.description;
+      if (description) lines.push(...wrap(description, 31, 9));
+      const facts = [G.statusLabel ? G.statusLabel(node.verification_status) : node.verification_status, `${node.degree} ligação(ões)`];
+      lines.push(facts.filter(Boolean).join(" · "));
+      return lines;
+    }
+
+    function cardSize(node) {
+      if (!expanded.has(node.id)) return { w: CARD_W, h: CARD_H };
+      return { w: CARD_W, h: CARD_H + 10 + cardLines(node).length * CARD_LINE };
+    }
+
+    function toggleExpand(ids) {
+      const open = !ids.every((id) => expanded.has(id));
+      for (const id of ids) {
+        if (open) expanded.add(id);
+        else expanded.delete(id);
+      }
+      render();
     }
 
     function radiusOf(node) {
@@ -952,7 +1137,8 @@
           },
         }),
       );
-      shell.hidden = viewMode !== "graph";
+      canvas.hidden = viewMode !== "graph";
+      map.element.hidden = viewMode !== "graph";
       altHost.hidden = viewMode === "graph";
       if (viewMode === "graph") return;
       const { shown, links } = visibleSubgraph();
@@ -1105,7 +1291,7 @@
         if (!source || !target) continue;
         const near = hoverId && (edge.source_entity_id === hoverId || edge.target_entity_id === hoverId);
         const path = svgEl("path", {
-          d: updatePath(source, target, radiusOf),
+          d: cardPath(source, target, cardSize),
           class: `graph-edge verification-${edge.verification_status || "not-verified"}${pathEdgeIds.has(edge.id) ? " is-path" : ""}${near ? " is-near" : ""}`,
           "data-id": edge.id,
           "marker-end": "url(#graph-arrow)",
@@ -1140,7 +1326,8 @@
       svg.classList.toggle("has-hover", Boolean(hoverId));
 
       for (const node of visibleNodes) {
-        const radius = radiusOf(node);
+        const size = cardSize(node);
+        const open = expanded.has(node.id);
         const group = svgEl("g", {
           class: `graph-node type-${node.entity_type}${node.id === selectedId || selection.has(node.id) ? " is-selected" : ""}${pinned.has(node.id) ? " is-pinned" : ""}${pathIds.has(node.id) ? " is-path" : ""}${neighbourIds.has(node.id) ? " is-near" : ""}`,
           transform: `translate(${node.x} ${node.y})`,
@@ -1149,15 +1336,28 @@
           "aria-label": `${entityTypeLabel(node.entity_type)}: ${node.name}`,
           "data-id": node.id,
         });
-        const circle = svgEl("circle", {
-          r: radius,
-          fill: nodeColor(node),
-          class: "graph-node-circle",
-        });
-        circle.append(svgEl("title", {}, `${node.name} · ${entityTypeLabel(node.entity_type)}${pinned.has(node.id) ? " · fixada" : ""}`));
-        group.append(circle, tools.glyph(node.entity_type, radius));
+        const left = -size.w / 2;
+        const top = -size.h / 2;
+        const card = svgEl("rect", { x: left, y: top, width: size.w, height: size.h, rx: 12, class: "graph-card" });
+        card.append(svgEl("title", {}, `${node.name} · ${entityTypeLabel(node.entity_type)}${pinned.has(node.id) ? " · fixada" : ""}`));
+        const name = node.name.length > 24 ? `${node.name.slice(0, 23)}…` : node.name;
+        const kind = kindOf(node);
+        group.append(
+          card,
+          svgEl("circle", { cx: left + 27, cy: top + CARD_H / 2, r: 15, fill: nodeColor(node), class: "graph-card-icon" }),
+          svgEl("g", { transform: `translate(${left + 27} ${top + CARD_H / 2})` }, tools.glyph(node.entity_type, 11)),
+          svgEl("text", { x: left + 52, y: top + 22, class: "graph-card-kind" }, kind.length > 28 ? `${kind.slice(0, 27)}…` : kind),
+          svgEl("text", { x: left + 52, y: top + 40, class: "graph-card-name" }, name),
+          svgEl("path", { d: open ? `M ${-left - 22} ${top + 25} l 5 -5 l 5 5` : `M ${-left - 22} ${top + 22} l 5 5 l 5 -5`, class: "graph-card-chevron" }),
+        );
+        if (open) {
+          group.append(svgEl("line", { x1: left + 12, x2: -left - 12, y1: top + CARD_H, y2: top + CARD_H, class: "graph-card-rule" }));
+          cardLines(node).forEach((line, index) => {
+            group.append(svgEl("text", { x: left + 14, y: top + CARD_H + 20 + index * CARD_LINE, class: "graph-card-line" }, line));
+          });
+        }
         if (pinned.has(node.id)) {
-          group.append(svgEl("circle", { cx: radius * 0.74, cy: -radius * 0.74, r: 3.4, class: "graph-pin" }));
+          group.append(svgEl("circle", { cx: -left - 8, cy: top + 8, r: 3.4, class: "graph-pin" }));
         }
         group.addEventListener("click", (event) => event.stopPropagation());
         group.addEventListener("keydown", (event) => {
@@ -1167,16 +1367,14 @@
           }
         });
         group.addEventListener("pointerenter", () => {
-          // Rendering replaces this element; re-entering the same node must
-          // not render again or hover would loop and swallow clicks.
           if (dragging || panning || marquee || hoverId === node.id) return;
           hoverId = node.id;
-          render();
+          applyHover();
         });
         group.addEventListener("pointerleave", () => {
           if (hoverId !== node.id) return;
           hoverId = null;
-          render();
+          applyHover();
         });
         group.addEventListener("pointerdown", (event) => {
           if (event.button !== 0) return;
@@ -1196,21 +1394,10 @@
           canvas.focus({ preventScroll: true });
         });
         nodeLayer.append(group);
-        const label = svgEl(
-          "text",
-          {
-            x: node.x,
-            y: node.y + radius + 14,
-            "text-anchor": "middle",
-            class: `graph-node-label${neighbourIds.has(node.id) ? " is-near" : ""}`,
-            "data-id": node.id,
-          },
-          node.name.length > 26 ? `${node.name.slice(0, 24)}…` : node.name,
-        );
-        labelLayer.append(label);
       }
       canvas.classList.toggle("is-empty", nodes.length === 0);
       legendHost.replaceChildren(legend());
+      renderLayoutList();
       hiddenButton.hidden = hidden.size === 0;
       hiddenButton.textContent = `Ocultas (${hidden.size}) · mostrar`;
       syncHistoryButtons();
@@ -1219,8 +1406,29 @@
       renderInspector();
     }
 
+    /* Hover only changes classes: rebuilding every element on each
+       pointerenter cost about half a second on a 1,500-node case. */
+    function applyHover() {
+      const near = new Set(hoverId ? [hoverId] : []);
+      const touching = new Set();
+      if (hoverId) {
+        for (const edge of edges) {
+          if (edge.source_entity_id === hoverId) near.add(edge.target_entity_id);
+          else if (edge.target_entity_id === hoverId) near.add(edge.source_entity_id);
+          else continue;
+          touching.add(edge.id);
+        }
+      }
+      svg.classList.toggle("has-hover", Boolean(hoverId));
+      for (const group of nodeLayer.querySelectorAll(".graph-node")) group.classList.toggle("is-near", near.has(group.dataset.id));
+      for (const label of labelLayer.querySelectorAll(".graph-node-label")) label.classList.toggle("is-near", near.has(label.dataset.id));
+      for (const path of edgeLayer.querySelectorAll(".graph-edge")) path.classList.toggle("is-near", touching.has(path.dataset.id));
+      for (const text of labelLayer.querySelectorAll(".graph-edge-label")) text.classList.toggle("is-near", touching.has(text.dataset.edge));
+    }
+
     function updateGeometry() {
       const byId = new Map(nodes.map((node) => [node.id, node]));
+      const edgeById = new Map(edges.map((edge) => [edge.id, edge]));
       for (const group of nodeLayer.querySelectorAll(".graph-node")) {
         const node = byId.get(group.dataset.id);
         if (!node) continue;
@@ -1235,14 +1443,14 @@
         label.setAttribute("y", node.y + radius + 14);
       }
       for (const path of edgeLayer.querySelectorAll(".graph-edge")) {
-        const edge = edges.find((item) => item.id === path.dataset.id);
+        const edge = edgeById.get(path.dataset.id);
         if (!edge) continue;
         const source = byId.get(edge.source_entity_id);
         const target = byId.get(edge.target_entity_id);
-        if (source && target) path.setAttribute("d", updatePath(source, target, radiusOf));
+        if (source && target) path.setAttribute("d", cardPath(source, target, cardSize));
       }
       for (const text of labelLayer.querySelectorAll(".graph-edge-label")) {
-        const edge = edges.find((item) => item.id === text.dataset.edge);
+        const edge = edgeById.get(text.dataset.edge);
         const source = edge && byId.get(edge.source_entity_id);
         const target = edge && byId.get(edge.target_entity_id);
         if (!source || !target) continue;
@@ -1269,10 +1477,10 @@
         applyTransform();
         return;
       }
-      const minX = Math.min(...nodes.map((node) => node.x)) - 80;
-      const minY = Math.min(...nodes.map((node) => node.y)) - 80;
-      const maxX = Math.max(...nodes.map((node) => node.x)) + 80;
-      const maxY = Math.max(...nodes.map((node) => node.y)) + 80;
+      const minX = Math.min(...nodes.map((node) => node.x - cardSize(node).w / 2)) - 40;
+      const minY = Math.min(...nodes.map((node) => node.y - cardSize(node).h / 2)) - 40;
+      const maxX = Math.max(...nodes.map((node) => node.x + cardSize(node).w / 2)) + 40;
+      const maxY = Math.max(...nodes.map((node) => node.y + cardSize(node).h / 2)) + 40;
       const rect = canvas.getBoundingClientRect();
       const width = Math.max(1, maxX - minX);
       const height = Math.max(1, maxY - minY);
@@ -1821,7 +2029,14 @@
         dragging.group.classList.remove("is-dragging");
         const { node, moved } = dragging;
         dragging = null;
-        if (!moved) selectNode(node.id, event.shiftKey || event.ctrlKey || event.metaKey);
+        if (!moved) {
+          const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+          if (!additive) {
+            if (expanded.has(node.id)) expanded.delete(node.id);
+            else expanded.add(node.id);
+          }
+          selectNode(node.id, additive);
+        }
         else {
           if (pinned.size) persistView();
           render();
@@ -1851,6 +2066,18 @@
         }
       }
     }
+    canvas.addEventListener("pointermove", (event) => {
+      lastPointer = worldPoint(event);
+    });
+    canvas.addEventListener("dblclick", (event) => {
+      const group = event.target.closest(".graph-node");
+      if (!group) {
+        newEntity(worldPoint(event));
+        return;
+      }
+      const node = nodes.find((item) => item.id === group.dataset.id);
+      if (node) pivotDialog(node);
+    });
     canvas.addEventListener("pointerup", endPointer);
     canvas.addEventListener("pointercancel", endPointer);
 
@@ -1880,6 +2107,39 @@
         event.preventDefault();
         const ids = targets();
         pinNodes(ids, !ids.every((id) => pinned.has(id)));
+      } else if (!modifier && /^[1-9]$/.test(event.key) && Object.keys(G.graphLayouts)[Number(event.key) - 1]) {
+        event.preventDefault();
+        setLayout(Object.keys(G.graphLayouts)[Number(event.key) - 1]);
+      } else if (!modifier && key === "f") {
+        event.preventDefault();
+        fit();
+        render();
+      } else if (!modifier && key === "e") {
+        event.preventDefault();
+        const ids = targets();
+        toggleExpand(ids.length ? ids : [...visibleNodeSet()]);
+      } else if (!modifier && key === "n") {
+        event.preventDefault();
+        newEntity(lastPointer);
+      } else if (!modifier && key === "l") {
+        event.preventDefault();
+        linkSelected();
+      } else if (!modifier && key === "x") {
+        event.preventDefault();
+        autoPivot(event.shiftKey ? 2 : 1);
+      } else if (!modifier && key === "d") {
+        event.preventDefault();
+        toggleDockPin();
+      } else if (!modifier && (event.key === "+" || event.key === "=")) {
+        event.preventDefault();
+        zoomBy(1.18);
+      } else if (!modifier && event.key === "-") {
+        event.preventDefault();
+        zoomBy(0.85);
+      } else if (!modifier && event.key === "/") {
+        event.preventDefault();
+        toggleDockPin(true);
+        search.focus();
       }
     });
 
@@ -1927,36 +2187,83 @@
       }, 260);
     });
 
-    root.replaceChildren(
-      pageHeader({
-        eyebrow: "ANÁLISE DE RELACIONAMENTOS",
-        title: "Grafo de relacionamentos",
-        description:
-          "Nós de entidades e relacionamentos registrados pelo analista no registro compartilhado. Arestas são associações, não provas.",
-        actions: [
-          button("Quadro", () => go("board", investigationId || undefined)),
-          button("Entidades", () => go("entities")),
-        ],
-      }),
+    const shortcuts = [
+      ["1–8", "Tipo de grafo"],
+      ["Clique", "Abrir ou fechar a caixa"],
+      ["Shift + clique", "Selecionar várias"],
+      ["Shift + arrastar", "Selecionar por área"],
+      ["Duplo clique no vazio · N", "Nova entidade ali"],
+      ["Duplo clique na caixa", "Pesquisar a partir dela"],
+      ["L", "Ligar as duas selecionadas"],
+      ["X · Shift+X", "Expandir a infraestrutura (1 ou 2 níveis)"],
+      ["E", "Abrir/fechar as selecionadas (ou todas)"],
+      ["P · H", "Fixar · ocultar"],
+      ["F · + · −", "Ajustar · zoom"],
+      ["Ctrl+Z · Ctrl+Shift+Z", "Desfazer · refazer"],
+      ["/", "Filtrar entidades"],
+      ["D", "Fixar este painel"],
+      ["Esc", "Limpar seleção"],
+    ];
+    dock.append(
+      el("div", { class: "graph-dock-head" }, el("strong", {}, "Grafo"), dockPin),
+      el("section", { class: "graph-dock-section" }, el("h3", {}, "Tipo de grafo"), layoutList),
       el(
-        "div",
-        { class: "graph-toolbar" },
-        caseSelect,
-        typeSelect,
-        layoutSelect,
-        colorSelect,
-        sizeSelect,
-        depthSelect,
-        el("label", { class: "toolbar-check", for: "graph-edge-labels" }, edgeLabelToggle, "Rótulos nas arestas"),
-        el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
+        "section",
+        { class: "graph-dock-section" },
+        el("h3", {}, "Configurações"),
+        el("div", { class: "graph-dock-fields" }, caseSelect, typeSelect, colorSelect, depthSelect,
+          el("div", { class: "search-field" }, el("span", { class: "search-field-icon" }, G.icon("search", { size: 14 })), search),
+          el("label", { class: "toolbar-check", for: "graph-edge-labels" }, edgeLabelToggle, "Rótulos nas ligações")),
+        viewTabs,
+        legendHost,
       ),
-      viewTabs,
-      shell,
-      altHost,
+      el("section", { class: "graph-dock-section" }, el("h3", {}, "Ações"), actionButtons),
+      el("section", { class: "graph-dock-section" }, el("h3", {}, "Selecionado"), inspector),
+      el(
+        "section",
+        { class: "graph-dock-section" },
+        el("h3", {}, "Atalhos"),
+        el("dl", { class: "graph-dock-keys" }, ...shortcuts.flatMap(([keys, text]) => [el("dt", {}, keys), el("dd", {}, text)])),
+      ),
     );
+    stage.append(altHost, dockEdge, dock);
+    root.replaceChildren(shell);
+
+    // Requests from the assistant panel (assistant.js).
+    function onAssistant(event) {
+      const request = event.detail || {};
+      if (request.action === "layout" && G.graphLayouts[request.layout]) {
+        layoutSelect.value = request.layout;
+        layoutSelect.dispatchEvent(new Event("change"));
+      } else if (request.action === "focus" && nodes.some((node) => node.id === request.entity_id)) {
+        selectFromView(request.entity_id);
+        selectNode(request.entity_id);
+      } else if (request.action === "fit") {
+        fit();
+        render();
+      }
+    }
+    window.addEventListener("garbage:graph", onAssistant);
+    G.cleanupFns.push(() => window.removeEventListener("garbage:graph", onAssistant));
 
     renderViewTabs();
+    // From the search "+": the searched artifact roots the tree, the added box is opened.
+    const focusTarget = G.state.graphFocus;
+    G.state.graphFocus = null;
+    if (G.state.graphRoot) {
+      selectedId = G.state.graphRoot;
+      G.state.graphRoot = null;
+    }
     await loadGraph();
+    const target = focusTarget && nodes.find((node) => node.id === focusTarget);
+    if (target) {
+      selectedId = target.id;
+      selection = new Set([target.id]);
+      expanded.add(target.id);
+      centerOn(target);
+      render();
+    }
+    canvas.focus({ preventScroll: true });
   }
 
   G.views.graph = renderGraph;

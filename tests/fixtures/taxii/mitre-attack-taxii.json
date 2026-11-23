@@ -1,0 +1,181 @@
+{
+ "discovery": {
+  "title": "MITRE ATT&CK TAXII 2.1",
+  "description": "This API Root contains TAXII 2.1 REST API endpoints that serve MITRE ATT&CK STIX",
+  "default": "/api/v21",
+  "api_roots": [
+   "/api/v21",
+   "/api/v21/attack-1.0",
+   "/api/v21/attack-2.0"
+  ]
+ },
+ "collections": {
+  "collections": [
+   {
+    "id": "x-mitre-collection--90c00720-636b-4485-b342-8751d232bf09",
+    "title": "ICS ATT&CK",
+    "description": "The ATT&CK for Industrial Control Systems (ICS) knowledge ba",
+    "can_read": true,
+    "can_write": false,
+    "media_types": [
+     "application/taxii+json;version=2.1",
+     "application/taxii+json"
+    ]
+   },
+   {
+    "id": "x-mitre-collection--1f5f1533-f617-4ca8-9ab4-6a02367fa019",
+    "title": "Enterprise ATT&CK",
+    "description": "ATT&CK for Enterprise provides a knowledge base of real-worl",
+    "can_read": true,
+    "can_write": false,
+    "media_types": [
+     "application/taxii+json;version=2.1",
+     "application/taxii+json"
+    ]
+   }
+  ]
+ },
+ "page1": {
+  "more": true,
+  "next": "1",
+  "objects": [
+   {
+    "id": "attack-pattern--9a505987-ab05-4f46-a9a6-6441442eec3b",
+    "modified": "2026-10-13T17:48:43.971Z",
+    "created": "2020-05-21T17:43:26.506Z",
+    "type": "attack-pattern",
+    "spec_version": "2.1",
+    "created_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "revoked": false,
+    "object_marking_refs": [
+     "marking-definition--fa42a846-8d90-4e51-bc29-71d5b4802168"
+    ],
+    "name": "Adversary-in-the-Middle",
+    "kill_chain_phases": [
+     {
+      "kill_chain_name": "mitre-ics-attack",
+      "phase_name": "collection"
+     }
+    ],
+    "x_mitre_attack_spec_version": "3.3.0",
+    "x_mitre_contributors": [
+     "Conrad Layne - GE Digital"
+    ],
+    "x_mitre_deprecated": false,
+    "x_mitre_domains": [
+     "ics-attack"
+    ],
+    "x_mitre_is_subtechnique": false,
+    "x_mitre_modified_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "x_mitre_platforms": [
+     "Embedded",
+     "Windows",
+     "Linux",
+     "Network Devices"
+    ],
+    "x_mitre_version": "2.0"
+   },
+   {
+    "id": "attack-pattern--1b22b676-9347-4c55-9a35-ef0dc653db5b",
+    "modified": "2026-10-13T17:48:33.649Z",
+    "created": "2020-05-21T17:43:26.506Z",
+    "type": "attack-pattern",
+    "spec_version": "2.1",
+    "created_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "revoked": false,
+    "object_marking_refs": [
+     "marking-definition--fa42a846-8d90-4e51-bc29-71d5b4802168"
+    ],
+    "name": "Denial of Service",
+    "kill_chain_phases": [
+     {
+      "kill_chain_name": "mitre-ics-attack",
+      "phase_name": "inhibit-response-function"
+     }
+    ],
+    "x_mitre_attack_spec_version": "3.3.0",
+    "x_mitre_deprecated": false,
+    "x_mitre_domains": [
+     "ics-attack"
+    ],
+    "x_mitre_is_subtechnique": false,
+    "x_mitre_modified_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "x_mitre_platforms": [
+     "Embedded",
+     "Windows",
+     "Linux",
+     "Network Devices"
+    ],
+    "x_mitre_version": "1.1"
+   }
+  ]
+ },
+ "page2": {
+  "more": true,
+  "next": "2",
+  "objects": [
+   {
+    "id": "attack-pattern--338f4364-2269-4f70-9079-b20384b16628",
+    "modified": "2026-10-13T17:48:55.761Z",
+    "created": "2026-04-20T20:50:34.107Z",
+    "type": "attack-pattern",
+    "spec_version": "2.1",
+    "created_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "revoked": false,
+    "object_marking_refs": [
+     "marking-definition--fa42a846-8d90-4e51-bc29-71d5b4802168"
+    ],
+    "name": "Block Operational Technology Message",
+    "kill_chain_phases": [
+     {
+      "kill_chain_name": "mitre-ics-attack",
+      "phase_name": "inhibit-response-function"
+     }
+    ],
+    "x_mitre_attack_spec_version": "3.3.0",
+    "x_mitre_deprecated": false,
+    "x_mitre_domains": [
+     "ics-attack"
+    ],
+    "x_mitre_is_subtechnique": false,
+    "x_mitre_modified_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "x_mitre_platforms": [
+     "Embedded",
+     "Windows",
+     "Linux"
+    ],
+    "x_mitre_version": "1.0"
+   },
+   {
+    "id": "attack-pattern--b5b9bacb-97f2-4249-b804-47fd44de1f95",
+    "modified": "2025-04-15T19:59:00.088Z",
+    "created": "2020-05-21T17:43:26.506Z",
+    "type": "attack-pattern",
+    "spec_version": "2.1",
+    "created_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "revoked": false,
+    "object_marking_refs": [
+     "marking-definition--fa42a846-8d90-4e51-bc29-71d5b4802168"
+    ],
+    "name": "Loss of Availability",
+    "kill_chain_phases": [
+     {
+      "kill_chain_name": "mitre-ics-attack",
+      "phase_name": "impact"
+     }
+    ],
+    "x_mitre_attack_spec_version": "3.2.0",
+    "x_mitre_deprecated": false,
+    "x_mitre_domains": [
+     "ics-attack"
+    ],
+    "x_mitre_is_subtechnique": false,
+    "x_mitre_modified_by_ref": "identity--c78cb6e5-0c4b-4611-8297-d1b8b55e40b5",
+    "x_mitre_platforms": [
+     "None"
+    ],
+    "x_mitre_version": "1.0"
+   }
+  ]
+ }
+}
