@@ -35,18 +35,25 @@
         <div class="sidebar-head">
           <a class="brand" href="#/overview" aria-label="GARBAGE — visão geral" data-tooltip="GARBAGE — Visão geral">
             <img class="brand-logo" src="/logo-mark.png" alt="" width="30" height="31">
-            <span class="brand-copy"><strong>GARBAGE</strong><small>Estação de inteligência</small></span>
+            <span class="brand-copy"><strong>GARBAGE</strong></span>
           </a>
           <button class="icon-button sidebar-close" id="sidebar-close" type="button" aria-label="Fechar navegação" data-icon="close"></button>
         </div>
+        <button class="rail-button rail-search" id="global-search-button" type="button"
+                aria-label="Pesquisar e executar comandos (Ctrl K)" data-tooltip="Pesquisar e comandos · Ctrl K" data-icon="search">
+          <span class="nav-label">Pesquisar</span>
+        </button>
         <nav id="nav-groups" class="nav-groups" aria-label="Módulos do workspace"></nav>
         <div class="sidebar-bottom">
-          <button class="rail-button sidebar-shortcut" id="shortcuts-button" type="button"
-                  aria-label="Atalhos de teclado" data-tooltip="Atalhos de teclado" data-icon="keyboard">
-            <span class="nav-label">Atalhos de teclado</span>
-          </button>
-          <span class="rail-local" tabindex="0" role="note" aria-label="Workspace local: os dados permanecem nesta máquina. Observações são registradas pelo analista e não verificadas de forma independente."
-                data-tooltip="Workspace local — os dados permanecem nesta máquina. Observações são registradas pelo analista e não verificadas de forma independente.">
+          <div class="display-wrap">
+            <button class="rail-button display-toggle" id="display-toggle" type="button"
+                    aria-label="Preferências de exibição" aria-expanded="false" aria-haspopup="true"
+                    data-tooltip="Exibição" data-icon="display"><span class="nav-label">Exibição</span></button>
+            <div class="display-menu" id="display-menu" hidden></div>
+          </div>
+          <div class="nav-bottom" id="nav-bottom"></div>
+          <span class="rail-local" tabindex="0" role="note" aria-label="Workspace local: os dados permanecem nesta máquina."
+                data-tooltip="Somente local — os dados permanecem nesta máquina.">
             <span class="live-dot" aria-hidden="true"></span>
             <span class="nav-label">Somente local</span>
           </span>
@@ -54,39 +61,11 @@
       </aside>
 
       <main class="main-shell" id="main-content" tabindex="-1">
-        <header class="topbar">
-          <div class="topbar-start">
-            <button class="icon-button mobile-nav-toggle" id="mobile-nav-toggle" type="button"
-                    aria-label="Abrir navegação" aria-expanded="false" aria-controls="sidebar" data-icon="menu"></button>
-            <nav class="breadcrumb" aria-label="Localização">
-              <span class="breadcrumb-root" id="breadcrumb-group">Workspace</span>
-              <span class="breadcrumb-sep" aria-hidden="true">/</span>
-              <strong id="page-breadcrumb" aria-current="page">Visão geral</strong>
-            </nav>
-          </div>
-          <div class="topbar-actions">
-            <button class="search-trigger" id="global-search-button" type="button" aria-label="Pesquisar no workspace e executar comandos">
-              <span class="search-trigger-icon" data-icon="search" aria-hidden="true"></span>
-              <span class="search-trigger-label">Pesquisar ou executar comando</span>
-              <kbd>Ctrl K</kbd>
-            </button>
-            <span class="local-indicator" data-tooltip="O servidor escuta apenas em loopback (127.0.0.1). Nada sai desta máquina." tabindex="0">
-              <span class="live-dot" aria-hidden="true"></span> Local
-            </span>
-            <div class="display-wrap">
-              <button class="icon-button display-toggle" id="display-toggle" type="button"
-                      aria-label="Preferências de exibição" aria-expanded="false" aria-haspopup="true"
-                      data-tooltip="Preferências de exibição" data-icon="display"></button>
-              <div class="display-menu" id="display-menu" hidden></div>
-            </div>
-            <button class="button button-primary button-small" id="new-investigation-button" type="button" aria-label="Nova investigação" data-tooltip="Nova investigação (N)">
-              <span data-icon="plus" aria-hidden="true"></span><span class="new-case-label">Nova investigação</span>
-            </button>
-          </div>
-        </header>
-
+        <button class="icon-button mobile-nav-toggle" id="mobile-nav-toggle" type="button"
+                aria-label="Abrir navegação" aria-expanded="false" aria-controls="sidebar" data-icon="menu"></button>
         <div id="status" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="loading-state" class="loading-bar" aria-hidden="true"></div>
+        <div id="area-tabs-host" class="area-tabs-host"></div>
         <div id="view-root" class="view-root" tabindex="-1"></div>
       </main>
     </div>

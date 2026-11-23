@@ -776,110 +776,50 @@
   /* Overview                                                         */
   /* ---------------------------------------------------------------- */
 
-  /* Overview as a dashboard: four numbers with their weekly change, an
+  /* Overview as a dashboard: four numbers, an
      area chart of searches and new records, and recent work in tabs. */
 
-  const DAY_MS = 86400000;
   const RECORD_ACTIONS = new Set(["create", "link", "observation", "evidence", "analysis"]);
   const RUN_STATUS = { completed: ["Concluída", "success"], "completed-with-errors": ["Concluída com falhas", "warning"], running: ["Em andamento", "info"], failed: ["Falhou", "danger"] };
 
-  function weekChange(current, previous) {
-    if (!current && !previous) return { text: "estável", tone: "flat" };
-    if (!previous) return { text: "novo", tone: "up" };
-    const change = Math.round(((current - previous) / previous) * 100);
-    if (change === 0) return { text: "0%", tone: "flat" };
-    return { text: `${change > 0 ? "+" : ""}${change}%`, tone: change > 0 ? "up" : "down" };
-  }
-
-  function lastWeeks(values) {
-    const current = values.slice(-7).reduce((sum, value) => sum + value, 0);
-    const previous = values.slice(-14, -7).reduce((sum, value) => sum + value, 0);
-    return { current, previous };
-  }
-
-  function dashCard({ label, value, change = null, foot }) {
-    const arrow = change && change.tone !== "flat" ? G.icon("arrow", { size: 12, className: `dash-trend-arrow is-${change.tone}` }) : null;
+  function dashCard({ label, value }) {
     return el(
       "article",
       { class: "dash-card" },
-      el(
-        "div",
-        { class: "dash-card-top" },
-        el("span", { class: "dash-card-label" }, label),
-        change ? el("span", { class: `dash-trend is-${change.tone}`, title: "Últimos 7 dias contra os 7 anteriores" }, arrow, change.text) : null,
-      ),
+      el("span", { class: "dash-card-label" }, label),
       el("strong", { class: "dash-card-value" }, value),
-      el("p", { class: "dash-card-foot" }, foot),
     );
   }
 
   async function renderOverview(root) {
-    const [data, analytics, cases, runs, watches] = await Promise.all([
+    const [data, analytics, runs, watches] = await Promise.all([
       api("/api/overview"),
       moduleEnabled("analytics") ? api("/api/analytics?days=90").catch(() => null) : null,
-      G.loadInvestigations(true).catch(() => []),
       moduleEnabled("intel-orchestrator") ? api("/api/intel/runs?limit=8").catch(() => null) : null,
       moduleEnabled("intel-orchestrator") ? api("/api/watchlist").catch(() => null) : null,
     ]);
     const totals = data.totals;
     const number = (value) => Number(value || 0).toLocaleString("pt-BR");
 
-    // Weekly comparisons come from real dates; a card without one shows no trend.
-    const now = Date.now();
-    const created = (cases || []).map((item) => Date.parse(item.created_at)).filter(Number.isFinite);
-    const casesThisWeek = created.filter((time) => now - time < 7 * DAY_MS).length;
-    const casesLastWeek = created.filter((time) => now - time >= 7 * DAY_MS && now - time < 14 * DAY_MS).length;
     const days = analytics?.activity.days || [];
     const searches = analytics?.intel_runs_by_day || [];
     const records = days.map((_, index) =>
       (analytics?.activity.series || []).filter((item) => RECORD_ACTIONS.has(item.key)).reduce((sum, item) => sum + item.values[index], 0),
     );
-    const searchWeeks = lastWeeks(searches);
-    const recordWeeks = lastWeeks(records);
+    const searchesThisWeek = searches.slice(-7).reduce((sum, value) => sum + value, 0);
 
     root.append(
       pageHeader({
-        eyebrow: "VISÃO GERAL",
-        title: "Situação do workspace",
-        description:
-          "Casos, entidades compartilhadas, evidências com hash e indicadores extraídos neste workspace local.",
+        title: "Visão geral",
         actions: [button("Atualizar", () => G.refreshView())],
       }),
       el(
         "div",
-        { class: "quick-actions" },
-        button("Registrar entidade", () => G.entityDialog()),
-        button("Registrar fonte", () => G.sourceDialog()),
-        button("Abrir quadro", () => go("board")),
-        button("Analisar indicadores", () => go("indicators")),
-        button("Ver evidências", () => go("evidence")),
-      ),
-      el(
-        "div",
         { class: "dash-cards" },
-        dashCard({
-          label: "Casos abertos",
-          value: number(totals.open),
-          change: weekChange(casesThisWeek, casesLastWeek),
-          foot: `${number(casesThisWeek)} criado(s) nos últimos 7 dias · ${number(totals.investigations)} no total`,
-        }),
-        dashCard({
-          label: "Entidades",
-          value: number(totals.entities),
-          change: analytics ? weekChange(recordWeeks.current, recordWeeks.previous) : null,
-          foot: `${number(totals.relationships)} relacionamento(s) · ${number(recordWeeks.current)} registro(s) novos em 7 dias`,
-        }),
-        dashCard({
-          label: "Indicadores únicos",
-          value: number(totals.unique_indicators),
-          foot: `${number(totals.correlations)} correlação(ões) exatas · ${number(totals.evidence)} evidência(s) com hash`,
-        }),
-        dashCard({
-          label: "Pesquisas em 7 dias",
-          value: number(searchWeeks.current),
-          change: analytics ? weekChange(searchWeeks.current, searchWeeks.previous) : null,
-          foot: `${number(searchWeeks.previous)} na semana anterior · ${number(analytics?.totals.intel_runs)} no total`,
-        }),
+        dashCard({ label: "Casos abertos", value: number(totals.open) }),
+        dashCard({ label: "Entidades", value: number(totals.entities) }),
+        dashCard({ label: "Indicadores", value: number(totals.unique_indicators) }),
+        dashCard({ label: "Pesquisas em 7 dias", value: number(searchesThisWeek) }),
       ),
     );
 
@@ -888,7 +828,6 @@
       const PERIODS = [[90, "3 meses"], [30, "30 dias"], [7, "7 dias"]];
       let period = 30;
       const chartHost = el("div", { class: "dash-chart-body" });
-      const caption = el("p", { class: "dash-chart-caption" });
       const periodTabs = el("div", { class: "segmented dash-periods", role: "radiogroup", "aria-label": "Período do gráfico" });
       const series = [
         { label: "Pesquisas", color: "var(--dash-series-1)" },
@@ -897,8 +836,6 @@
       const drawChart = () => {
         const from = days.length - period;
         const slice = { days: days.slice(from), searches: searches.slice(from), records: records.slice(from) };
-        const total = (values) => values.reduce((sum, value) => sum + value, 0);
-        caption.textContent = `${number(total(slice.searches))} pesquisa(s) e ${number(total(slice.records))} registro(s) novos no período`;
         periodTabs.replaceChildren(
           ...PERIODS.map(([value, text]) =>
             el(
@@ -937,7 +874,7 @@
           el(
             "div",
             { class: "dash-chart-head" },
-            el("div", {}, el("h2", { class: "dash-chart-title" }, "Pesquisas e registros por dia"), caption),
+            el("h2", { class: "dash-chart-title" }, "Atividade"),
             periodTabs,
           ),
           G.charts.legend(series.map((item) => ({ ...item, line: true }))),
@@ -948,25 +885,10 @@
 
     if (totals.investigations === 0) {
       root.append(
-        panel(
-          { eyebrow: "COMECE AQUI", title: "Monte o primeiro caso" },
-          el(
-            "div",
-            { class: "onboarding" },
-            el("p", {}, "Uma investigação integrada avança por registros compartilhados:"),
-            el(
-              "ol",
-              { class: "step-list" },
-              el("li", {}, "Crie uma investigação e defina seu escopo."),
-              el("li", {}, "Registre entidades e vincule-as ao caso."),
-              el("li", {}, "Registre observações, fontes e evidências com hash."),
-              el("li", {}, "Registre relacionamentos e organize o quadro de investigação."),
-              el("li", {}, "Exporte um relatório a partir dos registros reais."),
-            ),
-            button("Criar a primeira investigação", () => G.newInvestigation(), {
-              variant: "button-primary",
-            }),
-          ),
+        el(
+          "div",
+          { class: "onboarding" },
+          button("Criar a primeira investigação", () => G.newInvestigation(), { variant: "button-primary" }),
         ),
       );
     }
@@ -1075,134 +997,8 @@
         ),
         tableHost,
       ),
-      el(
-        "div",
-        { class: "dashboard-grid" },
-        panel(
-          {
-            eyebrow: "ARTEFATOS OBSERVADOS",
-            title: "Distribuição de indicadores",
-            caption: `${totals.unique_indicators} únicos`,
-          },
-          indicatorMix(data.indicator_mix || {}, totals.unique_indicators),
-        ),
-        panel(
-          {
-            eyebrow: "PROVENIÊNCIA DAS EVIDÊNCIAS",
-            title: "Base de coleta",
-            caption: `${totals.observations} observações`,
-          },
-          collectionBasis(data.collection_basis || {}, totals.observations),
-        ),
-        panel(
-          {
-            eyebrow: "SISTEMA",
-            title: "Status dos módulos",
-            actions: [button("Gerenciar módulos", () => go("modules"))],
-          },
-          moduleSummary(data.modules || {}),
-        ),
-      ),
-    );
-  }
-
-  function barProgress(percent, toneClass, label) {
-    const value = Math.max(0, Math.min(100, Math.round(percent)));
-    return el("progress", {
-      class: `bar-progress ${toneClass}`,
-      max: "100",
-      value: String(value),
-      "aria-label": `${label}: ${value}%`,
-    });
-  }
-
-  function indicatorMix(counts, total) {
-    const keys = Object.keys(counts);
-    if (!keys.length) {
-      return el(
-        "p",
-        { class: "panel-empty" },
-        total === 0
-          ? "Indicadores aparecem quando padrões são encontrados em observações ou entidades registradas."
-          : "Nenhuma distribuição de indicadores disponível.",
-      );
-    }
-    const container = el("div", { class: "bar-list" });
-    const max = Math.max(...Object.values(counts), 1);
-    for (const key of keys.sort((a, b) => counts[b] - counts[a])) {
-      container.append(
-        el(
-          "div",
-          { class: "bar-row" },
-          el(
-            "div",
-            { class: "bar-row-heading" },
-            el("span", {}, G.indicatorTypeLabel(key)),
-            el("strong", {}, counts[key].toLocaleString("pt-BR")),
-          ),
-          el(
-            "div",
-            { class: "bar-track" },
-            barProgress(
-              counts[key] ? Math.max(4, (counts[key] / max) * 100) : 0,
-              `tone-${key}`,
-              G.indicatorTypeLabel(key),
-            ),
-          ),
-        ),
-      );
-    }
-    return container;
-  }
-
-  function collectionBasis(counts, total) {
-    const container = el("div", { class: "bar-list" });
-    for (const [key, label] of G.COLLECTION_BASES) {
-      const count = counts[key] || 0;
-      container.append(
-        el(
-          "div",
-          { class: "bar-row" },
-          el(
-            "div",
-            { class: "bar-row-heading" },
-            el("span", {}, label),
-            el("strong", {}, String(count)),
-          ),
-          el(
-            "div",
-            { class: "bar-track" },
-            barProgress(total && count ? Math.max(3, (count / total) * 100) : 0, `basis-${key}`, label),
-          ),
-        ),
-      );
-    }
-    container.append(
-      el(
-        "div",
-        { class: "bar-total" },
-        el("span", {}, "Total de observações com fonte"),
-        el("strong", {}, String(total)),
-      ),
-    );
-    return container;
-  }
-
-  function moduleSummary(counts) {
-    const enabled = counts.enabled || 0;
-    const planned = counts.planned || 0;
-    const disabled = counts.disabled || 0;
-    return el(
-      "div",
-      { class: "module-summary" },
-      el("div", { class: "module-summary-row" }, badge("Ativados", "success"), String(enabled)),
-      el("div", { class: "module-summary-row" }, badge("Disponíveis", "neutral"), String(disabled)),
-      el("div", { class: "module-summary-row" }, badge("Planejados", "warning"), String(planned)),
-      el(
-        "p",
-        { class: "panel-note" },
-        "Módulos planejados aparecem como não implementados e não podem ser ativados.",
-      ),
+      // Indicator mix, collection basis and module status moved out of the
+      // overview: the dashboard keeps numbers, activity and the case tables.
     );
   }
 

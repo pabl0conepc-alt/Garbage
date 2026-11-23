@@ -34,61 +34,78 @@ const displayToggle = document.querySelector("#display-toggle");
 const displayMenu = document.querySelector("#display-menu");
 const shortcutsButton = document.querySelector("#shortcuts-button");
 
+/* Navigation is grouped into a few areas. The dock shows one icon per area;
+   the routes inside an area appear as tabs at the top of its screens. Each
+   route keeps its own hash, renderer and module. */
 G.NAV = [
   {
-    label: "Workspace",
+    key: "overview",
+    label: "Visão geral",
+    icon: "overview",
+    items: [{ view: "overview", label: "Visão geral", tab: "Visão geral", icon: "overview" }],
+  },
+  {
+    key: "search",
+    label: "Pesquisa",
+    icon: "radar",
     items: [
-      { view: "overview", label: "Visão geral", icon: "overview" },
-      { view: "investigations", label: "Investigações", icon: "investigations", module: "investigations" },
-      { view: "activity", label: "Linha do tempo", icon: "activity", module: "activity-log" },
+      { view: "multisearch", label: "Pesquisa multifonte", tab: "Pesquisa", icon: "radar", module: "intel-orchestrator" },
+      { view: "ai", label: "Investigador IA", tab: "Investigador IA", icon: "radar", module: "intel-orchestrator" },
+      { view: "watchlist", label: "Monitoramento", tab: "Monitoramento", icon: "activity", module: "intel-orchestrator" },
+      { view: "indicators", label: "Pesquisa de inteligência", tab: "Indicadores", icon: "indicators", module: "indicator-engine" },
+      { view: "files", label: "Análise de arquivos", tab: "Arquivos", icon: "files", module: "file-intelligence" },
     ],
   },
   {
-    label: "Inteligência",
+    key: "records",
+    label: "Registros",
+    icon: "entities",
     items: [
-      { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
-      { view: "watchlist", label: "Monitoramento", icon: "activity", module: "intel-orchestrator" },
-      { view: "ai", label: "Investigador IA", icon: "radar", module: "intel-orchestrator" },
-      { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
-      { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
-      { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },
+      { view: "entities", label: "Inteligência de entidades", tab: "Entidades", icon: "entities", module: "entities" },
+      { view: "evidence", label: "Gerenciador de evidências", tab: "Evidências", icon: "evidence", module: "evidence" },
+      { view: "sources", label: "Gerenciador de fontes", tab: "Fontes", icon: "sources", module: "source-manager" },
     ],
   },
   {
+    key: "analysis",
     label: "Análise",
+    icon: "graph",
     items: [
-      { view: "board", label: "Quadro de investigação", icon: "board", module: "investigation-board" },
-      { view: "graph", label: "Grafo de relacionamentos", icon: "graph", module: "relationship-graph" },
-      { view: "geo", label: "Mapa", icon: "graph", module: "investigations" },
-      { view: "analytics", label: "Painel analítico", icon: "chart", module: "analytics" },
-      { view: "resolution", label: "Resolução de entidades", icon: "merge", module: "entity-resolution" },
+      { view: "graph", label: "Grafo de relacionamentos", tab: "Grafo", icon: "graph", module: "relationship-graph" },
+      { view: "board", label: "Quadro de investigação", tab: "Quadro", icon: "board", module: "investigation-board" },
+      { view: "geo", label: "Mapa", tab: "Mapa", icon: "graph", module: "investigations" },
+      { view: "analytics", label: "Painel analítico", tab: "Painel", icon: "chart", module: "analytics" },
+      { view: "resolution", label: "Resolução de entidades", tab: "Resolução", icon: "merge", module: "entity-resolution" },
     ],
   },
   {
-    label: "Evidências",
+    key: "threats",
+    label: "Ameaças",
+    icon: "kev",
     items: [
-      { view: "evidence", label: "Gerenciador de evidências", icon: "evidence", module: "evidence" },
-      { view: "sources", label: "Gerenciador de fontes", icon: "sources", module: "source-manager" },
+      { view: "attack", label: "MITRE ATT&CK", tab: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
+      { view: "kev", label: "CISA KEV", tab: "CISA KEV", icon: "kev", module: "cisa-kev" },
     ],
   },
   {
-    label: "Inteligência de ameaças",
-    items: [
-      { view: "kev", label: "CISA KEV", icon: "kev", module: "cisa-kev" },
-      { view: "attack", label: "MITRE ATT&CK", icon: "matrix", module: "attack-matrix" },
-    ],
+    key: "reports",
+    label: "Relatórios",
+    icon: "reports",
+    items: [{ view: "reports", label: "Central de relatórios", tab: "Relatórios", icon: "reports", module: "report-center" }],
   },
   {
-    label: "Saída",
+    key: "settings",
+    label: "Configurações",
+    icon: "settings",
+    bottom: true,
     items: [
-      { view: "reports", label: "Central de relatórios", icon: "reports", module: "report-center" },
-    ],
-  },
-  {
-    label: "Sistema",
-    items: [
-      { view: "modules", label: "Gerenciador de módulos", icon: "modules", module: "module-manager" },
-      { view: "settings", label: "Configurações", icon: "settings", module: "settings" },
+      { view: "settings", label: "Configurações", tab: "Configurações", icon: "settings", module: "settings" },
+      { view: "connectors", label: "Conectores", tab: "Conectores", icon: "radar", module: "intel-orchestrator" },
+      { view: "keys", label: "Chaves de API", tab: "Chaves de API", icon: "settings", module: "intel-orchestrator" },
+      { view: "shortcuts", label: "Atalhos de teclado", tab: "Atalhos", icon: "keyboard" },
+      { view: "investigations", label: "Investigações", tab: "Investigações", icon: "investigations", module: "investigations" },
+      { view: "activity", label: "Linha do tempo", tab: "Linha do tempo", icon: "activity", module: "activity-log" },
+      { view: "modules", label: "Gerenciador de módulos", tab: "Módulos", icon: "modules", module: "module-manager" },
     ],
   },
 ];
@@ -916,7 +933,7 @@ const SETTING_TEXT = {
 };
 
 const VALUE_LABELS = {
-  dark: "Escuro", contrast: "Alto contraste", comfortable: "Confortável", compact: "Compacta",
+  dark: "Claro", contrast: "Alto contraste", comfortable: "Confortável", compact: "Compacta",
   true: "Sim", false: "Não", force: "Força", circular: "Circular", grid: "Grade",
   unattributed: "Sem atribuição",
 };
@@ -1024,22 +1041,28 @@ function statusBadge(value) {
   return badge(statusLabel(value), STATUS_TONES[value] || "neutral");
 }
 
-function pageHeader({ eyebrow, title, description, actions = [] }) {
+function sentenceCase(text) {
+  const lower = String(text).toLocaleLowerCase("pt-BR");
+  return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
+}
+
+/* Screens open on their title and actions only: the small label above the
+   title and the explanatory line under it were noise on every screen. */
+function pageHeader({ title, actions = [] }) {
   return el(
     "div",
     { class: "page-heading" },
     el(
       "div",
       { class: "page-heading-copy" },
-      eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
       el("h1", {}, title),
-      description ? el("p", { class: "page-description" }, description) : null,
     ),
     actions.length ? el("div", { class: "page-actions" }, actions) : null,
   );
 }
 
 function panel({ eyebrow, title, caption, actions = [], className = "" }, ...children) {
+  // Without a title the old small label stands in for it; never both.
   const heading =
     title || eyebrow || actions.length
       ? el(
@@ -1048,8 +1071,7 @@ function panel({ eyebrow, title, caption, actions = [], className = "" }, ...chi
           el(
             "div",
             {},
-            eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
-            title ? el("h2", {}, title) : null,
+            title || eyebrow ? el("h2", {}, title || sentenceCase(eyebrow)) : null,
           ),
           el(
             "div",
@@ -1461,32 +1483,56 @@ G.confirm = confirmDialog;
 /* Navigation                                                         */
 /* ------------------------------------------------------------------ */
 
+function navLink(group, items) {
+  return el(
+    "a",
+    {
+      class: "nav-link",
+      href: `#/${items[0].view}`,
+      "aria-label": group.label,
+      dataset: { area: group.key, views: items.map((item) => item.view).join(" "), tooltip: group.label },
+    },
+    el("span", { class: "nav-icon" }, icon(group.icon, { size: 20 })),
+    el("span", { class: "nav-label", "aria-hidden": "true" }, group.label),
+  );
+}
+
 function renderNav() {
   const container = document.querySelector("#nav-groups");
   container.replaceChildren();
+  const section = el("section", { class: "nav-section", "aria-label": "Áreas" });
+  const bottom = document.querySelector("#nav-bottom");
+  bottom?.replaceChildren();
   for (const group of G.NAV) {
     const items = group.items.filter((item) => moduleEnabled(item.module));
     if (!items.length) continue;
-    const labelId = `nav-group-${G.NAV.indexOf(group)}`;
-    const section = el("section", { class: "nav-section", "aria-labelledby": labelId });
-    section.append(el("div", { class: "nav-section-label", id: labelId }, group.label));
-    for (const item of items) {
-      section.append(
-        el(
-          "a",
-          {
-            class: "nav-link",
-            href: `#/${item.view}`,
-            "aria-label": item.label,
-            dataset: { view: item.view, tooltip: item.label },
-          },
-          el("span", { class: "nav-icon" }, icon(item.icon, { size: 20 })),
-          el("span", { class: "nav-label", "aria-hidden": "true" }, item.label),
-        ),
-      );
-    }
-    container.append(section);
+    if (group.bottom && bottom) bottom.append(navLink(group, items));
+    else section.append(navLink(group, items));
   }
+  container.append(section);
+}
+
+/* Browser-style tabs between the routes of one area, above the screen. */
+function areaTabs(view) {
+  const group = G.NAV.find((entry) => entry.items.some((item) => item.view === view));
+  if (!group) return null;
+  const items = group.items.filter((item) => moduleEnabled(item.module));
+  if (items.length < 2) return null;
+  return el(
+    "nav",
+    { class: "area-tabs", "aria-label": group.label },
+    ...items.map((item) =>
+      el(
+        "a",
+        {
+          class: `area-tab${item.view === view ? " is-active" : ""}`,
+          href: `#/${item.view}`,
+          "aria-current": item.view === view ? "page" : null,
+        },
+        item.tab || item.label,
+      ),
+    ),
+  );
 }
 
 function renderShellState() {
@@ -1500,8 +1546,11 @@ function renderShellState() {
 }
 
 function markActiveNav(view) {
+  // An open case belongs to the main flow; the case index to Configurações.
+  const params = G.state.currentParams || [];
+  const home = view === "investigations" && params.length ? "overview" : view;
   document.querySelectorAll(".nav-link").forEach((link) => {
-    const active = link.dataset.view === view;
+    const active = (link.dataset.views || "").split(" ").includes(home);
     link.classList.toggle("is-active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -1510,9 +1559,6 @@ function markActiveNav(view) {
 
 function setBreadcrumb(view) {
   const label = G.VIEW_LABELS[view] || titleCase(view);
-  document.querySelector("#page-breadcrumb").textContent = label;
-  const group = document.querySelector("#breadcrumb-group");
-  if (group) group.textContent = G.VIEW_GROUPS[view] || "Workspace";
   document.title = `${label} · GARBAGE`;
 }
 
@@ -1549,6 +1595,11 @@ async function route() {
   setLoading(true);
   viewRoot.replaceChildren();
   try {
+    const tabHost = document.querySelector("#area-tabs-host");
+    if (tabHost) {
+      tabHost.dataset.view = view;
+      tabHost.replaceChildren(...[areaTabs(view)].filter(Boolean));
+    }
     await G.views[view](viewRoot, params);
   } catch (error) {
     viewRoot.replaceChildren(
@@ -2008,7 +2059,7 @@ function renderDisplayMenu() {
       el("span", {}, "Salvo neste workspace"),
     ),
     displayGroup("TEMA", [
-      displayChoice("Escuro", "interface.theme", "dark", theme === "dark"),
+      displayChoice("Claro", "interface.theme", "dark", theme === "dark"),
       displayChoice("Alto contraste", "interface.theme", "contrast", theme === "contrast"),
     ]),
     displayGroup("DENSIDADE", [
@@ -2067,9 +2118,7 @@ function closeDisplayMenu() {
 /* Keyboard shortcuts                                                */
 /* ------------------------------------------------------------------ */
 
-G.openShortcuts = function openShortcuts() {
-  if (document.querySelector(".shortcuts-dialog")) return;
-  const rows = [
+G.SHORTCUTS = [
     ["Ctrl / ⌘ K", "Abrir pesquisa e comandos"],
     ["/", "Focar a pesquisa"],
     ["N", "Nova investigação"],
@@ -2084,7 +2133,21 @@ G.openShortcuts = function openShortcuts() {
     ["Grafo · P", "Fixar ou soltar a seleção"],
     ["Grafo · H ou Delete", "Ocultar a seleção"],
     ["Grafo · Ctrl / ⌘ Z", "Desfazer (Shift para refazer)"],
-  ];
+];
+
+G.views.shortcuts = async function renderShortcuts(root) {
+  root.replaceChildren(
+    pageHeader({ title: "Atalhos de teclado" }),
+    panel(
+      {},
+      el("dl", { class: "shortcut-list" }, ...G.SHORTCUTS.flatMap(([keys, text]) => [el("dt", {}, el("kbd", {}, keys)), el("dd", {}, text)])),
+    ),
+  );
+};
+
+G.openShortcuts = function openShortcuts() {
+  if (document.querySelector(".shortcuts-dialog")) return;
+  const rows = G.SHORTCUTS;
   const dialog = el(
     "dialog",
     { class: "app-dialog shortcuts-dialog", "aria-label": "Atalhos de teclado" },
@@ -2156,10 +2219,10 @@ function bindShell() {
   document.querySelector("#nav-groups").addEventListener("click", (event) => {
     if (event.target.closest("a.nav-link")) setMobileNav(false);
   });
-  newInvestigationButton.addEventListener("click", () => {
+  newInvestigationButton?.addEventListener("click", () => {
     G.newInvestigation().catch((error) => toast(error.message, "error"));
   });
-  searchButton.addEventListener("click", openSearch);
+  searchButton?.addEventListener("click", openSearch);
   mobileNavToggle?.addEventListener("click", () => {
     setMobileNav(!document.body.classList.contains("nav-open"));
   });
