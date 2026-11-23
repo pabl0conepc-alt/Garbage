@@ -1185,7 +1185,7 @@
               ? entityTypeLabel(record.entity_type)
               : titleCase(record.element_kind),
           )}</text>`,
-          `<text x="${record.x + 16}" y="${record.y + 50}" fill="#e7edf5" font-family="system-ui, sans-serif" font-size="15" font-weight="600">${escapeXml(
+          `<text x="${record.x + 16}" y="${record.y + 50}" fill="#e7edf5" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600">${escapeXml(
             (record.label || "").slice(0, 42),
           )}</text>`,
         );
@@ -1200,7 +1200,7 @@
           const lines = record.content.slice(0, 220).match(/.{1,52}(\s|$)/g) || [];
           lines.slice(0, 5).forEach((line, index) => {
             parts.push(
-              `<text x="${record.x + 16}" y="${record.y + 94 + index * 16}" fill="#a8b6c8" font-family="system-ui, sans-serif" font-size="12">${escapeXml(
+              `<text x="${record.x + 16}" y="${record.y + 94 + index * 16}" fill="#a8b6c8" font-family="Inter, system-ui, sans-serif" font-size="12">${escapeXml(
                 line.trim(),
               )}</text>`,
             );

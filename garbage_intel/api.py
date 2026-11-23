@@ -170,6 +170,7 @@ _STATIC_FILES = {
     "graph.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
     "favicon.svg": "image/svg+xml",
+    "waves-light.svg": "image/svg+xml",
     "waves-dark.svg": "image/svg+xml",
     "favicon.png": "image/png",
     "logo-mark.png": "image/png",

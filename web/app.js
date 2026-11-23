@@ -1138,44 +1138,15 @@ function statusBadge(value) {
   return badge(statusLabel(value), STATUS_TONES[value] || "neutral");
 }
 
-let pageInfoCount = 0;
-
-/* Title first. A short line may sit under it; anything longer waits
-   behind a small info toggle. `eyebrow` is still accepted, not drawn. */
-function pageHeader({ eyebrow, title, description, actions = [] }) {
-  const text = typeof description === "string" ? description.trim() : description;
-  const short = typeof text === "string" && text.length <= 72;
-  let infoButton = null;
-  let descriptionNode = null;
-  if (text && short) {
-    descriptionNode = el("p", { class: "page-description" }, text);
-  } else if (text) {
-    const id = `page-info-${++pageInfoCount}`;
-    descriptionNode = el("p", { class: "page-description", id, hidden: true }, text);
-    infoButton = el(
-      "button",
-      {
-        class: "icon-button page-info",
-        type: "button",
-        "aria-label": "Sobre esta tela",
-        "aria-expanded": "false",
-        "aria-controls": id,
-        onClick: () => {
-          descriptionNode.hidden = !descriptionNode.hidden;
-          infoButton.setAttribute("aria-expanded", String(!descriptionNode.hidden));
-        },
-      },
-      icon("info", { size: 16 }),
-    );
-  }
+/* Screens open on their title and actions only. */
+function pageHeader({ title, actions = [] }) {
   return el(
     "div",
     { class: "page-heading" },
     el(
       "div",
       { class: "page-heading-copy" },
-      el("div", { class: "page-title-row" }, el("h1", {}, title), infoButton),
-      descriptionNode,
+      el("h1", {}, title),
     ),
     actions.length ? el("div", { class: "page-actions" }, actions) : null,
   );
@@ -1229,8 +1200,7 @@ function panel({ eyebrow, title, caption, actions = [], className = "" }, ...chi
           el(
             "div",
             {},
-            eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
-            title ? el("h2", {}, title) : null,
+            title || eyebrow ? el("h2", {}, title || sentenceCase(eyebrow)) : null,
           ),
           el(
             "div",
