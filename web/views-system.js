@@ -233,6 +233,15 @@
         el("p", { class: "field-hint" }, entry.description),
       );
     }
+    if (entry.type === "text" || entry.type === "endpoint") {
+      return el(
+        "div",
+        { class: "field" },
+        el("label", {}, entry.label),
+        el("input", { class: "input", type: "text", value, "data-setting": entry.key, "aria-label": entry.label, spellcheck: "false" }),
+        el("p", { class: "field-hint" }, entry.description),
+      );
+    }
     if (entry.type === "url") {
       return el(
         "div",

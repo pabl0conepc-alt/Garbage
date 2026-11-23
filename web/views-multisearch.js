@@ -40,6 +40,24 @@
     urlhaus: ["URLhaus", "URLs de distribuição de malware ligadas a uma URL, host ou hash de payload."],
     threatfox: ["ThreatFox", "Indicadores de comprometimento ligados a famílias de malware e infraestrutura de botnets."],
     malwarebazaar: ["MalwareBazaar", "Registro de amostra de malware: família, tipo, entrega e hashes de semelhança."],
+    "discord-snowflake": ["Discord: data do ID", "Data de criação embutida num ID do Discord. Nada sai da máquina."],
+    "discord-user": ["Discord: usuário", "Perfil público de um usuário pelo ID: nome, nome de exibição, avatar, banner, insígnias e tag de servidor. Exige um token de bot seu."],
+    "discord-invite": ["Discord: convite", "Servidor por trás de um convite: nome, ID, data de criação, descrição, recursos, membros e online, quem convidou e validade."],
+    "roblox-user": ["Roblox", "Perfil público por ID ou nome: nomes, criação, banimento, descrição, amigos e seguidores, grupos e cargos, nomes anteriores e avatar."],
+    "username-sites": ["Username em 17 sites", "Se o nome existe em GitHub, GitLab, Chess.com, Lichess, Hacker News, DEV, Docker Hub, npm, PyPI, Keybase, Codeberg, Minecraft, Steam, Bluesky, Mastodon, Hugging Face e Launchpad, com o link do perfil."],
+    "username-variations": ["Variações de username", "Forma normalizada, traços estruturais e grafias parecidas para pesquisar em seguida. Nada sai da máquina."],
+    minecraft: ["Minecraft", "Perfil Java Edition por nome: UUID, skin e capa pela API pública da Mojang."],
+    steam: ["Steam", "Perfil público da Steam Community: nome, SteamID64, membro desde, privacidade, banimentos VAC e de troca e avatar. Nome real e localização não são guardados."],
+    telegram: ["Telegram", "Prévia pública do t.me de usuário, bot, grupo ou canal: nome, descrição, membros ou inscritos e foto."],
+    hibp: ["Have I Been Pwned", "Vazamentos em que um e-mail apareceu: nome, data, tamanho e tipos de dado expostos. Exige sua chave do HIBP; nunca traz os dados vazados."],
+    "email-posture": ["Postura de e-mail e domínio", "Nota de SPF, DMARC, DKIM, DNSSEC, MTA-STS, TLS-RPT, BIMI e CAA pelo DNS público, provedor de e-mail e domínio descartável."],
+    "gdelt-news": ["GDELT (notícias)", "Notícias do mundo todo dos últimos três meses que citam os termos, das mais recentes para as mais antigas, com domínio, idioma e país da fonte."],
+    hackernews: ["Hacker News", "Discussões no Hacker News sobre os termos, com pontos, comentários e link da thread."],
+    wikipedia: ["Wikipedia e Wikidata", "Artigos da Wikipedia (português e inglês) e entidades do Wikidata que correspondem aos termos."],
+    crossref: ["Crossref", "Trabalhos acadêmicos sobre os termos: título, DOI, ano, autores e periódico."],
+    openalex: ["OpenAlex", "Pesquisas sobre os termos com ano, DOI, citações, autores e periódico. A chave opcional aumenta a cota diária."],
+    "rss-feed": ["Feed RSS/Atom", "Lê um feed a partir da URL https: título e itens mais recentes com links, datas e resumos. Contata o servidor do feed."],
+    "web-surface": ["Superfície do site", "Página inicial, robots.txt, sitemap e manifest: caminhos bloqueados e sensíveis, seções do sitemap, SEO e Open Graph, canonical, hreflang, pontos fracos da CSP, conteúdo misto, hosts externos e hash do texto para monitoramento. Contata o servidor do alvo."],
   };
 
   const RESULT_LABELS = {
@@ -78,6 +96,26 @@
     "security-contact": "Contato de segurança", "security-policy": "Política de divulgação",
     "security-encryption": "Chave de criptografia", "security-acknowledgments": "Agradecimentos",
     "security-hiring": "Vagas de segurança", "security-csaf": "CSAF",
+    "created-at": "Criado em", username: "Nome de usuário", avatar: "Avatar", banner: "Banner",
+    "accent-color": "Cor de destaque", badge: "Insígnia", "server-tag": "Tag de servidor", account: "Conta",
+    server: "Servidor", "server-feature": "Recurso do servidor", "server-icon": "Ícone do servidor",
+    "member-count": "Membros", "invite-channel": "Canal do convite", inviter: "Quem convidou",
+    "invite-expires": "Validade do convite", invite: "Convite", "user-id": "ID do usuário", banned: "Banido",
+    description: "Descrição", "friends-count": "Amigos", "followers-count": "Seguidores",
+    "following-count": "Seguindo", group: "Grupo", "previous-username": "Nome anterior",
+    "site-unknown": "Site sem resposta clara", "telegram-name": "Nome no Telegram", handle: "Identificador",
+    breach: "Vazamento", "username-analysis": "Análise do username", variation: "Variação", skin: "Skin",
+    cape: "Capa", "steam-id64": "SteamID64", "persona-name": "Nome na Steam", "custom-url": "URL personalizada",
+    "member-since": "Membro desde", privacy: "Privacidade", "vac-banned": "Banido por VAC",
+    "trade-ban": "Banimento de troca", "limited-account": "Conta limitada", headline: "Título",
+    "posture-score": "Nota de postura", "posture-check": "Verificação", "mail-provider": "Provedor de e-mail",
+    "disposable-domain": "Domínio descartável", "robots-txt": "robots.txt", "robots-disallow": "Caminho bloqueado",
+    sitemap: "Sitemap", "sitemap-notable": "URL sensível no sitemap", canonical: "Canonical",
+    "seo-meta": "Meta de SEO", "social-meta": "Meta social (Open Graph)", "seo-missing": "Meta ausente",
+    hreflang: "Idioma alternativo", "page-links": "Links da página", "mixed-content": "Conteúdo misto",
+    "news-article": "Notícia", discussion: "Discussão", "encyclopedia-article": "Artigo de enciclopédia",
+    "wikidata-entity": "Entidade do Wikidata", publication: "Publicação", feed: "Feed", "feed-item": "Item do feed",
+    csp: "Content-Security-Policy", "page-text-hash": "Hash do texto da página", "web-manifest": "Manifest do app",
   };
 
   const DATA_LABELS = {
@@ -150,6 +188,8 @@
   const TYPE_LABELS = {
     domain: "Domínio", ipv4: "IPv4", ipv6: "IPv6", cidr: "CIDR", url: "URL", email: "E-mail",
     md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", asn: "ASN", cve: "CVE",
+    "discord-id": "ID do Discord", "discord-invite": "Convite do Discord", "roblox-user": "Roblox",
+    username: "Username", telegram: "Telegram", minecraft: "Minecraft", steam: "Steam", topic: "Tema",
   };
 
   /* Which findings can become a shared entity, and as which category. */
@@ -166,7 +206,7 @@
     "dns-a", "dns-aaaa", "dns-ns", "dns-cname", "dns-mx", "nameserver", "ct-name",
     "asn", "cidr", "abuse-contact", "lookalike", "co-occurrence", "indicator", "cert-san",
     "cert-san-ip", "http-redirect", "hostname", "origin-asn", "announced-prefix", "subdomain",
-    "malicious-url", "final-url", "ioc", "cve",
+    "malicious-url", "final-url", "ioc", "cve", "variation", "inviter",
   ]);
 
   const PROVIDER_NOTE = {
@@ -179,6 +219,10 @@
     urlscan: "Opcional: a busca funciona sem chave, com limite menor.",
     nvd: "Opcional: aumenta o limite de 5 para 50 consultas a cada 30 s.",
     ipinfo: "Opcional: sem token, o limite anônimo é menor.",
+    discord: "Obrigatório para o perfil de usuário. Crie um bot no Developer Portal e cole o token dele.",
+    openalex: "Opcional: sem chave, as buscas dividem uma cota diária gratuita pequena por IP.",
+    ai: "Para o Investigador IA em endpoints com chave (OpenRouter, OpenAI, Anthropic…). Servidores locais como Ollama não precisam.",
+    hibp: "Obrigatória e paga. Mostra só em quais vazamentos o e-mail apareceu.",
   };
 
   function button(label, onClick, options = {}) {
@@ -214,6 +258,8 @@
     let value = String(item.value || "").trim();
     if (item.result_type === "dns-mx") value = value.split(/\s+/).pop() || "";
     if (item.result_type === "ct-name") value = value.replace(/^\*\./, "");
+    if (item.result_type === "variation" && item.data?.query) return item.data.query;
+    if (item.result_type === "inviter") return `discord:${item.data?.user_id || ""}`;
     return value.replace(/\.$/, "");
   }
 
@@ -397,7 +443,7 @@
     let detected = null;
     let currentRun = null;
     let pollToken = 0;
-    let activeTab = { conectores: "connectors", chaves: "keys" }[params[0]] || "search";
+    let activeTab = { conectores: "connectors", chaves: "keys", cabecalhos: "headers", comparar: "compare" }[params[0]] || "search";
     const keysHost = el("div");
     let detectTimer = null;
     const selected = new Set(connectorData.items.map((item) => item.connector_id));
@@ -408,7 +454,7 @@
       id: "multisearch-input",
       autocomplete: "off",
       spellcheck: "false",
-      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome> ou t.me/<nome>",
+      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome>, t.me/<nome>, minecraft:<nome>, steam:<nome> ou topic:<termos>",
       "aria-label": "Artefato para consultar",
       maxlength: "2000",
     });
@@ -766,6 +812,14 @@
               render: (row) => (row.status ? `${row.status.success_count} / ${row.status.error_count}` : "—"),
             },
             {
+              label: "HOJE",
+              cellClass: "numeric-col",
+              render: (row) =>
+                row.today && (row.today.requests || row.today.cached)
+                  ? el("span", { title: "Consultas feitas hoje · com erro · respondidas pelo cache" }, `${row.today.requests} · ${row.today.errors} erro(s) · ${row.today.cached} cache`)
+                  : "—",
+            },
+            {
               label: "LIMITE · CACHE",
               render: (row) =>
                 `${row.rate_per_minute}/min · ${row.ttl_seconds ? `${Math.round(row.ttl_seconds / 3600) || 1} h` : "sem cache"}`,
@@ -874,6 +928,145 @@
       );
     }
 
+    const compareHost = el("div");
+    function compareTab() {
+      const output = el("div");
+      const pickA = el("select", { class: "input", "aria-label": "Primeira consulta" });
+      const pickB = el("select", { class: "input", "aria-label": "Segunda consulta" });
+      const levelLabel = { strong: ["Forte", "danger"], moderate: ["Moderada", "warning"], weak: ["Fraca", "info"], none: ["Nenhuma", "neutral"] };
+      const signalLabel = {
+        "same-name": "Mesmo nome", "normalised-name": "Nome igual após normalizar", "similar-name": "Nome parecido",
+        "same-image": "Mesma imagem", "same-sites": "Mesmos sites", "shared-links": "Links em comum",
+        "similar-text": "Bio parecida", "shared-values": "Outros achados iguais",
+      };
+      const signalWhy = {
+        "same-name": "O mesmo nome ou identificador aparece nos dois.",
+        "normalised-name": "Os nomes batem depois de tirar separadores, números finais e leetspeak.",
+        "similar-name": "Os nomes são muito parecidos.",
+        "same-image": "Os dois usam a mesma URL de avatar, skin ou banner.",
+        "same-sites": "O nome existe nos mesmos sites (nomes comuns coincidem com frequência).",
+        "shared-links": "Os dois apontam para os mesmos hosts pouco comuns.",
+        "similar-text": "Bios ou descrições compartilham boa parte das palavras.",
+        "shared-values": "Outros achados idênticos (IPs, servidores de nome, certificados, grupos…).",
+      };
+      api("/api/intel/runs?limit=100").then((data) => {
+        const options = data.items.map((run) => [run.id, `${run.query_type} · ${run.query_value} · ${formatDate(run.started_at)}`]);
+        for (const pick of [pickA, pickB]) pick.replaceChildren(...options.map(([id, label]) => el("option", { value: id }, label)));
+        if (options.length > 1) pickB.value = options[1][0];
+        if (options.length < 2) output.replaceChildren(el("p", { class: "panel-empty" }, "Faça pelo menos duas consultas para comparar."));
+      });
+      async function run(event) {
+        event.preventDefault();
+        output.replaceChildren(loadingBlock("Comparando…"));
+        try {
+          const r = await api("/api/intel/compare", { method: "POST", body: JSON.stringify({ run_a: pickA.value, run_b: pickB.value }) });
+          const [label, tone] = levelLabel[r.level];
+          output.replaceChildren(
+            panel(
+              { eyebrow: "RESULTADO", title: `${r.a.query_value}  ×  ${r.b.query_value}`, caption: `Pontuação ${r.score}/100` },
+              el("p", {}, badge(`Correspondência ${label.toLowerCase()}`, tone)),
+              table({
+                columns: [
+                  { label: "SINAL", render: (x) => signalLabel[x.signal] || x.signal },
+                  { label: "PESO", cellClass: "numeric-col", render: (x) => `+${x.weight}` },
+                  { label: "POR QUÊ", render: (x) => signalWhy[x.signal] || x.detail },
+                  { label: "VALORES", render: (x) => x.evidence.join(", ") },
+                ],
+                rows: r.signals,
+                emptyMessage: "Nenhum sinal em comum.",
+              }),
+              el("p", { class: "field-hint" }, "Isto é uma pista para revisão manual, não uma identificação. Nomes comuns, hospedagem compartilhada e avatares padrão geram coincidências."),
+            ),
+          );
+        } catch (error) {
+          output.replaceChildren(G.inlineError(error.message));
+        }
+      }
+      compareHost.replaceChildren(
+        el("form", { class: "query-panel watch-form", onsubmit: run }, pickA, pickB, el("button", { class: "button button-primary", type: "submit" }, "Comparar")),
+        el("p", { class: "field-hint" }, "Compare duas consultas salvas lado a lado, por exemplo user:alice e user:alice_99, ou um perfil da Steam e um do Roblox. Cada sinal mostra o peso e os valores que o geraram."),
+        output,
+      );
+      return compareHost;
+    }
+    const headersHost = el("div");
+    function headersTab() {
+      if (headersHost.childElementCount) return headersHost;
+      const area = el("textarea", {
+        class: "input header-input",
+        rows: "12",
+        spellcheck: "false",
+        placeholder: "Cole aqui os cabeçalhos completos da mensagem (no Gmail: Mostrar original; no Outlook: Exibir origem da mensagem).",
+        "aria-label": "Cabeçalhos do e-mail",
+      });
+      const output = el("div");
+      const levelTone = { high: "danger", medium: "warning", low: "neutral" };
+      const levelLabel = { high: "Alto", medium: "Médio", low: "Baixo" };
+      async function analyse(event) {
+        event.preventDefault();
+        output.replaceChildren(loadingBlock("Analisando cabeçalhos…"));
+        try {
+          const r = await api("/api/intel/email-headers", { method: "POST", body: JSON.stringify({ headers: area.value }) });
+          const auth = r.authentication;
+          output.replaceChildren(
+            panel(
+              { eyebrow: "RESUMO", title: r.subject || "(sem assunto)", caption: `Risco: ${levelLabel[r.risk]}` },
+              G.kvList([
+                ["De", `${r.from.name ? r.from.name + " " : ""}<${r.from.address}>`],
+                ["Responder para", r.reply_to || null],
+                ["Return-Path", r.return_path || null],
+                ["Data", r.date || null],
+                ["IP de origem", r.origin_ip || null],
+                ["SPF / DKIM / DMARC", ["spf", "dkim", "dmarc"].map((m) => `${m.toUpperCase()}=${auth.verdicts[m] || "—"}`).join("  ")],
+                ["Alinhamento", `SPF ${auth.alignment.spf ? "alinhado" : "não alinhado"} · DKIM ${auth.alignment.dkim ? "alinhado" : "não alinhado"}`],
+                ["Assinaturas DKIM", auth.dkim_signatures.map((d) => `${d.domain} (s=${d.selector})`).join(", ") || null],
+              ]),
+            ),
+            panel(
+              { eyebrow: "SINAIS", title: `Observações (${r.signals.length})` },
+              r.signals.length
+                ? el("div", {}, ...r.signals.map((sig) => el("div", { class: "file-finding" }, badge(levelLabel[sig.level], levelTone[sig.level]), el("span", {}, sig.message))))
+                : el("p", { class: "panel-empty" }, "Nenhum sinal de alerta."),
+            ),
+            panel(
+              { eyebrow: "CAMINHO", title: `Saltos de entrega (${r.hops.length})`, caption: "Do primeiro servidor ao destino" },
+              table({
+                columns: [
+                  { label: "#", render: (h) => String(h.hop) },
+                  { label: "DE", render: (h) => h.from || "—" },
+                  { label: "IP", render: (h) => h.from_ip || "—" },
+                  { label: "POR", render: (h) => h.by || "—" },
+                  { label: "ATRASO", render: (h) => (h.delay_seconds !== undefined ? `${h.delay_seconds}s` : "—") },
+                ],
+                rows: r.hops,
+                emptyMessage: "Nenhum cabeçalho Received.",
+              }),
+            ),
+            panel(
+              { eyebrow: "INDICADORES", title: `Extraídos (${r.indicators.length})`, caption: "Clique para consultar na multibusca" },
+              r.indicators.length
+                ? el("div", { class: "chip-row" }, ...r.indicators.map((i) => el("button", { class: "button button-secondary button-small", type: "button", onclick: () => { input.value = i.value; activeTab = "search"; renderTab(); form.requestSubmit(); } }, `${i.type}: ${i.value}`)))
+                : el("p", { class: "panel-empty" }, "Nenhum indicador."),
+            ),
+            el("p", { class: "field-hint" }, r.limitations.join(" ")),
+          );
+        } catch (error) {
+          output.replaceChildren(G.inlineError(error.message));
+        }
+      }
+      headersHost.append(
+        el(
+          "form",
+          { class: "query-panel", onsubmit: analyse },
+          area,
+          el("button", { class: "button button-primary", type: "submit" }, "Analisar cabeçalhos"),
+          el("p", { class: "field-hint" }, "Tudo é analisado localmente; nenhum link é aberto e nada é consultado na internet."),
+        ),
+        output,
+      );
+      return headersHost;
+    }
+
     function renderTab() {
       tabStrip.replaceChildren(
         G.tabs({
@@ -881,6 +1074,8 @@
             { key: "search", label: "Pesquisa" },
             { key: "connectors", label: "Conectores", count: connectorData.total },
             { key: "keys", label: "Chaves de API" },
+            { key: "headers", label: "Cabeçalhos de e-mail" },
+            { key: "compare", label: "Comparar" },
           ],
           active: activeTab,
           onSelect: (key) => {
@@ -893,6 +1088,10 @@
       tabHost.replaceChildren(
         activeTab === "keys"
           ? keysHost
+          : activeTab === "headers"
+          ? headersTab()
+          : activeTab === "compare"
+          ? compareTab()
           : activeTab === "connectors"
           ? connectorsTab()
           : el(

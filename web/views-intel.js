@@ -963,8 +963,58 @@
   /* Evidence                                                          */
   /* ================================================================ */
 
+  function preservationPanel(investigations, onChange) {
+    const caseSelect = el(
+      "select",
+      { class: "input compact-select", "aria-label": "Investigação" },
+      ...investigations.map((item) => el("option", { value: item.id }, item.name)),
+    );
+    const urlInput = el("input", { class: "input", type: "url", placeholder: "https://… página a preservar", "aria-label": "URL a capturar" });
+    const titleInput = el("input", { class: "input", type: "text", placeholder: "Título (opcional)", "aria-label": "Título da captura", maxlength: "250" });
+    const status = el("p", { class: "field-hint" }, "A captura guarda os bytes exatos recebidos, com URL final, status, redirecionamentos, IP do servidor, cabeçalhos e horário, mais uma cópia de trabalho só com o texto. Exige rede e contato com o alvo nas Configurações.");
+    async function capture(event) {
+      event.preventDefault();
+      if (!caseSelect.value) return toast("Crie uma investigação primeiro.", "error");
+      status.textContent = "Capturando…";
+      try {
+        const r = await api(`/api/investigations/${caseSelect.value}/capture`, { method: "POST", body: JSON.stringify({ url: urlInput.value, title: titleInput.value }) });
+        status.textContent = `Capturado (HTTP ${r.status}). SHA-256 ${r.original.sha256}${r.working_copy ? " · cópia de texto criada" : ""}.`;
+        urlInput.value = "";
+        titleInput.value = "";
+        onChange();
+      } catch (error) {
+        status.textContent = error.message;
+        toast(error.message, "error");
+      }
+    }
+    async function verifyAll() {
+      try {
+        const r = await api("/api/evidence/verify-all", { method: "POST" });
+        toast(r.problems.length ? `${r.problems.length} evidência(s) com problema de integridade.` : `${r.checked} arquivo(s) conferido(s): todos íntegros.`, r.problems.length ? "error" : "success");
+        onChange();
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+    return panel(
+      { eyebrow: "PRESERVAÇÃO", title: "Capturar página e exportar pacote" },
+      el("form", { class: "query-panel watch-form", onSubmit: capture }, caseSelect, urlInput, titleInput, el("button", { class: "button button-primary", type: "submit" }, "Capturar")),
+      status,
+      el(
+        "div",
+        { class: "row-actions" },
+        button("Exportar pacote verificável do caso", () => {
+          if (caseSelect.value) location.href = `/api/investigations/${caseSelect.value}/evidence-package`;
+        }),
+        button("Verificar integridade de todas", verifyAll),
+      ),
+      el("p", { class: "field-hint" }, "O pacote ZIP traz os arquivos, um manifest.json com hashes, horários, origem e cadeia de custódia, o SHA256SUMS e um verify.py que qualquer pessoa roda com Python, sem o GARBAGE. A integridade também é conferida automaticamente uma vez por dia enquanto o servidor estiver aberto."),
+    );
+  }
+
   async function renderEvidence(root) {
     const data = await api("/api/evidence?limit=500");
+    const investigations = await G.loadInvestigations();
     const search = el("input", {
       class: "input",
       type: "search",
@@ -1066,6 +1116,7 @@
           }),
         ],
       }),
+      preservationPanel(investigations, () => G.refreshView()),
       panel(
         { eyebrow: "ARMAZENAMENTO ÍNTEGRO", title: "Registros de evidência", actions: [countLabel] },
         el(

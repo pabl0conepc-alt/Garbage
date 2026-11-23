@@ -5542,3 +5542,30 @@ dialog:focus-visible,
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
+/* Watchlist */
+.watch-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.watch-form .input[type="text"] { flex: 1 1 220px; }
+.watch-alert { border-bottom: 1px solid var(--border-subtle); padding: 8px 0; }
+.watch-alert summary { cursor: pointer; }
+.watch-alert.unread summary strong::before { content: "● "; color: var(--accent); }
+.watch-alert ul { margin: 6px 0 6px 18px; }
+
+/* Map */
+.geo-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .geo-layout { grid-template-columns: 1fr; } }
+.geo-plot { width: 100%; height: auto; display: block; border: 1px solid var(--border-subtle); border-radius: 6px; }
+.geo-bg { fill: var(--surface-secondary); }
+.geo-grid { stroke: var(--border-subtle); stroke-width: 1; }
+.geo-label { fill: var(--text-muted); font-size: 11px; opacity: 0.7; }
+.geo-dot { stroke: var(--bg); stroke-width: 2; cursor: pointer; }
+.geo-dot:hover, .geo-dot:focus { r: 9; outline: none; }
+.geo-dot.origin-photo { fill: var(--warning); }
+.geo-dot.origin-network { fill: var(--info); stroke-dasharray: 2 2; }
+.geo-dot.origin-manual { fill: var(--success); }
+
+/* AI investigator */
+.ai-form { display: flex; flex-direction: column; gap: 8px; }
+.ai-report h3 { margin: 14px 0 6px; font-size: 1rem; }
+.ai-report p { margin: 4px 0; white-space: pre-wrap; }
+.ai-report .ai-bullet { padding-left: 12px; }

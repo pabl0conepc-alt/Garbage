@@ -54,7 +54,7 @@ INDICATOR_TYPES = (
 # Public platform accounts, written with a prefix (discord:<id>, roblox:<id or
 # name>, user:<name>, telegram:<name>) or as their profile/invite URL so they
 # never collide with indicators.
-ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram")
+ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram", "minecraft", "steam", "topic")
 ARTIFACT_TYPES = INDICATOR_TYPES + ACCOUNT_TYPES
 RESULT_STATUSES = (
     "pending",
@@ -79,6 +79,12 @@ _DISCORD_INVITE = re.compile(
 _USERNAME = re.compile(r"(?:user|username):\s*@?([A-Za-z0-9_.-]{2,39})", re.IGNORECASE)
 _TELEGRAM = re.compile(
     r"(?:telegram:\s*@?|(?:https?://)?(?:www\.)?(?:t|telegram)\.me/)([A-Za-z][A-Za-z0-9_]{3,31})/?",
+    re.IGNORECASE,
+)
+_TOPIC = re.compile(r"(?:topic|news|tema):\s*(.{2,200})", re.IGNORECASE | re.DOTALL)
+_MINECRAFT = re.compile(r"minecraft:\s*([A-Za-z0-9_]{3,16})", re.IGNORECASE)
+_STEAM = re.compile(
+    r"(?:steam:\s*|(?:https?://)?steamcommunity\.com/(?:id|profiles)/)([A-Za-z0-9_-]{2,32})/?",
     re.IGNORECASE,
 )
 _ROBLOX_PREFIX = re.compile(r"roblox:\s*(\d{1,19}|[A-Za-z0-9_]{3,20})", re.IGNORECASE)
@@ -231,7 +237,7 @@ def detect_artifact(raw: object) -> dict[str, str]:
         raise ValidationError(
             "value is not a supported artifact; use a domain, IP, CIDR, URL, "
             "email, hash, ASN, CVE, discord:<id>, a Discord invite, roblox:<id or name>, "
-            "user:<name> or telegram:<name>"
+            "user:<name>, telegram:<name>, minecraft:<name>, steam:<name or id> or topic:<terms>"
         )
     return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
 
@@ -249,6 +255,16 @@ def _detect_account(value: str) -> dict[str, str] | None:
     match = _TELEGRAM.fullmatch(value)
     if match:
         return {"type": "telegram", "value": match.group(1).lower(), "label": "Telegram"}
+    match = _TOPIC.fullmatch(value)
+    if match:
+        terms = " ".join(match.group(1).split())
+        return {"type": "topic", "value": terms, "label": "Topic"}
+    match = _MINECRAFT.fullmatch(value)
+    if match:
+        return {"type": "minecraft", "value": match.group(1).lower(), "label": "Minecraft"}
+    match = _STEAM.fullmatch(value)
+    if match:
+        return {"type": "steam", "value": match.group(1).lower(), "label": "Steam"}
     match = _ROBLOX_PREFIX.fullmatch(value) or _ROBLOX_PROFILE.fullmatch(value)
     if match:
         # Usernames are case-insensitive on Roblox; ids are kept as written.
@@ -342,6 +358,17 @@ def list_connectors(database: str) -> dict[str, Any]:
             for row in connection.execute("SELECT * FROM intel_source_status")
         }
         disabled = _disabled_connectors(connection, connectors())
+        today = {
+            row["connector_id"]: dict(row)
+            for row in connection.execute(
+                """SELECT connector_id,
+                          COUNT(DISTINCT CASE WHEN cached = 0 AND status IN ('ok', 'empty', 'error') THEN run_id END) AS requests,
+                          COUNT(DISTINCT CASE WHEN status = 'error' THEN run_id END) AS errors,
+                          COUNT(DISTINCT CASE WHEN cached = 1 THEN run_id END) AS cached
+                   FROM intel_results WHERE fetched_at >= ? GROUP BY connector_id""",
+                (utc_now()[:10],),
+            )
+        }
     items = []
     for connector in connectors():
         status = status_rows.get(connector.connector_id)
@@ -372,6 +399,7 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "module_id": connector_module(connector),
                 "availability": availability,
                 "status": status,
+                "today": today.get(connector.connector_id, {"requests": 0, "errors": 0, "cached": 0}),
             }
         )
     return {
@@ -386,12 +414,30 @@ def list_connectors(database: str) -> dict[str, Any]:
 # Orchestration
 
 
+RETRY_DELAY_SECONDS = 1.5
+_TRANSIENT = re.compile(r"HTTP 5\d\d|timed out|timeout|temporarily|connection (?:reset|refused|aborted)", re.IGNORECASE)
+
+
+def _call_with_retry(connector: Connector, context: ConnectorContext) -> list[Finding]:
+    """Run the connector, retrying once after a transient network failure.
+
+    Rate limits (429), policy refusals and 4xx answers are not retried.
+    """
+    try:
+        return connector.run(context)
+    except NetworkError as exc:
+        if not _TRANSIENT.search(str(exc)):
+            raise
+        time.sleep(RETRY_DELAY_SECONDS)
+        return connector.run(context)
+
+
 def _run_one(
     connector: Connector, context: ConnectorContext
 ) -> tuple[str, list[Finding], str, int]:
     started = time.monotonic()
     try:
-        findings = connector.run(context)[:MAX_FINDINGS_PER_CONNECTOR]
+        findings = _call_with_retry(connector, context)[:MAX_FINDINGS_PER_CONNECTOR]
         status = "ok" if findings else "empty"
         error = ""
     except NetworkPolicyError as exc:
@@ -414,6 +460,7 @@ def run_query(
     investigation_id: object = None,
     use_cache: bool = True,
     wait: bool = True,
+    notify: bool = True,
 ) -> dict[str, Any]:
     """Fan one artifact out to every compatible connector and persist the run.
 
@@ -509,7 +556,7 @@ def run_query(
             _write_outcome(connection, run_id, connector, ("pending", [], "", 0, False), kind, detected["value"], ran=False)
 
     job = partial(
-        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers
+        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers, notify
     )
     if wait:
         job()
@@ -597,6 +644,7 @@ def _execute(
     context: ConnectorContext,
     secrets: dict[str, str],
     workers: int,
+    notify: bool = True,
 ) -> None:
     """Run the connectors and write each one's outcome as it completes."""
     finished: set[str] = set()
@@ -628,10 +676,42 @@ def _execute(
                 (run_id,),
             )
             _finish_run(connection, run_id, kind, value, case_id)
-        notify_webhook(database, run_id)
+        if notify:
+            notify_webhook(database, run_id)
 
 
 WEBHOOK_FETCH: Callable[..., Any] = net.fetch
+
+
+def post_webhook(database: str, content: str, details: dict[str, Any], target_id: str) -> bool:
+    """POST {content, garbage} to the configured webhook; False when unset or failed."""
+    with _connection(database) as connection:
+        url = setting_value(connection, "intel.webhook_url", "")
+        if not url or not setting_bool(connection, "intel.allow_network", False):
+            return False
+    try:
+        result = WEBHOOK_FETCH(
+            url,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"content": content[:1900], "garbage": details}).encode("utf-8"),
+            max_bytes=64 * 1024,
+            timeout=10.0,
+        )
+        delivered = result.status < 400
+        error = "" if delivered else f"HTTP {result.status}"
+    except (NetworkError, NetworkPolicyError) as exc:
+        delivered, error = False, str(exc)
+    if not delivered:
+        with _connection(database) as connection:
+            record_activity(
+                connection,
+                action="intel-webhook",
+                target_type="webhook",
+                target_id=target_id,
+                summary=f"Webhook delivery failed: {error[:200]}",
+            )
+    return delivered
 
 
 def notify_webhook(database: str, run_id: str) -> bool:
@@ -641,8 +721,7 @@ def notify_webhook(database: str, run_id: str) -> bool:
     activity log and never affect the run.
     """
     with _connection(database) as connection:
-        url = setting_value(connection, "intel.webhook_url", "")
-        if not url or not setting_bool(connection, "intel.allow_network", False):
+        if not setting_value(connection, "intel.webhook_url", "") or not setting_bool(connection, "intel.allow_network", False):
             return False
         run = connection.execute("SELECT * FROM intel_runs WHERE id = ?", (run_id,)).fetchone()
         rows = connection.execute(
@@ -656,40 +735,15 @@ def notify_webhook(database: str, run_id: str) -> bool:
     sources = {row["connector_id"]: row["findings"] for row in rows}
     lines = [f"**GARBAGE** · {run['query_type']} `{run['query_value'][:200]}` → {run['result_count']} findings ({run['status']})"]
     lines += [f"• {connector}: {count}" for connector, count in list(sources.items())[:15]]
-    payload = {
-        "content": "\n".join(lines)[:1900],
-        "garbage": {
-            "run_id": run_id,
-            "query_type": run["query_type"],
-            "query_value": run["query_value"],
-            "status": run["status"],
-            "result_count": run["result_count"],
-            "sources": sources,
-        },
+    details = {
+        "run_id": run_id,
+        "query_type": run["query_type"],
+        "query_value": run["query_value"],
+        "status": run["status"],
+        "result_count": run["result_count"],
+        "sources": sources,
     }
-    try:
-        result = WEBHOOK_FETCH(
-            url,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-            body=json.dumps(payload).encode("utf-8"),
-            max_bytes=64 * 1024,
-            timeout=10.0,
-        )
-        delivered = result.status < 400
-        error = "" if delivered else f"HTTP {result.status}"
-    except (NetworkError, NetworkPolicyError) as exc:
-        delivered, error = False, str(exc)
-    if not delivered:
-        with _connection(database) as connection:
-            record_activity(
-                connection,
-                action="intel-webhook",
-                target_type="intel_run",
-                target_id=run_id,
-                summary=f"Webhook delivery failed: {error[:200]}",
-            )
-    return delivered
+    return post_webhook(database, "\n".join(lines), details, run_id)
 
 
 def recover_interrupted_runs(database: str) -> int:
@@ -1135,3 +1189,6 @@ from .modules import intel_open_connectors as _intel_open_connectors  # noqa: E4
 from .modules import intel_keyed_connectors as _intel_keyed_connectors  # noqa: E402,F401
 from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402,F401
 from .modules import intel_account_connectors as _intel_account_connectors  # noqa: E402,F401
+from .modules import intel_posture_connectors as _intel_posture_connectors  # noqa: E402,F401
+from .modules import intel_web_surface as _intel_web_surface  # noqa: E402,F401
+from .modules import intel_research_connectors as _intel_research_connectors  # noqa: E402,F401

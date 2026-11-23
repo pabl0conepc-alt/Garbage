@@ -351,6 +351,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "intel.allow_target_contact": "false",
     "intel.max_workers": "4",
     "intel.webhook_url": "",
+    "ai.provider": "disabled",
+    "ai.base_url": "",
+    "ai.model": "",
 }
 
 SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
@@ -429,6 +432,27 @@ SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
         "label": "Webhook for finished queries",
         "description": "HTTPS URL that receives a summary when a multi-source query finishes (Discord webhooks work as-is). Empty disables it; requires network access.",
         "type": "url",
+        "options": [""],
+    },
+    {
+        "key": "ai.provider",
+        "label": "AI model provider",
+        "description": "Model used by the AI investigator. openai-compatible covers Ollama, LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI and similar; anthropic uses the Messages API.",
+        "type": "choice",
+        "options": ["disabled", "openai-compatible", "anthropic"],
+    },
+    {
+        "key": "ai.base_url",
+        "label": "AI endpoint",
+        "description": "Base URL, e.g. http://localhost:11434/v1 (Ollama), http://localhost:1234/v1 (LM Studio), https://openrouter.ai/api/v1, https://api.openai.com/v1 or https://api.anthropic.com. Empty uses the provider default. http:// only for this machine or the local network.",
+        "type": "endpoint",
+        "options": [""],
+    },
+    {
+        "key": "ai.model",
+        "label": "AI model name",
+        "description": "Model id as the endpoint names it, e.g. llama3.1:8b, qwen2.5:14b, openai/gpt-4o-mini, anthropic/claude-sonnet-5-5 (OpenRouter) or claude-opus-5-5.",
+        "type": "text",
         "options": [""],
     },
 )
@@ -1039,6 +1063,75 @@ def _migrate_workspace(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_watchlists(connection: sqlite3.Connection) -> None:
+    """Version 10: watchlists and their alerts."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS watches (
+               id TEXT PRIMARY KEY,
+               value TEXT NOT NULL,
+               query_type TEXT NOT NULL,
+               label TEXT NOT NULL DEFAULT '',
+               interval_minutes INTEGER NOT NULL,
+               enabled INTEGER NOT NULL DEFAULT 1,
+               fingerprint_json TEXT NOT NULL DEFAULT '',
+               warnings_json TEXT NOT NULL DEFAULT '[]',
+               last_run_id TEXT NOT NULL DEFAULT '',
+               last_checked_at TEXT NOT NULL DEFAULT '',
+               last_error TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               UNIQUE (query_type, value)
+           );
+           CREATE TABLE IF NOT EXISTS watch_alerts (
+               id TEXT PRIMARY KEY,
+               watch_id TEXT NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
+               run_id TEXT NOT NULL DEFAULT '',
+               kind TEXT NOT NULL,
+               summary TEXT NOT NULL,
+               details_json TEXT NOT NULL DEFAULT '{}',
+               read INTEGER NOT NULL DEFAULT 0,
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS watch_alerts_created ON watch_alerts(created_at DESC);"""
+    )
+
+
+def _migrate_geo_points(connection: sqlite3.Connection) -> None:
+    """Version 11: map points added by the analyst."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS geo_points (
+               id TEXT PRIMARY KEY,
+               investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+               label TEXT NOT NULL,
+               latitude REAL NOT NULL,
+               longitude REAL NOT NULL,
+               note TEXT NOT NULL DEFAULT '',
+               source_reference TEXT NOT NULL DEFAULT '',
+               observed_at TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS geo_points_case ON geo_points(investigation_id);"""
+    )
+
+
+def _migrate_ai_sessions(connection: sqlite3.Connection) -> None:
+    """Version 12: AI investigator sessions."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS ai_sessions (
+               id TEXT PRIMARY KEY,
+               investigation_id TEXT REFERENCES investigations(id) ON DELETE SET NULL,
+               question TEXT NOT NULL,
+               status TEXT NOT NULL,
+               model TEXT NOT NULL DEFAULT '',
+               max_steps INTEGER NOT NULL,
+               steps_json TEXT NOT NULL DEFAULT '[]',
+               report TEXT NOT NULL DEFAULT '',
+               error TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               finished_at TEXT NOT NULL DEFAULT ''
+           );"""
+    )
+
+
 MIGRATIONS = (
     (1, "Baseline evidence ledger schema", _migrate_ledger),
     (2, "Investigation workspace tables and columns", _migrate_workspace),
@@ -1049,6 +1142,9 @@ MIGRATIONS = (
     (7, "Offline MITRE ATT&CK and case techniques", _migrate_attack),
     (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
     (9, "Full-text search index", _migrate_search_index),
+    (10, "Watchlists and alerts", _migrate_watchlists),
+    (11, "Analyst map points", _migrate_geo_points),
+    (12, "AI investigator sessions", _migrate_ai_sessions),
 )
 
 

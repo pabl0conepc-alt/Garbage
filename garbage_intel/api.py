@@ -67,6 +67,8 @@ from .intel import (
     recover_interrupted_runs,
     run_query,
 )
+from .modules.email_headers import analyze_headers
+from . import ai_agent, compare, geo, preservation, watchlist
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -147,6 +149,9 @@ _STATIC_FILES = {
     "views-analytics.js": "text/javascript; charset=utf-8",
     "views-attack.js": "text/javascript; charset=utf-8",
     "views-transforms.js": "text/javascript; charset=utf-8",
+    "views-watchlist.js": "text/javascript; charset=utf-8",
+    "views-geo.js": "text/javascript; charset=utf-8",
+    "views-ai.js": "text/javascript; charset=utf-8",
     "graph-tools.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
@@ -1046,6 +1051,62 @@ class RequestHandler(BaseHTTPRequestHandler):
             {"Content-Disposition": _attachment_disposition(original_name)},
         )
 
+    def api_evidence_capture(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("evidence")
+        self._json(201, preservation.capture_url(self.database_path, match.group(1), payload))
+
+    def api_evidence_package(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        data, name = preservation.export_package(self.database_path, match.group(1))
+        self._send(200, "application/zip", data, {"Content-Disposition": _attachment_disposition(name)})
+
+    def api_evidence_verify_all(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("evidence")
+        self._json(200, preservation.verify_all(self.database_path))
+
+    def api_geo_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        case = _query_text(query, "investigation_id", "").strip() or None
+        self._json(200, geo.collect_points(self.database_path, case))
+
+    def api_geo_export(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        case = _query_text(query, "investigation_id", "").strip() or None
+        kind = _query_text(query, "format", "geojson")
+        points = geo.collect_points(self.database_path, case)["items"]
+        if kind == "kml":
+            self._send(200, "application/vnd.google-earth.kml+xml", geo.to_kml(points, "GARBAGE").encode("utf-8"),
+                       {"Content-Disposition": _attachment_disposition("garbage-map.kml")})
+        elif kind == "geojson":
+            self._send(200, "application/geo+json", json.dumps(geo.to_geojson(points), ensure_ascii=False).encode("utf-8"),
+                       {"Content-Disposition": _attachment_disposition("garbage-map.geojson")})
+        else:
+            raise ValidationError("format must be geojson or kml")
+
+    def api_geo_point_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(201, geo.add_point(self.database_path, match.group(1), payload))
+
+    def api_geo_point_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        geo.delete_point(self.database_path, match.group(1))
+        self._json(200, {"deleted": match.group(1)})
+
+    def api_intel_compare(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        if not isinstance(payload, dict) or set(payload) - {"run_a", "run_b"}:
+            raise ValidationError("send {run_a, run_b}")
+        self._json(200, compare.compare_runs(self.database_path, str(payload.get("run_a") or ""), str(payload.get("run_b") or "")))
+
+    def api_ai_sessions_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, ai_agent.list_sessions(self.database_path))
+
+    def api_ai_sessions_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(201, ai_agent.start_session(self.database_path, payload))
+
+    def api_ai_session_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, ai_agent.get_session(self.database_path, match.group(1)))
+
+    def api_ai_test(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, ai_agent.test_connection(self.database_path))
+
     def api_evidence_preview(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1429,6 +1490,35 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("intel-orchestrator")
         self._json(200, delete_key(self.database_path, match.group(1)))
 
+    def api_watchlist_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, watchlist.list_watches(self.database_path))
+
+    def api_watchlist_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(201, watchlist.create_watch(self.database_path, payload))
+
+    def api_watch_patch(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, watchlist.update_watch(self.database_path, match.group(1), payload))
+
+    def api_watch_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        watchlist.delete_watch(self.database_path, match.group(1))
+        self._json(200, {"deleted": match.group(1)})
+
+    def api_watch_check(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, watchlist.check_watch(self.database_path, match.group(1)))
+
+    def api_watch_alerts(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        unread = _query_text(query, "unread", "") in ("1", "true")
+        self._json(200, watchlist.list_alerts(self.database_path, unread_only=unread))
+
+    def api_watch_alerts_read(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        ids = payload.get("ids") if isinstance(payload, dict) else None
+        self._json(200, {"updated": watchlist.mark_alerts_read(self.database_path, ids)})
+
     def api_intel_detect(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -1437,6 +1527,17 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not value:
             raise ValidationError("value is required")
         self._json(200, detect_artifact(value))
+
+    def api_intel_email_headers(
+        self, match: re.Match[str], query: dict[str, list[str]], payload: Any
+    ) -> None:
+        self._module("intel-orchestrator")
+        if not isinstance(payload, dict) or set(payload) - {"headers"}:
+            raise ValidationError("send {\"headers\": \"...\"}")
+        try:
+            self._json(200, analyze_headers(payload.get("headers")))
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
     def api_intel_runs_get(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
@@ -2075,6 +2176,26 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
         MAX_BODY_BYTES,
     ),
     ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/intel/email-headers$"), "api_intel_email_headers", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/capture$"), "api_evidence_capture", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/evidence-package$"), "api_evidence_package", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/evidence/verify-all$"), "api_evidence_verify_all", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/intel/compare$"), "api_intel_compare", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/ai/sessions$"), "api_ai_sessions_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/ai/sessions$"), "api_ai_sessions_post", MAX_BODY_BYTES),
+    ("GET", re.compile(rf"^/api/ai/sessions/{_ID_PATTERN}$"), "api_ai_session_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/ai/test$"), "api_ai_test", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/geo$"), "api_geo_get", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/geo/export$"), "api_geo_export", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/geo-points$"), "api_geo_point_post", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/geo-points/{_ID_PATTERN}$"), "api_geo_point_delete", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/watchlist$"), "api_watchlist_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/watchlist$"), "api_watchlist_post", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/watchlist/alerts$"), "api_watch_alerts", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/watchlist/alerts/read$"), "api_watch_alerts_read", MAX_BODY_BYTES),
+    ("PATCH", re.compile(rf"^/api/watchlist/{_ID_PATTERN}$"), "api_watch_patch", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/watchlist/{_ID_PATTERN}$"), "api_watch_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/watchlist/{_ID_PATTERN}/check$"), "api_watch_check", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/intel/runs$"), "api_intel_runs_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/intel/runs$"), "api_intel_runs_post", MAX_BODY_BYTES),
     (
@@ -2129,6 +2250,7 @@ def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer
 def serve(database: str | Path, port: int = 8000) -> None:
     server = create_server(database, port)
     recover_interrupted_runs(str(database))
+    watchlist.start_scheduler(str(database))
     print(f"GARBAGE local interface: http://127.0.0.1:{server.server_port}/")
     try:
         server.serve_forever()
