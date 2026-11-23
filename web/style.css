@@ -5542,3 +5542,11 @@ dialog:focus-visible,
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
+/* Watchlist */
+.watch-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.watch-form .input[type="text"] { flex: 1 1 220px; }
+.watch-alert { border-bottom: 1px solid var(--border-subtle); padding: 8px 0; }
+.watch-alert summary { cursor: pointer; }
+.watch-alert.unread summary strong::before { content: "● "; color: var(--accent); }
+.watch-alert ul { margin: 6px 0 6px 18px; }

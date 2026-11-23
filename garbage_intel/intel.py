@@ -425,6 +425,7 @@ def run_query(
     investigation_id: object = None,
     use_cache: bool = True,
     wait: bool = True,
+    notify: bool = True,
 ) -> dict[str, Any]:
     """Fan one artifact out to every compatible connector and persist the run.
 
@@ -520,7 +521,7 @@ def run_query(
             _write_outcome(connection, run_id, connector, ("pending", [], "", 0, False), kind, detected["value"], ran=False)
 
     job = partial(
-        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers
+        _execute, database, run_id, kind, detected["value"], case_id, runnable, context, secrets, workers, notify
     )
     if wait:
         job()
@@ -608,6 +609,7 @@ def _execute(
     context: ConnectorContext,
     secrets: dict[str, str],
     workers: int,
+    notify: bool = True,
 ) -> None:
     """Run the connectors and write each one's outcome as it completes."""
     finished: set[str] = set()
@@ -639,10 +641,42 @@ def _execute(
                 (run_id,),
             )
             _finish_run(connection, run_id, kind, value, case_id)
-        notify_webhook(database, run_id)
+        if notify:
+            notify_webhook(database, run_id)
 
 
 WEBHOOK_FETCH: Callable[..., Any] = net.fetch
+
+
+def post_webhook(database: str, content: str, details: dict[str, Any], target_id: str) -> bool:
+    """POST {content, garbage} to the configured webhook; False when unset or failed."""
+    with _connection(database) as connection:
+        url = setting_value(connection, "intel.webhook_url", "")
+        if not url or not setting_bool(connection, "intel.allow_network", False):
+            return False
+    try:
+        result = WEBHOOK_FETCH(
+            url,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"content": content[:1900], "garbage": details}).encode("utf-8"),
+            max_bytes=64 * 1024,
+            timeout=10.0,
+        )
+        delivered = result.status < 400
+        error = "" if delivered else f"HTTP {result.status}"
+    except (NetworkError, NetworkPolicyError) as exc:
+        delivered, error = False, str(exc)
+    if not delivered:
+        with _connection(database) as connection:
+            record_activity(
+                connection,
+                action="intel-webhook",
+                target_type="webhook",
+                target_id=target_id,
+                summary=f"Webhook delivery failed: {error[:200]}",
+            )
+    return delivered
 
 
 def notify_webhook(database: str, run_id: str) -> bool:
@@ -652,8 +686,7 @@ def notify_webhook(database: str, run_id: str) -> bool:
     activity log and never affect the run.
     """
     with _connection(database) as connection:
-        url = setting_value(connection, "intel.webhook_url", "")
-        if not url or not setting_bool(connection, "intel.allow_network", False):
+        if not setting_value(connection, "intel.webhook_url", "") or not setting_bool(connection, "intel.allow_network", False):
             return False
         run = connection.execute("SELECT * FROM intel_runs WHERE id = ?", (run_id,)).fetchone()
         rows = connection.execute(
@@ -667,40 +700,15 @@ def notify_webhook(database: str, run_id: str) -> bool:
     sources = {row["connector_id"]: row["findings"] for row in rows}
     lines = [f"**GARBAGE** · {run['query_type']} `{run['query_value'][:200]}` → {run['result_count']} findings ({run['status']})"]
     lines += [f"• {connector}: {count}" for connector, count in list(sources.items())[:15]]
-    payload = {
-        "content": "\n".join(lines)[:1900],
-        "garbage": {
-            "run_id": run_id,
-            "query_type": run["query_type"],
-            "query_value": run["query_value"],
-            "status": run["status"],
-            "result_count": run["result_count"],
-            "sources": sources,
-        },
+    details = {
+        "run_id": run_id,
+        "query_type": run["query_type"],
+        "query_value": run["query_value"],
+        "status": run["status"],
+        "result_count": run["result_count"],
+        "sources": sources,
     }
-    try:
-        result = WEBHOOK_FETCH(
-            url,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-            body=json.dumps(payload).encode("utf-8"),
-            max_bytes=64 * 1024,
-            timeout=10.0,
-        )
-        delivered = result.status < 400
-        error = "" if delivered else f"HTTP {result.status}"
-    except (NetworkError, NetworkPolicyError) as exc:
-        delivered, error = False, str(exc)
-    if not delivered:
-        with _connection(database) as connection:
-            record_activity(
-                connection,
-                action="intel-webhook",
-                target_type="intel_run",
-                target_id=run_id,
-                summary=f"Webhook delivery failed: {error[:200]}",
-            )
-    return delivered
+    return post_webhook(database, "\n".join(lines), details, run_id)
 
 
 def recover_interrupted_runs(database: str) -> int:

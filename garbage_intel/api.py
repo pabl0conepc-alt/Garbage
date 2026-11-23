@@ -68,6 +68,7 @@ from .intel import (
     run_query,
 )
 from .modules.email_headers import analyze_headers
+from . import watchlist
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -148,6 +149,7 @@ _STATIC_FILES = {
     "views-analytics.js": "text/javascript; charset=utf-8",
     "views-attack.js": "text/javascript; charset=utf-8",
     "views-transforms.js": "text/javascript; charset=utf-8",
+    "views-watchlist.js": "text/javascript; charset=utf-8",
     "graph-tools.js": "text/javascript; charset=utf-8",
     "board.js": "text/javascript; charset=utf-8",
     "graph.js": "text/javascript; charset=utf-8",
@@ -1430,6 +1432,35 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._module("intel-orchestrator")
         self._json(200, delete_key(self.database_path, match.group(1)))
 
+    def api_watchlist_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._json(200, watchlist.list_watches(self.database_path))
+
+    def api_watchlist_post(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._json(201, watchlist.create_watch(self.database_path, payload))
+
+    def api_watch_patch(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, watchlist.update_watch(self.database_path, match.group(1), payload))
+
+    def api_watch_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        watchlist.delete_watch(self.database_path, match.group(1))
+        self._json(200, {"deleted": match.group(1)})
+
+    def api_watch_check(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        self._json(200, watchlist.check_watch(self.database_path, match.group(1)))
+
+    def api_watch_alerts(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
+        self._module("intel-orchestrator")
+        unread = _query_text(query, "unread", "") in ("1", "true")
+        self._json(200, watchlist.list_alerts(self.database_path, unread_only=unread))
+
+    def api_watch_alerts_read(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        ids = payload.get("ids") if isinstance(payload, dict) else None
+        self._json(200, {"updated": watchlist.mark_alerts_read(self.database_path, ids)})
+
     def api_intel_detect(
         self, match: re.Match[str], query: dict[str, list[str]], payload: object
     ) -> None:
@@ -2088,6 +2119,13 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ),
     ("GET", re.compile(r"^/api/intel/detect$"), "api_intel_detect", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/intel/email-headers$"), "api_intel_email_headers", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/watchlist$"), "api_watchlist_get", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/watchlist$"), "api_watchlist_post", MAX_BODY_BYTES),
+    ("GET", re.compile(r"^/api/watchlist/alerts$"), "api_watch_alerts", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/watchlist/alerts/read$"), "api_watch_alerts_read", MAX_BODY_BYTES),
+    ("PATCH", re.compile(rf"^/api/watchlist/{_ID_PATTERN}$"), "api_watch_patch", MAX_BODY_BYTES),
+    ("DELETE", re.compile(rf"^/api/watchlist/{_ID_PATTERN}$"), "api_watch_delete", MAX_BODY_BYTES),
+    ("POST", re.compile(rf"^/api/watchlist/{_ID_PATTERN}/check$"), "api_watch_check", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/intel/runs$"), "api_intel_runs_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/intel/runs$"), "api_intel_runs_post", MAX_BODY_BYTES),
     (
@@ -2142,6 +2180,7 @@ def create_server(database: str | Path, port: int = 8000) -> ThreadingHTTPServer
 def serve(database: str | Path, port: int = 8000) -> None:
     server = create_server(database, port)
     recover_interrupted_runs(str(database))
+    watchlist.start_scheduler(str(database))
     print(f"GARBAGE local interface: http://127.0.0.1:{server.server_port}/")
     try:
         server.serve_forever()

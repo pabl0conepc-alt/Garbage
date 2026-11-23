@@ -47,6 +47,7 @@ G.NAV = [
     label: "Inteligência",
     items: [
       { view: "multisearch", label: "Pesquisa multifonte", icon: "radar", module: "intel-orchestrator" },
+      { view: "watchlist", label: "Monitoramento", icon: "activity", module: "intel-orchestrator" },
       { view: "entities", label: "Inteligência de entidades", icon: "entities", module: "entities" },
       { view: "indicators", label: "Pesquisa de inteligência", icon: "indicators", module: "indicator-engine" },
       { view: "files", label: "Análise de arquivos", icon: "files", module: "file-intelligence" },

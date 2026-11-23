@@ -1039,6 +1039,38 @@ def _migrate_workspace(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_watchlists(connection: sqlite3.Connection) -> None:
+    """Version 10: watchlists and their alerts."""
+    connection.executescript(
+        """CREATE TABLE IF NOT EXISTS watches (
+               id TEXT PRIMARY KEY,
+               value TEXT NOT NULL,
+               query_type TEXT NOT NULL,
+               label TEXT NOT NULL DEFAULT '',
+               interval_minutes INTEGER NOT NULL,
+               enabled INTEGER NOT NULL DEFAULT 1,
+               fingerprint_json TEXT NOT NULL DEFAULT '',
+               warnings_json TEXT NOT NULL DEFAULT '[]',
+               last_run_id TEXT NOT NULL DEFAULT '',
+               last_checked_at TEXT NOT NULL DEFAULT '',
+               last_error TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               UNIQUE (query_type, value)
+           );
+           CREATE TABLE IF NOT EXISTS watch_alerts (
+               id TEXT PRIMARY KEY,
+               watch_id TEXT NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
+               run_id TEXT NOT NULL DEFAULT '',
+               kind TEXT NOT NULL,
+               summary TEXT NOT NULL,
+               details_json TEXT NOT NULL DEFAULT '{}',
+               read INTEGER NOT NULL DEFAULT 0,
+               created_at TEXT NOT NULL
+           );
+           CREATE INDEX IF NOT EXISTS watch_alerts_created ON watch_alerts(created_at DESC);"""
+    )
+
+
 MIGRATIONS = (
     (1, "Baseline evidence ledger schema", _migrate_ledger),
     (2, "Investigation workspace tables and columns", _migrate_workspace),
@@ -1049,6 +1081,7 @@ MIGRATIONS = (
     (7, "Offline MITRE ATT&CK and case techniques", _migrate_attack),
     (8, "Transforms, entity resolution and module registry corrections", _migrate_foundation),
     (9, "Full-text search index", _migrate_search_index),
+    (10, "Watchlists and alerts", _migrate_watchlists),
 )
 
 
