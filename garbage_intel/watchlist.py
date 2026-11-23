@@ -253,7 +253,7 @@ def _prefix(watch: dict[str, Any]) -> str:
     """Account types are detected from their prefix; indicators need none."""
     return {
         "discord-id": "discord:", "roblox-user": "roblox:", "username": "user:",
-        "telegram": "telegram:", "minecraft": "minecraft:", "steam": "steam:",
+        "telegram": "telegram:", "minecraft": "minecraft:", "steam": "steam:", "topic": "topic:",
         "discord-invite": "https://discord.gg/",
     }.get(watch["query_type"], "")
 

@@ -51,6 +51,12 @@
     telegram: ["Telegram", "Prévia pública do t.me de usuário, bot, grupo ou canal: nome, descrição, membros ou inscritos e foto."],
     hibp: ["Have I Been Pwned", "Vazamentos em que um e-mail apareceu: nome, data, tamanho e tipos de dado expostos. Exige sua chave do HIBP; nunca traz os dados vazados."],
     "email-posture": ["Postura de e-mail e domínio", "Nota de SPF, DMARC, DKIM, DNSSEC, MTA-STS, TLS-RPT, BIMI e CAA pelo DNS público, provedor de e-mail e domínio descartável."],
+    "gdelt-news": ["GDELT (notícias)", "Notícias do mundo todo dos últimos três meses que citam os termos, das mais recentes para as mais antigas, com domínio, idioma e país da fonte."],
+    hackernews: ["Hacker News", "Discussões no Hacker News sobre os termos, com pontos, comentários e link da thread."],
+    wikipedia: ["Wikipedia e Wikidata", "Artigos da Wikipedia (português e inglês) e entidades do Wikidata que correspondem aos termos."],
+    crossref: ["Crossref", "Trabalhos acadêmicos sobre os termos: título, DOI, ano, autores e periódico."],
+    openalex: ["OpenAlex", "Pesquisas sobre os termos com ano, DOI, citações, autores e periódico. A chave opcional aumenta a cota diária."],
+    "rss-feed": ["Feed RSS/Atom", "Lê um feed a partir da URL https: título e itens mais recentes com links, datas e resumos. Contata o servidor do feed."],
     "web-surface": ["Superfície do site", "Página inicial, robots.txt, sitemap e manifest: caminhos bloqueados e sensíveis, seções do sitemap, SEO e Open Graph, canonical, hreflang, pontos fracos da CSP, conteúdo misto, hosts externos e hash do texto para monitoramento. Contata o servidor do alvo."],
   };
 
@@ -107,6 +113,8 @@
     sitemap: "Sitemap", "sitemap-notable": "URL sensível no sitemap", canonical: "Canonical",
     "seo-meta": "Meta de SEO", "social-meta": "Meta social (Open Graph)", "seo-missing": "Meta ausente",
     hreflang: "Idioma alternativo", "page-links": "Links da página", "mixed-content": "Conteúdo misto",
+    "news-article": "Notícia", discussion: "Discussão", "encyclopedia-article": "Artigo de enciclopédia",
+    "wikidata-entity": "Entidade do Wikidata", publication: "Publicação", feed: "Feed", "feed-item": "Item do feed",
     csp: "Content-Security-Policy", "page-text-hash": "Hash do texto da página", "web-manifest": "Manifest do app",
   };
 
@@ -181,7 +189,7 @@
     domain: "Domínio", ipv4: "IPv4", ipv6: "IPv6", cidr: "CIDR", url: "URL", email: "E-mail",
     md5: "MD5", sha1: "SHA-1", sha256: "SHA-256", asn: "ASN", cve: "CVE",
     "discord-id": "ID do Discord", "discord-invite": "Convite do Discord", "roblox-user": "Roblox",
-    username: "Username", telegram: "Telegram", minecraft: "Minecraft", steam: "Steam",
+    username: "Username", telegram: "Telegram", minecraft: "Minecraft", steam: "Steam", topic: "Tema",
   };
 
   /* Which findings can become a shared entity, and as which category. */
@@ -212,6 +220,7 @@
     nvd: "Opcional: aumenta o limite de 5 para 50 consultas a cada 30 s.",
     ipinfo: "Opcional: sem token, o limite anônimo é menor.",
     discord: "Obrigatório para o perfil de usuário. Crie um bot no Developer Portal e cole o token dele.",
+    openalex: "Opcional: sem chave, as buscas dividem uma cota diária gratuita pequena por IP.",
     ai: "Para o Investigador IA em endpoints com chave (OpenRouter, OpenAI, Anthropic…). Servidores locais como Ollama não precisam.",
     hibp: "Obrigatória e paga. Mostra só em quais vazamentos o e-mail apareceu.",
   };
@@ -445,7 +454,7 @@
       id: "multisearch-input",
       autocomplete: "off",
       spellcheck: "false",
-      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome>, t.me/<nome>, minecraft:<nome> ou steam:<nome>",
+      placeholder: "Domínio, IP, CIDR, URL, e-mail, hash, ASN, CVE, discord:<id>, convite do Discord, roblox:<id ou nome>, user:<nome>, t.me/<nome>, minecraft:<nome>, steam:<nome> ou topic:<termos>",
       "aria-label": "Artefato para consultar",
       maxlength: "2000",
     });

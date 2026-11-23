@@ -54,7 +54,7 @@ INDICATOR_TYPES = (
 # Public platform accounts, written with a prefix (discord:<id>, roblox:<id or
 # name>, user:<name>, telegram:<name>) or as their profile/invite URL so they
 # never collide with indicators.
-ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram", "minecraft", "steam")
+ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram", "minecraft", "steam", "topic")
 ARTIFACT_TYPES = INDICATOR_TYPES + ACCOUNT_TYPES
 RESULT_STATUSES = (
     "pending",
@@ -81,6 +81,7 @@ _TELEGRAM = re.compile(
     r"(?:telegram:\s*@?|(?:https?://)?(?:www\.)?(?:t|telegram)\.me/)([A-Za-z][A-Za-z0-9_]{3,31})/?",
     re.IGNORECASE,
 )
+_TOPIC = re.compile(r"(?:topic|news|tema):\s*(.{2,200})", re.IGNORECASE | re.DOTALL)
 _MINECRAFT = re.compile(r"minecraft:\s*([A-Za-z0-9_]{3,16})", re.IGNORECASE)
 _STEAM = re.compile(
     r"(?:steam:\s*|(?:https?://)?steamcommunity\.com/(?:id|profiles)/)([A-Za-z0-9_-]{2,32})/?",
@@ -236,7 +237,7 @@ def detect_artifact(raw: object) -> dict[str, str]:
         raise ValidationError(
             "value is not a supported artifact; use a domain, IP, CIDR, URL, "
             "email, hash, ASN, CVE, discord:<id>, a Discord invite, roblox:<id or name>, "
-            "user:<name>, telegram:<name>, minecraft:<name> or steam:<name or id>"
+            "user:<name>, telegram:<name>, minecraft:<name>, steam:<name or id> or topic:<terms>"
         )
     return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
 
@@ -254,6 +255,10 @@ def _detect_account(value: str) -> dict[str, str] | None:
     match = _TELEGRAM.fullmatch(value)
     if match:
         return {"type": "telegram", "value": match.group(1).lower(), "label": "Telegram"}
+    match = _TOPIC.fullmatch(value)
+    if match:
+        terms = " ".join(match.group(1).split())
+        return {"type": "topic", "value": terms, "label": "Topic"}
     match = _MINECRAFT.fullmatch(value)
     if match:
         return {"type": "minecraft", "value": match.group(1).lower(), "label": "Minecraft"}
@@ -1156,3 +1161,4 @@ from .modules import intel_org_connectors as _intel_org_connectors  # noqa: E402
 from .modules import intel_account_connectors as _intel_account_connectors  # noqa: E402,F401
 from .modules import intel_posture_connectors as _intel_posture_connectors  # noqa: E402,F401
 from .modules import intel_web_surface as _intel_web_surface  # noqa: E402,F401
+from .modules import intel_research_connectors as _intel_research_connectors  # noqa: E402,F401

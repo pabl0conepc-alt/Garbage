@@ -38,6 +38,7 @@ PROVIDERS: dict[str, Provider] = {
         Provider("ipinfo", "IPinfo", "https://ipinfo.io/account/token", "Optional: the anonymous tier is rate limited."),
         Provider("discord", "Discord (bot token)", "https://discord.com/developers/applications", "A token of your own bot; needed only for user profile lookups by ID."),
         Provider("ai", "AI model", "https://openrouter.ai/keys", "Key for the AI investigator endpoint (OpenRouter, OpenAI, Anthropic, ...). Local servers such as Ollama need none."),
+        Provider("openalex", "OpenAlex", "https://openalex.org/settings/api", "Optional: without a key, searches share a small free daily budget per IP."),
         Provider("hibp", "Have I Been Pwned", "https://haveibeenpwned.com/API/Key", "Paid key; returns only which breaches an address appeared in, never the leaked data."),
     )
 }
