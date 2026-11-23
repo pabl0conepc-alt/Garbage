@@ -358,6 +358,17 @@ def list_connectors(database: str) -> dict[str, Any]:
             for row in connection.execute("SELECT * FROM intel_source_status")
         }
         disabled = _disabled_connectors(connection, connectors())
+        today = {
+            row["connector_id"]: dict(row)
+            for row in connection.execute(
+                """SELECT connector_id,
+                          COUNT(DISTINCT CASE WHEN cached = 0 AND status IN ('ok', 'empty', 'error') THEN run_id END) AS requests,
+                          COUNT(DISTINCT CASE WHEN status = 'error' THEN run_id END) AS errors,
+                          COUNT(DISTINCT CASE WHEN cached = 1 THEN run_id END) AS cached
+                   FROM intel_results WHERE fetched_at >= ? GROUP BY connector_id""",
+                (utc_now()[:10],),
+            )
+        }
     items = []
     for connector in connectors():
         status = status_rows.get(connector.connector_id)
@@ -388,6 +399,7 @@ def list_connectors(database: str) -> dict[str, Any]:
                 "module_id": connector_module(connector),
                 "availability": availability,
                 "status": status,
+                "today": today.get(connector.connector_id, {"requests": 0, "errors": 0, "cached": 0}),
             }
         )
     return {
@@ -402,12 +414,30 @@ def list_connectors(database: str) -> dict[str, Any]:
 # Orchestration
 
 
+RETRY_DELAY_SECONDS = 1.5
+_TRANSIENT = re.compile(r"HTTP 5\d\d|timed out|timeout|temporarily|connection (?:reset|refused|aborted)", re.IGNORECASE)
+
+
+def _call_with_retry(connector: Connector, context: ConnectorContext) -> list[Finding]:
+    """Run the connector, retrying once after a transient network failure.
+
+    Rate limits (429), policy refusals and 4xx answers are not retried.
+    """
+    try:
+        return connector.run(context)
+    except NetworkError as exc:
+        if not _TRANSIENT.search(str(exc)):
+            raise
+        time.sleep(RETRY_DELAY_SECONDS)
+        return connector.run(context)
+
+
 def _run_one(
     connector: Connector, context: ConnectorContext
 ) -> tuple[str, list[Finding], str, int]:
     started = time.monotonic()
     try:
-        findings = connector.run(context)[:MAX_FINDINGS_PER_CONNECTOR]
+        findings = _call_with_retry(connector, context)[:MAX_FINDINGS_PER_CONNECTOR]
         status = "ok" if findings else "empty"
         error = ""
     except NetworkPolicyError as exc:

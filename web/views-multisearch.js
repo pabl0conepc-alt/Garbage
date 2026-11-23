@@ -443,7 +443,7 @@
     let detected = null;
     let currentRun = null;
     let pollToken = 0;
-    let activeTab = { conectores: "connectors", chaves: "keys", cabecalhos: "headers" }[params[0]] || "search";
+    let activeTab = { conectores: "connectors", chaves: "keys", cabecalhos: "headers", comparar: "compare" }[params[0]] || "search";
     const keysHost = el("div");
     let detectTimer = null;
     const selected = new Set(connectorData.items.map((item) => item.connector_id));
@@ -812,6 +812,14 @@
               render: (row) => (row.status ? `${row.status.success_count} / ${row.status.error_count}` : "—"),
             },
             {
+              label: "HOJE",
+              cellClass: "numeric-col",
+              render: (row) =>
+                row.today && (row.today.requests || row.today.cached)
+                  ? el("span", { title: "Consultas feitas hoje · com erro · respondidas pelo cache" }, `${row.today.requests} · ${row.today.errors} erro(s) · ${row.today.cached} cache`)
+                  : "—",
+            },
+            {
               label: "LIMITE · CACHE",
               render: (row) =>
                 `${row.rate_per_minute}/min · ${row.ttl_seconds ? `${Math.round(row.ttl_seconds / 3600) || 1} h` : "sem cache"}`,
@@ -920,6 +928,67 @@
       );
     }
 
+    const compareHost = el("div");
+    function compareTab() {
+      const output = el("div");
+      const pickA = el("select", { class: "input", "aria-label": "Primeira consulta" });
+      const pickB = el("select", { class: "input", "aria-label": "Segunda consulta" });
+      const levelLabel = { strong: ["Forte", "danger"], moderate: ["Moderada", "warning"], weak: ["Fraca", "info"], none: ["Nenhuma", "neutral"] };
+      const signalLabel = {
+        "same-name": "Mesmo nome", "normalised-name": "Nome igual após normalizar", "similar-name": "Nome parecido",
+        "same-image": "Mesma imagem", "same-sites": "Mesmos sites", "shared-links": "Links em comum",
+        "similar-text": "Bio parecida", "shared-values": "Outros achados iguais",
+      };
+      const signalWhy = {
+        "same-name": "O mesmo nome ou identificador aparece nos dois.",
+        "normalised-name": "Os nomes batem depois de tirar separadores, números finais e leetspeak.",
+        "similar-name": "Os nomes são muito parecidos.",
+        "same-image": "Os dois usam a mesma URL de avatar, skin ou banner.",
+        "same-sites": "O nome existe nos mesmos sites (nomes comuns coincidem com frequência).",
+        "shared-links": "Os dois apontam para os mesmos hosts pouco comuns.",
+        "similar-text": "Bios ou descrições compartilham boa parte das palavras.",
+        "shared-values": "Outros achados idênticos (IPs, servidores de nome, certificados, grupos…).",
+      };
+      api("/api/intel/runs?limit=100").then((data) => {
+        const options = data.items.map((run) => [run.id, `${run.query_type} · ${run.query_value} · ${formatDate(run.started_at)}`]);
+        for (const pick of [pickA, pickB]) pick.replaceChildren(...options.map(([id, label]) => el("option", { value: id }, label)));
+        if (options.length > 1) pickB.value = options[1][0];
+        if (options.length < 2) output.replaceChildren(el("p", { class: "panel-empty" }, "Faça pelo menos duas consultas para comparar."));
+      });
+      async function run(event) {
+        event.preventDefault();
+        output.replaceChildren(loadingBlock("Comparando…"));
+        try {
+          const r = await api("/api/intel/compare", { method: "POST", body: JSON.stringify({ run_a: pickA.value, run_b: pickB.value }) });
+          const [label, tone] = levelLabel[r.level];
+          output.replaceChildren(
+            panel(
+              { eyebrow: "RESULTADO", title: `${r.a.query_value}  ×  ${r.b.query_value}`, caption: `Pontuação ${r.score}/100` },
+              el("p", {}, badge(`Correspondência ${label.toLowerCase()}`, tone)),
+              table({
+                columns: [
+                  { label: "SINAL", render: (x) => signalLabel[x.signal] || x.signal },
+                  { label: "PESO", cellClass: "numeric-col", render: (x) => `+${x.weight}` },
+                  { label: "POR QUÊ", render: (x) => signalWhy[x.signal] || x.detail },
+                  { label: "VALORES", render: (x) => x.evidence.join(", ") },
+                ],
+                rows: r.signals,
+                emptyMessage: "Nenhum sinal em comum.",
+              }),
+              el("p", { class: "field-hint" }, "Isto é uma pista para revisão manual, não uma identificação. Nomes comuns, hospedagem compartilhada e avatares padrão geram coincidências."),
+            ),
+          );
+        } catch (error) {
+          output.replaceChildren(G.inlineError(error.message));
+        }
+      }
+      compareHost.replaceChildren(
+        el("form", { class: "query-panel watch-form", onsubmit: run }, pickA, pickB, el("button", { class: "button button-primary", type: "submit" }, "Comparar")),
+        el("p", { class: "field-hint" }, "Compare duas consultas salvas lado a lado, por exemplo user:alice e user:alice_99, ou um perfil da Steam e um do Roblox. Cada sinal mostra o peso e os valores que o geraram."),
+        output,
+      );
+      return compareHost;
+    }
     const headersHost = el("div");
     function headersTab() {
       if (headersHost.childElementCount) return headersHost;
@@ -1006,6 +1075,7 @@
             { key: "connectors", label: "Conectores", count: connectorData.total },
             { key: "keys", label: "Chaves de API" },
             { key: "headers", label: "Cabeçalhos de e-mail" },
+            { key: "compare", label: "Comparar" },
           ],
           active: activeTab,
           onSelect: (key) => {
@@ -1020,6 +1090,8 @@
           ? keysHost
           : activeTab === "headers"
           ? headersTab()
+          : activeTab === "compare"
+          ? compareTab()
           : activeTab === "connectors"
           ? connectorsTab()
           : el(

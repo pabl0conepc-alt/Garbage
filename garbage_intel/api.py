@@ -68,7 +68,7 @@ from .intel import (
     run_query,
 )
 from .modules.email_headers import analyze_headers
-from . import ai_agent, geo, preservation, watchlist
+from . import ai_agent, compare, geo, preservation, watchlist
 from .modules.cisa_kev import CisaKevError, list_cached, refresh_cisa_kev
 from .modules.file_intel import (
     MAX_FILE_BYTES,
@@ -1087,6 +1087,12 @@ class RequestHandler(BaseHTTPRequestHandler):
     def api_geo_point_delete(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         geo.delete_point(self.database_path, match.group(1))
         self._json(200, {"deleted": match.group(1)})
+
+    def api_intel_compare(self, match: re.Match[str], query: dict[str, list[str]], payload: Any) -> None:
+        self._module("intel-orchestrator")
+        if not isinstance(payload, dict) or set(payload) - {"run_a", "run_b"}:
+            raise ValidationError("send {run_a, run_b}")
+        self._json(200, compare.compare_runs(self.database_path, str(payload.get("run_a") or ""), str(payload.get("run_b") or "")))
 
     def api_ai_sessions_get(self, match: re.Match[str], query: dict[str, list[str]], payload: object) -> None:
         self._json(200, ai_agent.list_sessions(self.database_path))
@@ -2174,6 +2180,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], str, int], ...] = (
     ("POST", re.compile(rf"^/api/investigations/{_ID_PATTERN}/capture$"), "api_evidence_capture", MAX_BODY_BYTES),
     ("GET", re.compile(rf"^/api/investigations/{_ID_PATTERN}/evidence-package$"), "api_evidence_package", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/evidence/verify-all$"), "api_evidence_verify_all", MAX_BODY_BYTES),
+    ("POST", re.compile(r"^/api/intel/compare$"), "api_intel_compare", MAX_BODY_BYTES),
     ("GET", re.compile(r"^/api/ai/sessions$"), "api_ai_sessions_get", MAX_BODY_BYTES),
     ("POST", re.compile(r"^/api/ai/sessions$"), "api_ai_sessions_post", MAX_BODY_BYTES),
     ("GET", re.compile(rf"^/api/ai/sessions/{_ID_PATTERN}$"), "api_ai_session_get", MAX_BODY_BYTES),
