@@ -278,6 +278,12 @@ const ICON_PATHS = {
   clock: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l2.5 2",
   list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
   dot: "M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
+  minus: "M5 12h14",
+  fit: "M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1 -1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15",
+  undo: "M9 14 4.5 9.5 9 5M4.5 9.5H15a4.5 4.5 0 0 1 0 9h-3",
+  redo: "M15 14l4.5-4.5L15 5M19.5 9.5H9a4.5 4.5 0 0 0 0 9h3",
+  send: "M4.5 12 19.5 5l-4 14-3.5-5.5zM12 13.5l7.5-8.5",
+  arrow: "M9.5 6.5 15 12l-5.5 5.5",
 };
 
 /* Legacy glyphs passed by views are mapped onto the icon set so every

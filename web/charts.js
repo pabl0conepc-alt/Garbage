@@ -61,6 +61,8 @@
   function hideTooltip() {
     if (tooltip) tooltip.hidden = true;
   }
+  // The readout lives on <body>; a route change must not leave it behind.
+  window.addEventListener("hashchange", hideTooltip);
 
   /* Wraps a chart with a title, an optional legend and a table toggle. */
   function card({ eyebrow, title, caption = "", chart, table, legend = null, empty = "" }) {
@@ -188,8 +190,10 @@
 
   /* ---------------------------------------------------------------- */
   /* Time series: 2px lines, crosshair snaps to the nearest day.       */
+  /* With area: true each line gets a soft fill fading to the axis.    */
 
-  function timeSeries({ days, series, height = 220, format = (v) => number.format(v) }) {
+  let gradientId = 0;
+  function timeSeries({ days, series, height = 220, format = (v) => number.format(v), area = false }) {
     const wrap = el("div", { class: "line-chart" });
     const draw = () => {
       const width = Math.max(280, wrap.clientWidth || 640);
@@ -215,6 +219,22 @@
         text.textContent = `${day.slice(8, 10)}/${day.slice(5, 7)}`;
         root.append(text);
       });
+      if (area) {
+        const defs = svg("defs");
+        root.append(defs);
+        series.forEach((item, slot) => {
+          const id = `chart-area-${(gradientId += 1)}`;
+          const gradient = svg("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+          const top = svg("stop", { offset: "0", class: "chart-area-top" });
+          const bottom = svg("stop", { offset: "1", class: "chart-area-bottom" });
+          top.style.stopColor = item.color || seriesColor(slot);
+          bottom.style.stopColor = item.color || seriesColor(slot);
+          gradient.append(top, bottom);
+          defs.append(gradient);
+          const line = item.values.map((value, index) => `L ${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(" ");
+          root.append(svg("path", { d: `M ${x(0)} ${y(0)} ${line} L ${x(item.values.length - 1)} ${y(0)} Z`, fill: `url(#${id})`, class: "chart-area" }));
+        });
+      }
       series.forEach((item, slot) => {
         const points = item.values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
         root.append(svg("polyline", { points, class: "chart-line", stroke: item.color || seriesColor(slot) }));

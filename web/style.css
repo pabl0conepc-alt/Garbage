@@ -5569,3 +5569,310 @@ dialog:focus-visible,
 .ai-report h3 { margin: 14px 0 6px; font-size: 1rem; }
 .ai-report p { margin: 4px 0; white-space: pre-wrap; }
 .ai-report .ai-bullet { padding-left: 12px; }
+
+/* ==================================================================
+   Refresh visual: fundo de ondas, barras em pílula, grafo radial por
+   categorias e Visão geral em painel. Última camada; só visual.
+   ================================================================== */
+
+/* ---- Fundo: ondas grafite sutis, fixas atrás do conteúdo -------------- */
+/* Desenho próprio (waves-dark.svg): véus translúcidos e feixes de linhas
+   finas quase sumindo no fundo escuro. */
+
+html {
+  background: var(--background) url("/waves-dark.svg") center / cover no-repeat fixed;
+}
+body { background: transparent; }
+[data-theme="contrast"] body { background: var(--background); }
+
+/* ---- Barras em pílula ----------------------------------------------- */
+/* Corpo quase preto com gradiente interno, borda fina clara e um brilho
+   suave na borda superior. */
+
+:root {
+  --pill-fill: linear-gradient(180deg, #26282C 0%, #141618 40%, #0B0C0E 100%);
+  --pill-line: rgba(255, 255, 255, 0.15);
+  --pill-shine: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  --pill-drop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 40px -18px rgba(0, 0, 0, 0.8);
+}
+
+.rail,
+.topbar,
+.query-bar,
+.graph-toolbar,
+.graph-controls {
+  border: 1px solid var(--pill-line);
+  background: var(--pill-fill);
+  box-shadow: var(--pill-shine), var(--pill-drop);
+}
+.rail,
+.topbar,
+.query-bar,
+.graph-toolbar,
+.graph-controls { border-radius: 999px; }
+.rail { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.topbar { -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0 10px 0 22px; }
+
+/* Fio de luz na borda superior, mais forte no meio. */
+.rail::after,
+.topbar::after,
+.query-bar::after,
+.graph-toolbar::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  pointer-events: none;
+}
+.query-bar,
+.graph-toolbar { position: relative; }
+
+.rail .nav-link.is-active { background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14); }
+.topbar .search-trigger { border-radius: 999px; background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); }
+.topbar .button-primary { border-radius: 999px; }
+
+/* Barra de pesquisa multifonte: uma pílula só com o campo dentro. */
+.query-bar { padding: 6px; }
+.query-bar .query-input.input,
+.query-bar .query-input.input:hover,
+.query-bar .query-input.input:focus {
+  height: 42px;
+  padding-left: 18px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: transparent;
+}
+.query-bar .query-input.input:focus-visible { outline: 1px solid rgba(255, 255, 255, 0.35); outline-offset: 0; }
+.query-bar .compact-select,
+.query-bar select.input { border-radius: 999px; background-color: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); }
+.query-bar .inline-check { padding: 0 6px; }
+.query-bar .button { height: 40px; padding: 0 18px; border-radius: 999px; }
+
+/* Barra de filtros do grafo e controles flutuantes. */
+.graph-toolbar { padding: 6px 8px; gap: 6px; }
+.graph-toolbar .input,
+.graph-toolbar select { border-radius: 999px; background-color: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); }
+.graph-toolbar .search-field,
+.graph-toolbar .search-field .input { border-radius: 999px; }
+.graph-controls { padding: 5px; gap: 3px; }
+.graph-controls .button { border-radius: 999px; }
+
+@media (max-width: 760px) {
+  .rail { border-radius: var(--radius-xl); }
+  .topbar { padding: 0 8px; }
+  .graph-toolbar,
+  .query-bar { border-radius: 24px; }
+}
+
+/* ---- Grafo: barra de ícones flutuante no topo do palco --------------- */
+
+.graph-stage { background: rgba(14, 15, 17, 0.88) url("/waves-dark.svg") center / cover no-repeat; }
+.graph-iconbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 24px);
+  padding: 5px;
+  border: 1px solid var(--pill-line);
+  border-radius: 999px;
+  background: var(--pill-fill);
+  box-shadow: var(--pill-shine), var(--pill-drop);
+  overflow-x: auto;
+  scrollbar-width: none;
+  transform: translateX(-50%);
+}
+.graph-iconbar::-webkit-scrollbar { display: none; }
+.graph-tool {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #C9CDD1;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.graph-tool:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+.graph-tool:focus-visible,
+.graph-tool-text:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 1px; }
+.graph-tool:disabled { opacity: 0.35; cursor: default; }
+.graph-shell.is-scene .graph-tool[aria-label="Radial por categorias"] { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
+.graph-tool-rule { flex: none; width: 1px; height: 18px; margin: 0 4px; background: rgba(255, 255, 255, 0.14); }
+.graph-tool-group { display: flex; gap: 2px; margin-left: 4px; padding: 2px; border-radius: 999px; background: rgba(255, 255, 255, 0.05); }
+.graph-tool-group[hidden] { display: none; }
+.graph-tool-text {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #B9BEC3;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.graph-tool-text:hover { color: #FFFFFF; }
+.graph-tool-text.is-active { background: #F0F1F2; color: #0B0C0E; }
+.graph-shell.is-scene .graph-minimap,
+.graph-shell.is-scene .graph-legend { display: none; }
+
+/* ---- Grafo radial por categorias -------------------------------------- */
+
+.graph-orb-stop-1 { stop-color: #FFFFFF; }
+.graph-orb-stop-2 { stop-color: #B8BCC2; }
+.graph-orb-stop-3 { stop-color: #383C42; }
+.graph-orb-glow-1 { stop-color: #FFFFFF; stop-opacity: 0.16; }
+.graph-orb-glow-2 { stop-color: #FFFFFF; stop-opacity: 0; }
+
+.radial-hit { cursor: pointer; outline: none; }
+.radial-orb-glow { opacity: 0.7; transition: opacity 0.15s ease; }
+.radial-orb:hover .radial-orb-glow,
+.radial-orb.is-selected .radial-orb-glow { opacity: 1; }
+.radial-orb-body { stroke: rgba(255, 255, 255, 0.6); stroke-width: 1; }
+.radial-orb-ring { fill: none; stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; }
+.radial-orb .graph-node-glyph { stroke: #141618; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.radial-orb:focus-visible .radial-orb-body { stroke: #FFFFFF; stroke-width: 3; }
+.radial-title { fill: var(--text-primary); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.radial-subtitle { fill: var(--text-muted); font-size: 13px; }
+
+.radial-link { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 1.2; }
+.radial-link.is-active { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.6; }
+.radial-fan { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; transition: stroke 0.12s ease; }
+.radial-fan.is-near,
+.radial-fan.is-selected { stroke: rgba(255, 255, 255, 0.75); stroke-width: 1.4; }
+
+.radial-cat-box { fill: rgba(255, 255, 255, 0.04); stroke: rgba(255, 255, 255, 0.12); stroke-width: 1; transition: fill 0.12s ease, stroke 0.12s ease; }
+.radial-cat:hover .radial-cat-box { fill: rgba(255, 255, 255, 0.08); }
+.radial-cat.is-active .radial-cat-box { fill: #F0F1F2; stroke: #FFFFFF; }
+.radial-cat:focus-visible .radial-cat-box { stroke: #FFFFFF; stroke-width: 2; }
+.radial-cat-count { fill: var(--text-primary); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.radial-cat-label { fill: var(--text-secondary); font-size: 14px; }
+.radial-cat-chevron { fill: none; stroke: var(--text-muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.radial-cat.is-active .radial-cat-count,
+.radial-cat.is-active .radial-cat-label { fill: #0B0C0E; }
+.radial-cat.is-active .radial-cat-chevron { stroke: #0B0C0E; }
+
+.radial-item-box { fill: rgba(21, 24, 27, 0.78); stroke: rgba(255, 255, 255, 0.08); stroke-width: 1; transition: fill 0.12s ease, stroke 0.12s ease; }
+.radial-item:hover .radial-item-box { fill: rgba(40, 44, 48, 0.92); stroke: rgba(255, 255, 255, 0.2); }
+.radial-item.is-selected .radial-item-box { stroke: #FFFFFF; stroke-width: 1.5; }
+.radial-item:focus-visible .radial-item-box { stroke: #FFFFFF; stroke-width: 2; }
+.radial-item-name { fill: var(--text-primary); font-size: 13.5px; font-weight: 500; }
+.radial-badge rect { fill: rgba(255, 255, 255, 0.07); stroke: rgba(255, 255, 255, 0.12); stroke-width: 1; }
+.radial-badge text { fill: var(--text-secondary); font-size: 10.5px; }
+
+/* Painel de detalhes: o inspetor ao lado vira o cartão da entidade. */
+.graph-shell.is-scene .graph-inspector {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #1C1F22, #0F1113);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.graph-detail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 20px 16px; }
+.graph-detail-kind { color: var(--text-muted); font-size: var(--text-sm); }
+.graph-detail-title { margin: 4px 0 10px; font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.graph-detail-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.graph-detail-id { margin: 10px 0 0; color: var(--text-secondary); font-family: var(--font-mono); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.graph-detail-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 18px 0; }
+.graph-detail-metric { display: flex; flex-direction: column; gap: 2px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; background: rgba(255, 255, 255, 0.04); }
+.graph-detail-metric strong { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.graph-detail-metric span { color: var(--text-muted); font-size: var(--text-xs); }
+.graph-detail-analysis { padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); }
+.graph-detail-analysis h3 { margin: 0 0 6px; font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
+.graph-detail-analysis p { margin: 0 0 8px; font-size: var(--text-base); line-height: 1.5; overflow-wrap: anywhere; }
+.graph-detail-analysis .graph-detail-description { color: var(--text-secondary); }
+.graph-detail-analysis .graph-detail-note { margin: 0; color: var(--text-muted); font-size: var(--text-xs); }
+.graph-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.graph-detail-actions .button { border-radius: 999px; }
+.graph-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 12px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--pill-line);
+  border-radius: 999px;
+  background: var(--pill-fill);
+  box-shadow: var(--pill-shine);
+  color: var(--text-muted);
+}
+.graph-ask:focus-within { border-color: rgba(255, 255, 255, 0.45); }
+.graph-ask-input { flex: 1; min-width: 0; height: 32px; border: 0; background: none; color: var(--text-primary); font: inherit; font-size: var(--text-base); outline: none; }
+.graph-ask-input::placeholder { color: var(--text-muted); }
+.graph-ask-send { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 0; border-radius: 999px; background: #F0F1F2; color: #0B0C0E; cursor: pointer; }
+.graph-ask-send:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 2px; }
+
+/* ---- Visão geral como painel: cartões, gráfico de área, tabela -------- */
+
+:root { --dash-series-1: #F0F1F2; --dash-series-2: #7E868E; }
+
+.dash-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.dash-card,
+.dash-chart,
+.dash-recent {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(27, 30, 34, 0.94), rgba(16, 18, 20, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 40px -26px rgba(0, 0, 0, 0.8);
+}
+.dash-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 18px 20px 20px; }
+.dash-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dash-card-label { color: var(--text-muted); font-size: var(--text-sm); }
+.dash-card-value { font-size: clamp(28px, 2.6vw, 36px); font-weight: 600; line-height: 1.1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.dash-card-foot { margin: 6px 0 0; color: var(--text-muted); font-size: var(--text-sm); line-height: 1.45; }
+.dash-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dash-trend.is-up { color: var(--text-primary); }
+.dash-trend.is-down { color: var(--danger); }
+.dash-trend-arrow.is-up { transform: rotate(-90deg); }
+.dash-trend-arrow.is-down { transform: rotate(90deg); }
+
+.dash-chart { margin-bottom: 16px; padding: 20px 22px 14px; }
+.dash-chart-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; margin-bottom: 8px; }
+.dash-chart-title { margin: 0; font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.015em; }
+.dash-chart-caption { margin: 4px 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+.dash-periods { border-radius: 999px; }
+.dash-periods .segmented-option { border-radius: 999px; }
+.dash-chart-body { margin-top: 6px; }
+.chart-area { stroke: none; pointer-events: none; }
+.chart-area-top { stop-opacity: 0.24; }
+.chart-area-bottom { stop-opacity: 0; }
+
+.dash-recent { margin-bottom: 16px; padding: 12px 20px 16px; }
+.dash-recent-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.dash-recent .table-scroll { border: 0; background: transparent; }
+
+@media (max-width: 1100px) { .dash-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .dash-cards { grid-template-columns: minmax(0, 1fr); }
+  .dash-chart,
+  .dash-recent { padding-left: 14px; padding-right: 14px; }
+}

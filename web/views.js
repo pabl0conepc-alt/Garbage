@@ -776,19 +776,74 @@
   /* Overview                                                         */
   /* ---------------------------------------------------------------- */
 
+  /* Overview as a dashboard: four numbers with their weekly change, an
+     area chart of searches and new records, and recent work in tabs. */
+
+  const DAY_MS = 86400000;
+  const RECORD_ACTIONS = new Set(["create", "link", "observation", "evidence", "analysis"]);
+  const RUN_STATUS = { completed: ["Concluída", "success"], "completed-with-errors": ["Concluída com falhas", "warning"], running: ["Em andamento", "info"], failed: ["Falhou", "danger"] };
+
+  function weekChange(current, previous) {
+    if (!current && !previous) return { text: "estável", tone: "flat" };
+    if (!previous) return { text: "novo", tone: "up" };
+    const change = Math.round(((current - previous) / previous) * 100);
+    if (change === 0) return { text: "0%", tone: "flat" };
+    return { text: `${change > 0 ? "+" : ""}${change}%`, tone: change > 0 ? "up" : "down" };
+  }
+
+  function lastWeeks(values) {
+    const current = values.slice(-7).reduce((sum, value) => sum + value, 0);
+    const previous = values.slice(-14, -7).reduce((sum, value) => sum + value, 0);
+    return { current, previous };
+  }
+
+  function dashCard({ label, value, change = null, foot }) {
+    const arrow = change && change.tone !== "flat" ? G.icon("arrow", { size: 12, className: `dash-trend-arrow is-${change.tone}` }) : null;
+    return el(
+      "article",
+      { class: "dash-card" },
+      el(
+        "div",
+        { class: "dash-card-top" },
+        el("span", { class: "dash-card-label" }, label),
+        change ? el("span", { class: `dash-trend is-${change.tone}`, title: "Últimos 7 dias contra os 7 anteriores" }, arrow, change.text) : null,
+      ),
+      el("strong", { class: "dash-card-value" }, value),
+      el("p", { class: "dash-card-foot" }, foot),
+    );
+  }
+
   async function renderOverview(root) {
-    const data = await api("/api/overview");
+    const [data, analytics, cases, runs, watches] = await Promise.all([
+      api("/api/overview"),
+      moduleEnabled("analytics") ? api("/api/analytics?days=90").catch(() => null) : null,
+      G.loadInvestigations(true).catch(() => []),
+      moduleEnabled("intel-orchestrator") ? api("/api/intel/runs?limit=8").catch(() => null) : null,
+      moduleEnabled("intel-orchestrator") ? api("/api/watchlist").catch(() => null) : null,
+    ]);
     const totals = data.totals;
-    const actions = [
-      button("Atualizar", () => G.refreshView()),
-    ];
+    const number = (value) => Number(value || 0).toLocaleString("pt-BR");
+
+    // Weekly comparisons come from real dates; a card without one shows no trend.
+    const now = Date.now();
+    const created = (cases || []).map((item) => Date.parse(item.created_at)).filter(Number.isFinite);
+    const casesThisWeek = created.filter((time) => now - time < 7 * DAY_MS).length;
+    const casesLastWeek = created.filter((time) => now - time >= 7 * DAY_MS && now - time < 14 * DAY_MS).length;
+    const days = analytics?.activity.days || [];
+    const searches = analytics?.intel_runs_by_day || [];
+    const records = days.map((_, index) =>
+      (analytics?.activity.series || []).filter((item) => RECORD_ACTIONS.has(item.key)).reduce((sum, item) => sum + item.values[index], 0),
+    );
+    const searchWeeks = lastWeeks(searches);
+    const recordWeeks = lastWeeks(records);
+
     root.append(
       pageHeader({
         eyebrow: "VISÃO GERAL",
         title: "Situação do workspace",
         description:
           "Casos, entidades compartilhadas, evidências com hash e indicadores extraídos neste workspace local.",
-        actions,
+        actions: [button("Atualizar", () => G.refreshView())],
       }),
       el(
         "div",
@@ -801,51 +856,95 @@
       ),
       el(
         "div",
-        { class: "metric-grid" },
-        metric({
-          label: "INVESTIGAÇÕES ABERTAS",
-          value: totals.open.toLocaleString("pt-BR"),
-          foot: `${totals.investigations} no total · ${totals.closed} fechadas`,
-          icon: "⌕",
-          tone: "blue",
+        { class: "dash-cards" },
+        dashCard({
+          label: "Casos abertos",
+          value: number(totals.open),
+          change: weekChange(casesThisWeek, casesLastWeek),
+          foot: `${number(casesThisWeek)} criado(s) nos últimos 7 dias · ${number(totals.investigations)} no total`,
         }),
-        metric({
-          label: "ENTIDADES COMPARTILHADAS",
-          value: totals.entities.toLocaleString("pt-BR"),
-          foot: `${totals.relationships.toLocaleString("pt-BR")} relacionamentos`,
-          icon: "⬡",
-          tone: "violet",
+        dashCard({
+          label: "Entidades",
+          value: number(totals.entities),
+          change: analytics ? weekChange(recordWeeks.current, recordWeeks.previous) : null,
+          foot: `${number(totals.relationships)} relacionamento(s) · ${number(recordWeeks.current)} registro(s) novos em 7 dias`,
         }),
-        metric({
-          label: "REGISTROS DE EVIDÊNCIA",
-          value: totals.evidence.toLocaleString("pt-BR"),
-          foot: "SHA-256 preservado",
-          icon: "▣",
-          tone: "green",
+        dashCard({
+          label: "Indicadores únicos",
+          value: number(totals.unique_indicators),
+          foot: `${number(totals.correlations)} correlação(ões) exatas · ${number(totals.evidence)} evidência(s) com hash`,
         }),
-        metric({
-          label: "INDICADORES ÚNICOS",
-          value: totals.unique_indicators.toLocaleString("pt-BR"),
-          foot: `${totals.indicator_origins.toLocaleString("pt-BR")} ocorrências em observações`,
-          icon: "⌁",
-          tone: "amber",
-        }),
-        metric({
-          label: "OBSERVAÇÕES",
-          value: totals.observations.toLocaleString("pt-BR"),
-          foot: "Proveniência mantida",
-          icon: "▤",
-          tone: "blue",
-        }),
-        metric({
-          label: "CORRELAÇÕES EXATAS",
-          value: totals.correlations.toLocaleString("pt-BR"),
-          foot: "Valores compartilhados entre observações",
-          icon: "⟷",
-          tone: "violet",
+        dashCard({
+          label: "Pesquisas em 7 dias",
+          value: number(searchWeeks.current),
+          change: analytics ? weekChange(searchWeeks.current, searchWeeks.previous) : null,
+          foot: `${number(searchWeeks.previous)} na semana anterior · ${number(analytics?.totals.intel_runs)} no total`,
         }),
       ),
     );
+
+    // Area chart: the period tabs slice the 90 days already loaded.
+    if (analytics && days.length) {
+      const PERIODS = [[90, "3 meses"], [30, "30 dias"], [7, "7 dias"]];
+      let period = 30;
+      const chartHost = el("div", { class: "dash-chart-body" });
+      const caption = el("p", { class: "dash-chart-caption" });
+      const periodTabs = el("div", { class: "segmented dash-periods", role: "radiogroup", "aria-label": "Período do gráfico" });
+      const series = [
+        { label: "Pesquisas", color: "var(--dash-series-1)" },
+        { label: "Registros novos", color: "var(--dash-series-2)" },
+      ];
+      const drawChart = () => {
+        const from = days.length - period;
+        const slice = { days: days.slice(from), searches: searches.slice(from), records: records.slice(from) };
+        const total = (values) => values.reduce((sum, value) => sum + value, 0);
+        caption.textContent = `${number(total(slice.searches))} pesquisa(s) e ${number(total(slice.records))} registro(s) novos no período`;
+        periodTabs.replaceChildren(
+          ...PERIODS.map(([value, text]) =>
+            el(
+              "button",
+              {
+                type: "button",
+                role: "radio",
+                class: `segmented-option${value === period ? " is-active" : ""}`,
+                "aria-checked": String(value === period),
+                onClick: () => {
+                  period = value;
+                  drawChart();
+                },
+              },
+              text,
+            ),
+          ),
+        );
+        chartHost.replaceChildren(
+          G.charts.timeSeries({
+            days: slice.days,
+            height: 260,
+            area: true,
+            series: [
+              { ...series[0], values: slice.searches },
+              { ...series[1], values: slice.records },
+            ],
+          }),
+        );
+      };
+      drawChart();
+      root.append(
+        el(
+          "section",
+          { class: "dash-chart" },
+          el(
+            "div",
+            { class: "dash-chart-head" },
+            el("div", {}, el("h2", { class: "dash-chart-title" }, "Pesquisas e registros por dia"), caption),
+            periodTabs,
+          ),
+          G.charts.legend(series.map((item) => ({ ...item, line: true }))),
+          chartHost,
+        ),
+      );
+    }
 
     if (totals.investigations === 0) {
       root.append(
@@ -872,67 +971,109 @@
       );
     }
 
-    const recentRows = data.recent_investigations || [];
-    root.append(
-      el(
-        "div",
-        { class: "dashboard-grid" },
-        panel(
-          {
-            eyebrow: "ATIVIDADE DOS CASOS",
-            title: "Atividade recente",
-            caption: "Mais recentes primeiro",
-            actions: [button("Abrir linha do tempo", () => go("activity"))],
-          },
-          renderActivityFeed(data.recent_activity || [], {
-            emptyMessage:
-              "A atividade aparece aqui depois que casos, entidades e evidências são registrados.",
-          }),
-        ),
-        panel(
-          {
-            eyebrow: "CASOS",
-            title: "Investigações recentes",
-            actions: [button("Todos os casos", () => go("investigations"))],
-          },
+    // Recent work, in tabs.
+    const when = (value) => (value ? formatDate(value, { time: true }) : "—");
+    const tabsSpec = [
+      {
+        key: "cases",
+        label: "Casos recentes",
+        count: (data.recent_investigations || []).length,
+        draw: () =>
           table({
             columns: [
               {
                 label: "CASO",
-                render: (row) =>
-                  el(
-                    "div",
-                    { class: "cell-stack" },
-                    el("strong", {}, row.name),
-                    el("span", { class: "mono" }, shortId(row.id)),
-                  ),
+                render: (row) => el("div", { class: "cell-stack" }, el("strong", {}, row.name), el("span", { class: "mono" }, shortId(row.id))),
               },
               { label: "STATUS", render: (row) => statusBadge(row.status) },
-              {
-                label: "OBS.",
-                className: "numeric-col",
-                render: (row) => String(row.observation_count),
-              },
-              {
-                label: "ENT.",
-                className: "numeric-col",
-                render: (row) => String(row.entity_count),
-              },
-              {
-                label: "EVID.",
-                className: "numeric-col",
-                render: (row) => String(row.evidence_count),
-              },
-              {
-                label: "",
-                render: (row) => button("Abrir", () => go("investigations", row.id)),
-              },
+              { label: "OBS.", className: "numeric-col", render: (row) => number(row.observation_count) },
+              { label: "ENT.", className: "numeric-col", render: (row) => number(row.entity_count) },
+              { label: "EVID.", className: "numeric-col", render: (row) => number(row.evidence_count) },
+              { label: "ATUALIZADO", render: (row) => when(row.updated_at) },
             ],
-            rows: recentRows,
+            rows: data.recent_investigations || [],
             emptyMessage: "Nenhuma investigação ainda.",
             onRowClick: (row) => go("investigations", row.id),
           }),
+      },
+      {
+        key: "activity",
+        label: "Atividade",
+        count: (data.recent_activity || []).length,
+        draw: () =>
+          renderActivityFeed(data.recent_activity || [], {
+            emptyMessage: "A atividade aparece aqui depois que casos, entidades e evidências são registrados.",
+          }),
+      },
+    ];
+    if (runs) {
+      tabsSpec.push({
+        key: "runs",
+        label: "Pesquisas recentes",
+        count: runs.items.length,
+        draw: () =>
+          table({
+            columns: [
+              { label: "PESQUISA", render: (row) => el("strong", {}, row.query_value) },
+              { label: "TIPO", render: (row) => entityTypeLabel(row.query_type) },
+              { label: "STATUS", render: (row) => badge(...(RUN_STATUS[row.status] || [G.statusLabel(row.status), "neutral"])) },
+              { label: "FONTES", className: "numeric-col", render: (row) => number(row.connector_count) },
+              { label: "RESULTADOS", className: "numeric-col", render: (row) => number(row.result_count) },
+              { label: "INÍCIO", render: (row) => when(row.started_at) },
+            ],
+            rows: runs.items,
+            emptyMessage: "Nenhuma pesquisa multifonte ainda.",
+            onRowClick: (row) => go("multisearch", row.id),
+          }),
+      });
+    }
+    if (watches) {
+      tabsSpec.push({
+        key: "watch",
+        label: "Monitoramento",
+        count: watches.items.length,
+        draw: () =>
+          table({
+            columns: [
+              { label: "IDENTIFICADOR", render: (row) => el("strong", {}, row.label || row.value) },
+              { label: "TIPO", render: (row) => entityTypeLabel(row.query_type) },
+              { label: "ATIVO", render: (row) => (row.enabled ? "Sim" : "Pausado") },
+              { label: "ÚLTIMA VERIFICAÇÃO", render: (row) => (row.last_error ? `Erro: ${row.last_error}` : when(row.last_checked_at)) },
+            ],
+            rows: watches.items,
+            emptyMessage: "Nenhum identificador monitorado.",
+            onRowClick: () => go("watchlist"),
+          }),
+      });
+    }
+    let activeTab = tabsSpec[0].key;
+    const tabHost = el("div", { class: "dash-tabs" });
+    const tableHost = el("div", { class: "dash-table-host" });
+    const drawTabs = () => {
+      tabHost.replaceChildren(
+        tabs({
+          items: tabsSpec.map(({ key, label, count }) => ({ key, label, count })),
+          active: activeTab,
+          onSelect: (key) => {
+            activeTab = key;
+            drawTabs();
+          },
+        }),
+      );
+      tableHost.replaceChildren(tabsSpec.find((item) => item.key === activeTab).draw());
+    };
+    drawTabs();
+    root.append(
+      el(
+        "section",
+        { class: "dash-recent" },
+        el(
+          "div",
+          { class: "dash-recent-head" },
+          tabHost,
+          button("Todos os casos", () => go("investigations")),
         ),
+        tableHost,
       ),
       el(
         "div",

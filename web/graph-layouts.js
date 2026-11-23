@@ -346,6 +346,83 @@
     });
   }
 
+  /* Radial by category: one entity on the left, its neighbours grouped
+     into category cards (relationship type or entity type) and the
+     neighbours of the chosen category listed on the right. graph.js draws
+     this scene in place of the cards; run() still places every node so
+     exports and the other layouts have sane positions to start from. */
+  const SCENE = {
+    orbRadius: 54,
+    categoryX: 300,
+    categoryW: 236,
+    categoryH: 60,
+    categoryGap: 14,
+    listX: 700,
+    listW: 340,
+    itemH: 40,
+    itemGap: 8,
+    limit: 48,
+  };
+
+  function categoryScene(nodes, edges, options = {}) {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const root =
+      byId.get(options.rootId) ||
+      [...nodes].sort((a, b) => b.degree - a.degree || a.name.localeCompare(b.name))[0];
+    if (!root) return null;
+    const groups = new Map();
+    for (const edge of edges) {
+      const outgoing = edge.source_entity_id === root.id;
+      if (!outgoing && edge.target_entity_id !== root.id) continue;
+      const other = byId.get(outgoing ? edge.target_entity_id : edge.source_entity_id);
+      if (!other || other.id === root.id) continue;
+      const key = options.groupBy === "type" ? other.entity_type : edge.relationship_type;
+      if (!groups.has(key)) groups.set(key, new Map());
+      if (!groups.get(key).has(other.id)) groups.get(key).set(other.id, { node: other, edge, outgoing });
+    }
+    const categories = [...groups.entries()]
+      .map(([key, members]) => ({
+        key,
+        members: [...members.values()].sort((a, b) => b.node.degree - a.node.degree || a.node.name.localeCompare(b.node.name)),
+      }))
+      .sort((a, b) => b.members.length - a.members.length || String(a.key).localeCompare(String(b.key)));
+    const active = categories.find((item) => item.key === options.active) || categories[0] || null;
+    const column = categories.length * SCENE.categoryH + Math.max(0, categories.length - 1) * SCENE.categoryGap;
+    categories.forEach((item, index) => {
+      item.y = -column / 2 + index * (SCENE.categoryH + SCENE.categoryGap) + SCENE.categoryH / 2;
+    });
+    const shown = active ? active.members.slice(0, SCENE.limit) : [];
+    const more = active ? active.members.length - shown.length : 0;
+    const rows = shown.length + (more ? 1 : 0);
+    const list = rows * SCENE.itemH + Math.max(0, rows - 1) * SCENE.itemGap;
+    const items = shown.map((member, index) => ({
+      ...member,
+      y: -list / 2 + index * (SCENE.itemH + SCENE.itemGap) + SCENE.itemH / 2,
+    }));
+    const moreY = more ? list / 2 - SCENE.itemH / 2 : null;
+    const half = Math.max(column, list, SCENE.orbRadius * 2 + 90) / 2;
+    return {
+      ...SCENE,
+      root,
+      categories,
+      active,
+      items,
+      more,
+      moreY,
+      bounds: {
+        minX: -SCENE.orbRadius - 150,
+        maxX: (shown.length ? SCENE.listX + SCENE.listW : SCENE.categoryX + SCENE.categoryW) + 40,
+        minY: -half - 30,
+        maxY: half + 30,
+      },
+    };
+  }
+
+  function categoryLayout(nodes, edges, options) {
+    const scene = categoryScene(nodes, edges, options);
+    radial(nodes, edges, { ...options, rootId: scene?.root.id });
+  }
+
   G.graphLayouts = {
     force: { label: "Força (agrupa vizinhos)", run: force },
     community: { label: "Por comunidade", run: community },
@@ -355,5 +432,6 @@
     columns: { label: "Colunas por tipo", run: typeColumns },
     circle: { label: "Circular", run: circle },
     grid: { label: "Grade", run: grid },
+    categories: { label: "Radial por categorias", run: categoryLayout, scene: categoryScene },
   };
 })();

@@ -128,6 +128,10 @@
     let pinned = new Map();
     let hidden = new Set();
     let marquee = null;
+    let categoryBy = "relationship";
+    let activeCategory = null;
+    let sceneRoot = null;
+    let scene = null;
     const tools = G.graphTools;
     const history = new tools.ViewHistory();
     const enrichment = new Map();
@@ -152,7 +156,15 @@
       orient: "auto-start-reverse",
     });
     arrow.append(svgEl("path", { d: "M 0 1 L 9 5 L 0 9 z", class: "graph-arrow-head" }));
-    defs.append(arrow);
+    const orbFill = svgEl("radialGradient", { id: "graph-orb-fill", cx: "0.38", cy: "0.32", r: "0.75" });
+    orbFill.append(
+      svgEl("stop", { offset: "0", class: "graph-orb-stop-1" }),
+      svgEl("stop", { offset: "0.55", class: "graph-orb-stop-2" }),
+      svgEl("stop", { offset: "1", class: "graph-orb-stop-3" }),
+    );
+    const orbGlow = svgEl("radialGradient", { id: "graph-orb-glow", cx: "0.5", cy: "0.5", r: "0.5" });
+    orbGlow.append(svgEl("stop", { offset: "0.35", class: "graph-orb-glow-1" }), svgEl("stop", { offset: "1", class: "graph-orb-glow-2" }));
+    defs.append(arrow, orbFill, orbGlow);
     svg.append(defs);
     const view = svgEl("g", { class: "graph-viewport" });
     const edgeLayer = svgEl("g", { class: "graph-edges" });
@@ -204,13 +216,60 @@
       );
     }
 
-    const shell = el(
+    /* Floating icon bar on top of the stage. */
+    function toolButton(iconName, label, onClick) {
+      return el("button", { class: "graph-tool", type: "button", "aria-label": label, "data-tooltip": label, onClick }, G.icon(iconName, { size: 17 }));
+    }
+    const toolUndo = toolButton("undo", "Desfazer (Ctrl+Z)", () => undo());
+    const toolRedo = toolButton("redo", "Refazer (Ctrl+Shift+Z)", () => redo());
+    const groupToggle = el("div", { class: "graph-tool-group", role: "radiogroup", "aria-label": "Agrupar categorias por", hidden: true });
+    function renderGroupToggle() {
+      groupToggle.hidden = layout !== "categories";
+      groupToggle.replaceChildren(
+        ...[["relationship", "Ligação"], ["type", "Tipo"]].map(([key, text]) =>
+          el(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              class: `graph-tool-text${categoryBy === key ? " is-active" : ""}`,
+              "aria-checked": String(categoryBy === key),
+              onClick: () => {
+                categoryBy = key;
+                activeCategory = null;
+                render();
+                fit();
+              },
+            },
+            text,
+          ),
+        ),
+      );
+    }
+    const iconbar = el(
       "div",
-      { class: "graph-shell" },
-      el(
-        "div",
-        { class: "graph-stage" },
-        canvas,
+      { class: "graph-iconbar", role: "toolbar", "aria-label": "Ferramentas do grafo" },
+      toolButton("fit", "Ajustar à tela", () => fit()),
+      toolButton("minus", "Diminuir zoom", () => zoomBy(0.85)),
+      toolButton("plus", "Aumentar zoom", () => zoomBy(1.18)),
+      el("span", { class: "graph-tool-rule", "aria-hidden": "true" }),
+      toolUndo,
+      toolRedo,
+      el("span", { class: "graph-tool-rule", "aria-hidden": "true" }),
+      toolButton("graph", "Radial por categorias", () => setLayout(layout === "categories" ? "force" : "categories")),
+      groupToggle,
+    );
+    function setLayout(key) {
+      if (!G.graphLayouts[key]) return;
+      layoutSelect.value = key;
+      layoutSelect.dispatchEvent(new Event("change"));
+    }
+
+    const stage = el(
+      "div",
+      { class: "graph-stage" },
+      canvas,
+      iconbar,
         el(
           "div",
           { class: "graph-controls" },
@@ -235,11 +294,10 @@
             render();
           }, { title: "Soltar fixações, mostrar ocultos e refazer o layout" }),
         ),
-        legendHost,
-        map.element,
-      ),
-      inspector,
+      legendHost,
+      map.element,
     );
+    const shell = el("div", { class: "graph-shell" }, stage, inspector);
 
     const caseSelect = el(
       "select",
@@ -466,6 +524,8 @@
     function syncHistoryButtons() {
       undoButton.disabled = !history.canUndo;
       redoButton.disabled = !history.canRedo;
+      toolUndo.disabled = !history.canUndo;
+      toolRedo.disabled = !history.canRedo;
     }
 
     function persistView() {
@@ -1000,10 +1060,11 @@
         render();
       }
       const margin = 60;
-      const minX = Math.min(...shown.map((node) => node.x)) - margin;
-      const minY = Math.min(...shown.map((node) => node.y)) - margin;
-      const width = Math.max(...shown.map((node) => node.x)) + margin - minX;
-      const height = Math.max(...shown.map((node) => node.y)) + margin - minY;
+      const box = layout === "categories" && scene ? scene.bounds : null;
+      const minX = box ? box.minX : Math.min(...shown.map((node) => node.x)) - margin;
+      const minY = box ? box.minY : Math.min(...shown.map((node) => node.y)) - margin;
+      const width = (box ? box.maxX : Math.max(...shown.map((node) => node.x)) + margin) - minX;
+      const height = (box ? box.maxY : Math.max(...shown.map((node) => node.y)) + margin) - minY;
       const copy = svg.cloneNode(true);
       const inline = (source, target) => {
         if (source.nodeType !== 1) return;
@@ -1086,8 +1147,245 @@
       }
     }
 
+    /* Radial by category ------------------------------------------- */
+    /* The chosen entity is an orb on the left, its neighbours are counted
+       in category cards and the chosen category fans out into a list. */
+
+    function categoryLabel(key) {
+      return categoryBy === "type" ? entityTypeLabel(key) : relationshipLabel(key);
+    }
+
+    function clip(text, length) {
+      const value = String(text || "");
+      return value.length > length ? `${value.slice(0, length - 1)}…` : value;
+    }
+
+    function sceneHit(group, label, onActivate) {
+      group.setAttribute("tabindex", "0");
+      group.setAttribute("role", "button");
+      group.setAttribute("aria-label", label);
+      group.addEventListener("pointerdown", (event) => event.stopPropagation());
+      group.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onActivate(event);
+      });
+      group.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onActivate(event);
+        }
+      });
+      return group;
+    }
+
+    function recenterScene(id) {
+      sceneRoot = id;
+      activeCategory = null;
+      selectedId = id;
+      selection = new Set([id]);
+      render();
+      fit();
+    }
+
+    function badgeShape(x, y, text) {
+      const width = Math.round(text.length * 6.1 + 16);
+      const group = svgEl("g", { class: "radial-badge", transform: `translate(${x} ${y})` });
+      group.append(
+        svgEl("rect", { x: 0, y: -9, width, height: 18, rx: 9 }),
+        svgEl("text", { x: width / 2, y: 4, "text-anchor": "middle" }, text),
+      );
+      return { group, width };
+    }
+
+    function drawScene() {
+      const visible = visibleNodeSet();
+      const shownNodes = nodes.filter((node) => visible.has(node.id));
+      const shownEdges = edges.filter((edge) => visible.has(edge.source_entity_id) && visible.has(edge.target_entity_id));
+      scene = G.graphLayouts.categories.scene(shownNodes, shownEdges, { rootId: sceneRoot, groupBy: categoryBy, active: activeCategory });
+      edgeLayer.replaceChildren();
+      nodeLayer.replaceChildren();
+      labelLayer.replaceChildren();
+      svg.classList.remove("has-hover");
+      if (!scene) return;
+      const { root, orbRadius: radius, categoryX, categoryW, categoryH, listX, listW, itemH } = scene;
+      activeCategory = scene.active?.key ?? null;
+
+      // Lines first, so cards and the orb sit on top of them.
+      for (const category of scene.categories) {
+        const middle = (radius + categoryX) / 2;
+        edgeLayer.append(svgEl("path", {
+          d: `M ${radius} 0 C ${middle} 0, ${middle} ${category.y}, ${categoryX} ${category.y}`,
+          class: `radial-link${category === scene.active ? " is-active" : ""}`,
+        }));
+      }
+      if (scene.active) {
+        const startX = categoryX + categoryW;
+        const middle = (startX + listX) / 2;
+        for (const item of scene.items) {
+          edgeLayer.append(svgEl("path", {
+            d: `M ${startX} ${scene.active.y} C ${middle} ${scene.active.y}, ${middle} ${item.y}, ${listX} ${item.y}`,
+            class: `radial-fan${item.node.id === selectedId ? " is-selected" : ""}`,
+            "data-id": item.node.id,
+          }));
+        }
+      }
+
+      // The orb: a glow, a lit sphere and the entity glyph.
+      const orb = sceneHit(
+        svgEl("g", { class: `radial-orb radial-hit${root.id === selectedId ? " is-selected" : ""}` }),
+        `${entityTypeLabel(root.entity_type)}: ${root.name}`,
+        () => selectNode(root.id),
+      );
+      orb.append(
+        svgEl("circle", { r: radius * 2.1, fill: "url(#graph-orb-glow)", class: "radial-orb-glow" }),
+        svgEl("circle", { r: radius, fill: "url(#graph-orb-fill)", class: "radial-orb-body" }),
+        svgEl("circle", { r: radius - 7, class: "radial-orb-ring" }),
+        svgEl("g", { class: "radial-orb-glyph" }, tools.glyph(root.entity_type, 18)),
+      );
+      nodeLayer.append(orb);
+      labelLayer.append(
+        svgEl("text", { x: 0, y: radius + 34, "text-anchor": "middle", class: "radial-title" }, clip(root.name, 28)),
+        svgEl("text", { x: 0, y: radius + 56, "text-anchor": "middle", class: "radial-subtitle" }, `${entityTypeLabel(root.entity_type)} · ${root.degree} ligação(ões)`),
+      );
+
+      if (!scene.categories.length) {
+        labelLayer.append(svgEl("text", { x: categoryX, y: 4, class: "radial-subtitle" }, "Nenhuma ligação registrada para esta entidade."));
+      }
+
+      for (const category of scene.categories) {
+        const isActive = category === scene.active;
+        const group = sceneHit(
+          svgEl("g", { class: `radial-cat radial-hit${isActive ? " is-active" : ""}`, transform: `translate(${categoryX} ${category.y - categoryH / 2})` }),
+          `${category.members.length} ${categoryLabel(category.key)}`,
+          () => {
+            activeCategory = category.key;
+            render();
+          },
+        );
+        group.setAttribute("aria-pressed", String(isActive));
+        const count = String(category.members.length);
+        group.append(
+          svgEl("rect", { width: categoryW, height: categoryH, rx: 16, class: "radial-cat-box" }),
+          svgEl("text", { x: 18, y: categoryH / 2 + 8, class: "radial-cat-count" }, count),
+          svgEl("text", { x: 26 + count.length * 13, y: categoryH / 2 + 5, class: "radial-cat-label" }, clip(categoryLabel(category.key), 22)),
+          svgEl("path", { d: `M ${categoryW - 24} ${categoryH / 2 - 5} l 5 5 l -5 5`, class: "radial-cat-chevron" }),
+        );
+        nodeLayer.append(group);
+      }
+
+      for (const item of scene.items) {
+        const { node } = item;
+        const group = sceneHit(
+          svgEl("g", { class: `radial-item radial-hit${node.id === selectedId ? " is-selected" : ""}`, transform: `translate(${listX} ${item.y - itemH / 2})`, "data-id": node.id }),
+          `${entityTypeLabel(node.entity_type)}: ${node.name}`,
+          () => selectNode(node.id),
+        );
+        group.addEventListener("dblclick", (event) => {
+          event.stopPropagation();
+          recenterScene(node.id);
+        });
+        const fan = () => edgeLayer.querySelector(`.radial-fan[data-id="${CSS.escape(node.id)}"]`);
+        group.addEventListener("pointerenter", () => fan()?.classList.add("is-near"));
+        group.addEventListener("pointerleave", () => fan()?.classList.remove("is-near"));
+        // The badge names the other dimension: the entity type when cards
+        // are relationships, the relationship when cards are types.
+        const tag = badgeShape(0, 0, clip(categoryBy === "type" ? relationshipLabel(item.edge.relationship_type) : entityTypeLabel(node.entity_type), 16));
+        tag.group.setAttribute("transform", `translate(${listW - 10 - tag.width} ${itemH / 2})`);
+        const room = Math.max(10, Math.floor((listW - 48 - tag.width) / 7.4));
+        group.append(
+          svgEl("rect", { width: listW, height: itemH, rx: 12, class: "radial-item-box" }),
+          svgEl("circle", { cx: 18, cy: itemH / 2, r: 4, fill: nodeColor(node), class: "radial-item-dot" }),
+          svgEl("text", { x: 32, y: itemH / 2 + 4.5, class: "radial-item-name" }, clip(node.name, room)),
+          tag.group,
+        );
+        group.append(svgEl("title", {}, `${node.name} · ${relationshipLabel(item.edge.relationship_type)} · duplo clique para centralizar`));
+        nodeLayer.append(group);
+      }
+      if (scene.more) {
+        labelLayer.append(svgEl("text", { x: listX + 16, y: scene.moreY + 4, class: "radial-subtitle" }, `e mais ${scene.more} nesta categoria`));
+      }
+    }
+
+    function renderSceneDetail() {
+      const node = nodes.find((item) => item.id === selectedId) || scene.root;
+      const metrics = graph.analytics?.nodes?.[node.id];
+      const isRoot = node.id === scene.root.id;
+      const link = scene.items.find((item) => item.node.id === node.id) ||
+        scene.categories.flatMap((category) => category.members).find((item) => item.node.id === node.id);
+      const card = (value, label) => el("div", { class: "graph-detail-metric" }, el("strong", {}, value), el("span", {}, label));
+      const biggest = scene.categories[0];
+      const summary = isRoot
+        ? scene.categories.length
+          ? `${scene.categories.reduce((sum, category) => sum + category.members.length, 0)} vizinho(s) em ${scene.categories.length} categoria(s). A maior é “${categoryLabel(biggest.key)}”, com ${biggest.members.length}.`
+          : "Esta entidade ainda não tem ligações registradas."
+        : link
+          ? `${link.outgoing ? scene.root.name : node.name} — ${relationshipLabel(link.edge.relationship_type)} → ${link.outgoing ? node.name : scene.root.name}.`
+          : "";
+      const ask = el("input", { class: "graph-ask-input", type: "text", placeholder: `Pergunte sobre ${clip(node.name, 26)}…`, "aria-label": "Pergunta ao Investigador IA" });
+      const askForm = el(
+        "form",
+        { class: "graph-ask" },
+        G.icon("radar", { size: 16 }),
+        ask,
+        el("button", { class: "graph-ask-send", type: "submit", "aria-label": "Levar a pergunta ao Investigador IA" }, G.icon("send", { size: 15 })),
+      );
+      askForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const context = `Sobre a entidade “${node.name}” (${entityTypeLabel(node.entity_type)}${node.identifier && node.identifier !== node.name ? `, ${node.identifier}` : ""})`;
+        const text = ask.value.trim();
+        // The AI screen opens with the question filled in; nothing runs until the analyst confirms there.
+        G.state.aiDraft = text ? `${context}: ${text}` : `${context}: `;
+        go("ai");
+      });
+      inspector.replaceChildren(
+        el(
+          "div",
+          { class: "graph-detail-body" },
+          el("span", { class: "graph-detail-kind" }, entityTypeLabel(node.entity_type)),
+          el("h2", { class: "graph-detail-title" }, node.name),
+          el("div", { class: "graph-detail-badges" }, statusBadge(node.verification_status), node.confidence ? badge(`Confiança ${(Object.fromEntries(G.CONFIDENCE_LEVELS)[node.confidence] || node.confidence).toLowerCase()}`, "neutral") : null),
+          node.identifier && node.identifier !== node.name ? el("p", { class: "graph-detail-id" }, node.identifier) : null,
+          el(
+            "div",
+            { class: "graph-detail-metrics" },
+            card(String(node.degree), "ligações"),
+            card(metrics ? percent(metrics.betweenness) : "—", "intermediação"),
+            card(metrics ? `#${metrics.community + 1}` : "—", "comunidade"),
+          ),
+          el(
+            "section",
+            { class: "graph-detail-analysis" },
+            el("h3", {}, "Análise"),
+            summary ? el("p", {}, summary) : null,
+            node.description ? el("p", { class: "graph-detail-description" }, clip(node.description, 420)) : null,
+            el("p", { class: "graph-detail-note" }, "Ligações são registros do analista, não prova de coordenação."),
+          ),
+          el(
+            "div",
+            { class: "graph-detail-actions" },
+            button("Abrir registro", () => go("entities", node.id), { variant: "button-primary" }),
+            isRoot ? null : button("Centralizar aqui", () => recenterScene(node.id), { title: "Ou duplo clique no item da lista" }),
+          ),
+        ),
+        G.moduleEnabled("intel-orchestrator") && G.views.ai ? askForm : null,
+      );
+    }
+
     function render() {
       applyTransform();
+      renderGroupToggle();
+      shell.classList.toggle("is-scene", layout === "categories");
+      if (layout === "categories") {
+        drawScene();
+        canvas.classList.toggle("is-empty", nodes.length === 0);
+        legendHost.replaceChildren();
+        hiddenButton.hidden = hidden.size === 0;
+        hiddenButton.textContent = `Ocultas (${hidden.size}) · mostrar`;
+        syncHistoryButtons();
+        if (scene) renderSceneDetail();
+        else renderInspector();
+        return;
+      }
       const visible = visibleNodeSet();
       const visibleNodes = nodes.filter((node) => visible.has(node.id));
       const visibleEdges = edges.filter(
@@ -1269,20 +1567,27 @@
         applyTransform();
         return;
       }
-      const minX = Math.min(...nodes.map((node) => node.x)) - 80;
-      const minY = Math.min(...nodes.map((node) => node.y)) - 80;
-      const maxX = Math.max(...nodes.map((node) => node.x)) + 80;
-      const maxY = Math.max(...nodes.map((node) => node.y)) + 80;
+      if (layout === "categories" && !scene) drawScene();
+      const box = layout === "categories" && scene
+        ? scene.bounds
+        : {
+            minX: Math.min(...nodes.map((node) => node.x)) - 80,
+            minY: Math.min(...nodes.map((node) => node.y)) - 80,
+            maxX: Math.max(...nodes.map((node) => node.x)) + 80,
+            maxY: Math.max(...nodes.map((node) => node.y)) + 80,
+          };
+      const { minX, minY, maxX, maxY } = box;
       const rect = canvas.getBoundingClientRect();
+      // Keep clear of the floating icon bar on top.
+      const top = 56;
+      const availableW = rect.width || 960;
+      const availableH = (rect.height || 620) - top;
       const width = Math.max(1, maxX - minX);
       const height = Math.max(1, maxY - minY);
-      const zoom = Math.min(
-        1.4,
-        Math.max(0.15, Math.min((rect.width || 960) / width, (rect.height || 620) / height)),
-      );
+      const zoom = Math.min(1.4, Math.max(0.15, Math.min(availableW / width, availableH / height)));
       viewport.zoom = Number(zoom.toFixed(3));
-      viewport.x = Math.round(((rect.width || 960) - width * zoom) / 2 - minX * zoom);
-      viewport.y = Math.round(((rect.height || 620) - height * zoom) / 2 - minY * zoom);
+      viewport.x = Math.round((availableW - width * zoom) / 2 - minX * zoom);
+      viewport.y = Math.round(top + (availableH - height * zoom) / 2 - minY * zoom);
       applyTransform();
     }
 
@@ -1759,7 +2064,7 @@
 
     canvas.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
-      if (event.target.closest(".graph-node") || event.target.closest(".graph-minimap")) return;
+      if (event.target.closest(".graph-node") || event.target.closest(".radial-hit") || event.target.closest(".graph-minimap")) return;
       event.preventDefault();
       canvas.setPointerCapture(event.pointerId);
       canvas.focus({ preventScroll: true });
@@ -1914,6 +2219,10 @@
     layoutSelect.addEventListener("change", () => {
       record();
       layout = layoutSelect.value;
+      if (layout === "categories") {
+        sceneRoot = selectedId;
+        activeCategory = null;
+      }
       persistView();
       layoutNodes();
       fit();
