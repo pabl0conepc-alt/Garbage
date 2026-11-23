@@ -316,6 +316,10 @@ const ICON_PATHS = {
   send: "M4.5 12 19.5 5l-4 14-3.5-5.5zM12 13.5l7.5-8.5",
   stop: "M7.5 6h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1 -1.5 1.5h-9a1.5 1.5 0 0 1 -1.5 -1.5v-9a1.5 1.5 0 0 1 1.5 -1.5z",
   trash: "M4.5 7h15M10 4.5h4M6.5 7l.9 11.2a2 2 0 0 0 2 1.8h5.2a2 2 0 0 0 2-1.8L17.5 7M10.3 11v5M13.7 11v5",
+  minus: "M5 12h14",
+  fit: "M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1 -1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15",
+  undo: "M9 14 4.5 9.5 9 5M4.5 9.5H15a4.5 4.5 0 0 1 0 9h-3",
+  redo: "M15 14l4.5-4.5L15 5M19.5 9.5H9a4.5 4.5 0 0 0 0 9h3",
 };
 
 /* Legacy glyphs passed by views are mapped onto the icon set so every
@@ -1134,44 +1138,15 @@ function statusBadge(value) {
   return badge(statusLabel(value), STATUS_TONES[value] || "neutral");
 }
 
-let pageInfoCount = 0;
-
-/* Title first. A short line may sit under it; anything longer waits
-   behind a small info toggle. `eyebrow` is still accepted, not drawn. */
-function pageHeader({ eyebrow, title, description, actions = [] }) {
-  const text = typeof description === "string" ? description.trim() : description;
-  const short = typeof text === "string" && text.length <= 72;
-  let infoButton = null;
-  let descriptionNode = null;
-  if (text && short) {
-    descriptionNode = el("p", { class: "page-description" }, text);
-  } else if (text) {
-    const id = `page-info-${++pageInfoCount}`;
-    descriptionNode = el("p", { class: "page-description", id, hidden: true }, text);
-    infoButton = el(
-      "button",
-      {
-        class: "icon-button page-info",
-        type: "button",
-        "aria-label": "Sobre esta tela",
-        "aria-expanded": "false",
-        "aria-controls": id,
-        onClick: () => {
-          descriptionNode.hidden = !descriptionNode.hidden;
-          infoButton.setAttribute("aria-expanded", String(!descriptionNode.hidden));
-        },
-      },
-      icon("info", { size: 16 }),
-    );
-  }
+/* Screens open on their title and actions only. */
+function pageHeader({ title, actions = [] }) {
   return el(
     "div",
     { class: "page-heading" },
     el(
       "div",
       { class: "page-heading-copy" },
-      el("div", { class: "page-title-row" }, el("h1", {}, title), infoButton),
-      descriptionNode,
+      el("h1", {}, title),
     ),
     actions.length ? el("div", { class: "page-actions" }, actions) : null,
   );
@@ -1225,8 +1200,7 @@ function panel({ eyebrow, title, caption, actions = [], className = "" }, ...chi
           el(
             "div",
             {},
-            eyebrow ? el("p", { class: "eyebrow" }, eyebrow) : null,
-            title ? el("h2", {}, title) : null,
+            title || eyebrow ? el("h2", {}, title || sentenceCase(eyebrow)) : null,
           ),
           el(
             "div",

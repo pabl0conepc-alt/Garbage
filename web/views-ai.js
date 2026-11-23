@@ -41,6 +41,11 @@
       "aria-label": "Pergunta da investigação",
       maxlength: "4000",
     });
+    // A question handed over from another screen (the graph's "Pergunte…" box).
+    if (G.state.aiDraft) {
+      question.value = G.state.aiDraft;
+      G.state.aiDraft = "";
+    }
     const caseSelect = el(
       "select",
       { class: "input compact-select", "aria-label": "Investigação" },
