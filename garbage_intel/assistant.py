@@ -365,7 +365,7 @@ def _run_server_tool(database: str, name: str, arguments: dict[str, Any]) -> tup
         case_id = _arg(arguments, "case_id")
         note = add_observation(
             database, case_id, _arg(arguments, "title", limit=200), _arg(arguments, "text", limit=20_000),
-            f"Assistente de IA ({llm.config(database)["model"] or 'modelo'})", "user-provided",
+            f"Assistente de IA ({llm.config(database)['model'] or 'modelo'})", "user-provided",
         )
         return {"id": note["id"]}, {"summary": f"Anotou no caso: {note['title']}", "link": f"#/investigations/{case_id}"}
     if name == "list_entities":

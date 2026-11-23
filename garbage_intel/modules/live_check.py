@@ -214,7 +214,8 @@ def _flags(url: str, hops: list[dict[str, Any]], page: dict[str, Any] | None) ->
     if page["obfuscation"]:
         flags.append({"level": "medium", "text": f"Código ofuscado na página: {', '.join(page['obfuscation'])}."})
     if page["download"]:
-        flags.append({"level": "high", "text": f"A resposta é um download{f' ({page['download_name']})' if page['download_name'] else ''}."})
+        name = f" ({page['download_name']})" if page["download_name"] else ""
+        flags.append({"level": "high", "text": f"A resposta é um download{name}."})
     if page["frames"]:
         flags.append({"level": "info", "text": f"{len(page['frames'])} quadro(s) embutido(s) (iframe)."})
     return flags
