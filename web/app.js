@@ -898,6 +898,7 @@ const SETTING_TEXT = {
   "report.include_limitations": ["Incluir limitações nos relatórios", "Acrescenta limitações analíticas explícitas aos relatórios gerados."],
   "intel.allow_network": ["Permitir que conectores de inteligência usem a rede", "Quando desativado, conectores que acessam serviços externos são ignorados; os conectores locais continuam funcionando."],
   "intel.allow_target_contact": ["Permitir contato com o alvo", "Quando desativado, conectores que enviam uma requisição ou handshake TLS aos servidores do próprio artefato são ignorados. Também exige rede."],
+  "intel.webhook_url": ["Webhook de consultas concluídas", "URL HTTPS que recebe um resumo quando uma consulta multifonte termina (webhooks do Discord funcionam direto). Vazio desativa; exige acesso à rede."],
   "intel.max_workers": ["Conectores em paralelo", "Número máximo de conectores consultados ao mesmo tempo para um artefato."],
   "report.include_raw_observations": ["Incluir observações completas", "Inclui o texto completo das observações nos relatórios HTML gerados."],
 };

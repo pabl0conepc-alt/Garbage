@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from garbage_intel.errors import ValidationError
+from garbage_intel.net import FetchResult
 from garbage_intel.intel import ConnectorContext, _run_one, connectors, detect_artifact
 from garbage_intel.modules import intel_open_connectors as shared
 from garbage_intel.modules.intel_account_connectors import decode_snowflake
@@ -188,3 +189,198 @@ class RobloxTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Photo EXIF, usernames, Telegram, Have I Been Pwned and the run webhook
+
+import struct
+import tempfile
+from pathlib import Path
+
+from garbage_intel import intel
+from garbage_intel.modules.exif import read_exif
+from garbage_intel.modules.file_intel import analyze_bytes
+from garbage_intel.store import initialize
+from garbage_intel.workspace import get_settings, update_settings
+from tests.test_intel_sources import reply
+
+
+def _rational(value):
+    return struct.pack("<II", int(round(value * 100)), 100)
+
+
+def jpeg_with_gps(latitude=(23, 33, 1.2), lat_ref=b"S", longitude=(46, 38, 2.5), lon_ref=b"W"):
+    """Little-endian EXIF with Make, an Exif IFD (DateTimeOriginal) and GPS."""
+    make, taken = b"Canon\x00", b"2024:05:01 10:20:30\x00"
+    entries0 = 3
+    ifd0 = 8
+    ifd0_size = 2 + entries0 * 12 + 4
+    make_at = ifd0 + ifd0_size
+    exif_ifd = make_at + len(make)
+    exif_size = 2 + 12 + 4
+    taken_at = exif_ifd + exif_size
+    gps_ifd = taken_at + len(taken)
+    gps_entries = 4
+    gps_size = 2 + gps_entries * 12 + 4
+    lat_at = gps_ifd + gps_size
+    lon_at = lat_at + 24
+
+    def entry(tag, kind, count, value):
+        return struct.pack("<HHI", tag, kind, count) + value
+
+    tiff = b"II" + struct.pack("<HI", 42, ifd0)
+    tiff += struct.pack("<H", entries0)
+    tiff += entry(0x010F, 2, len(make), struct.pack("<I", make_at))
+    tiff += entry(0x8769, 4, 1, struct.pack("<I", exif_ifd))
+    tiff += entry(0x8825, 4, 1, struct.pack("<I", gps_ifd))
+    tiff += b"\x00" * 4 + make
+    tiff += struct.pack("<H", 1) + entry(0x9003, 2, len(taken), struct.pack("<I", taken_at)) + b"\x00" * 4 + taken
+    tiff += struct.pack("<H", gps_entries)
+    tiff += entry(1, 2, 2, lat_ref + b"\x00\x00\x00")
+    tiff += entry(2, 5, 3, struct.pack("<I", lat_at))
+    tiff += entry(3, 2, 2, lon_ref + b"\x00\x00\x00")
+    tiff += entry(4, 5, 3, struct.pack("<I", lon_at))
+    tiff += b"\x00" * 4
+    tiff += b"".join(_rational(part) for part in latitude) + b"".join(_rational(part) for part in longitude)
+    app1 = b"Exif\x00\x00" + tiff
+    sof = b"\xff\xc0" + struct.pack(">HBHHB", 11, 8, 10, 20, 1) + b"\x01\x11\x00"
+    return b"\xff\xd8" + b"\xff\xe1" + struct.pack(">H", len(app1) + 2) + app1 + sof + b"\xff\xd9"
+
+
+class ExifTests(unittest.TestCase):
+    def test_reads_camera_time_and_gps(self):
+        exif = read_exif(jpeg_with_gps())
+        self.assertEqual(exif["make"], "Canon")
+        self.assertEqual(exif["taken_at"], "2024:05:01 10:20:30")
+        self.assertAlmostEqual(exif["gps"]["latitude"], -(23 + 33 / 60 + 1.2 / 3600), places=5)
+        self.assertAlmostEqual(exif["gps"]["longitude"], -(46 + 38 / 60 + 2.5 / 3600), places=5)
+        self.assertIn("openstreetmap.org", exif["gps"]["map_url"])
+
+    def test_no_exif_and_truncated_input(self):
+        self.assertIsNone(read_exif(b"\xff\xd8\xff\xd9"))
+        self.assertIsNone(read_exif(b"not a jpeg"))
+        photo = jpeg_with_gps()
+        for cut in range(4, len(photo), 7):
+            read_exif(photo[:cut])  # must never raise
+
+    def test_file_analysis_reports_position(self):
+        analysis = analyze_bytes(jpeg_with_gps(), "photo.jpg")
+        self.assertIn("gps", analysis["metadata"]["exif"])
+        self.assertIn("GPS position", json.dumps(analysis))
+
+
+class UsernameTests(unittest.TestCase):
+    def test_found_free_and_unknown(self):
+        routes = {
+            "api.github.com/users/alice": {"login": "alice"},
+            "gitlab.com/api/v4/users": [],
+            "hacker-news.firebaseio.com": [],  # stands in for the JSON null HN returns
+            "registry.npmjs.org": {"total": 3},
+            "keybase.io": {"them": [{"id": "x"}]},
+            "lichess.org": (500, {}),
+        }
+        status, findings, _, calls = run("username-sites", "username", "alice", routes)
+        self.assertEqual(status, "ok")
+        accounts = {item.value: item.data["profile_url"] for item in findings if item.result_type == "account"}
+        self.assertEqual(set(accounts), {"GitHub", "npm", "Keybase"})
+        self.assertEqual(accounts["GitHub"], "https://github.com/alice")
+        unknown = {item.value for item in findings if item.result_type == "site-unknown"}
+        self.assertEqual(unknown, {"Lichess"})
+        for url, options in calls:
+            self.assertEqual(options["allowed_hosts"], (url.split("/")[2],))
+
+    def test_none_found(self):
+        _, findings, _, _ = run("username-sites", "username", "zz", {})
+        self.assertEqual(findings[0].value, "none found")
+
+    def test_detection(self):
+        self.assertEqual(detect_artifact("user:@alice"), {"type": "username", "value": "alice", "label": "Username"})
+
+
+TELEGRAM_PAGE = """<html><head>
+<meta property="og:title" content="Example &amp; Co">
+<meta property="og:image" content="https://cdn1.telesco.pe/file/abc.jpg">
+<meta property="og:description" content="News about examples">
+</head><body><div class="tgme_page_title" dir="auto"><span>Example &amp; Co</span></div>
+<div class="tgme_page_extra">12 345 subscribers</div></body></html>"""
+
+
+class TelegramTests(unittest.TestCase):
+    def fetch(self, body, status=200):
+        def answer(url, **options):
+            self.options = options
+            encoded = body.encode()
+            return FetchResult(url, url, status, {}, encoded, "0" * 64, "192.0.2.1", 1, [])
+        return answer
+
+    def test_channel(self):
+        with patch.object(shared, "FETCH", self.fetch(TELEGRAM_PAGE)):
+            status, findings, _, _ = _run_one(BY_ID["telegram"], ConnectorContext("", "telegram", "example", None))
+        self.assertEqual(status, "ok")
+        found = by_type(findings)
+        self.assertEqual(found["telegram-name"][0].value, "Example & Co")
+        self.assertEqual(found["telegram-name"][0].data["kind"], "channel")
+        self.assertEqual(found["member-count"][0].data["count"], 12345)
+        self.assertEqual(self.options["allowed_hosts"], ("t.me",))
+
+    def test_missing(self):
+        with patch.object(shared, "FETCH", self.fetch("<html><meta property=\"og:title\" content=\"Telegram\"></html>")):
+            _, findings, _, _ = _run_one(BY_ID["telegram"], ConnectorContext("", "telegram", "nobody", None))
+        self.assertEqual(findings[0].value, "not found")
+
+    def test_detection(self):
+        for raw in ("telegram:@Example", "https://t.me/Example", "telegram.me/example/"):
+            self.assertEqual(detect_artifact(raw)["value"], "example")
+
+
+class HibpTests(unittest.TestCase):
+    def test_breaches_and_key_header(self):
+        self.assertTrue(BY_ID["hibp"].requires_key)
+        payload = [{"Name": "Adobe", "Title": "Adobe", "Domain": "adobe.com", "BreachDate": "2013-10-04",
+                    "PwnCount": 152445165, "DataClasses": ["Email addresses", "Passwords"], "IsVerified": True}]
+        status, findings, _, calls = run("hibp", "email", "a@example.com", {"breachedaccount/a%40example.com": payload}, api_key="hibp-key-1234")
+        self.assertEqual(status, "ok")
+        self.assertEqual(calls[0][1]["headers"]["hibp-api-key"], "hibp-key-1234")
+        self.assertEqual(findings[0].value, "Adobe")
+        self.assertEqual(findings[0].data["data_exposed"], "Email addresses, Passwords")
+
+    def test_not_breached(self):
+        _, findings, _, _ = run("hibp", "email", "a@example.com", {}, api_key="hibp-key-1234")
+        self.assertEqual(findings[0].value, "none")
+
+
+class WebhookTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.database = str(Path(self.tmp.name) / "w.db")
+        initialize(self.database)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_setting_validation(self):
+        with self.assertRaises(ValidationError):
+            update_settings(self.database, {"intel.webhook_url": "http://example.com/hook"})
+        update_settings(self.database, {"intel.webhook_url": "https://example.com/hook"})
+        self.assertEqual(get_settings(self.database)["values"]["intel.webhook_url"], "https://example.com/hook")
+        update_settings(self.database, {"intel.webhook_url": ""})
+
+    def test_posts_summary_only_with_network_allowed(self):
+        sent = []
+
+        def fake(url, **options):
+            sent.append((url, options))
+            return reply(url, {})
+
+        update_settings(self.database, {"intel.webhook_url": "https://example.com/hook"})
+        with patch.object(intel, "WEBHOOK_FETCH", fake):
+            run_info = intel.run_query(self.database, value="discord:175928847299117063")
+            self.assertEqual(sent, [])
+            update_settings(self.database, {"intel.allow_network": "true"})
+            self.assertTrue(intel.notify_webhook(self.database, run_info["id"]))
+        url, options = sent[0]
+        self.assertEqual(options["method"], "POST")
+        body = json.loads(options["body"])
+        self.assertIn("discord-id", body["content"])
+        self.assertEqual(body["garbage"]["sources"].get("discord-snowflake"), 1)

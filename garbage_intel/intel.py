@@ -28,11 +28,13 @@ from .db import (
     require_module,
     setting_bool,
     setting_int,
+    setting_value,
     utc_now,
 )
 from .errors import NotFoundError, ValidationError
 from .intel_keys import get_secret
 from .modules.indicator_tools import inspect_value
+from . import net
 from .net import NetworkError, NetworkPolicyError
 from .validation import clean_text
 
@@ -50,8 +52,9 @@ INDICATOR_TYPES = (
     "cve",
 )
 # Public platform accounts, written with a prefix (discord:<id>, roblox:<id or
-# name>) or as their profile/invite URL so they never collide with indicators.
-ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user")
+# name>, user:<name>, telegram:<name>) or as their profile/invite URL so they
+# never collide with indicators.
+ACCOUNT_TYPES = ("discord-id", "discord-invite", "roblox-user", "username", "telegram")
 ARTIFACT_TYPES = INDICATOR_TYPES + ACCOUNT_TYPES
 RESULT_STATUSES = (
     "pending",
@@ -71,6 +74,11 @@ _CVE = re.compile(r"CVE-(\d{4})-(\d{4,7})", re.IGNORECASE)
 _DISCORD_ID = re.compile(r"discord:\s*(\d{15,20})", re.IGNORECASE)
 _DISCORD_INVITE = re.compile(
     r"(?:https?://)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com/invite)/([A-Za-z0-9-]{2,32})/?",
+    re.IGNORECASE,
+)
+_USERNAME = re.compile(r"(?:user|username):\s*@?([A-Za-z0-9_.-]{2,39})", re.IGNORECASE)
+_TELEGRAM = re.compile(
+    r"(?:telegram:\s*@?|(?:https?://)?(?:www\.)?(?:t|telegram)\.me/)([A-Za-z][A-Za-z0-9_]{3,31})/?",
     re.IGNORECASE,
 )
 _ROBLOX_PREFIX = re.compile(r"roblox:\s*(\d{1,19}|[A-Za-z0-9_]{3,20})", re.IGNORECASE)
@@ -222,7 +230,8 @@ def detect_artifact(raw: object) -> dict[str, str]:
     if kind not in ARTIFACT_TYPES or not canonical:
         raise ValidationError(
             "value is not a supported artifact; use a domain, IP, CIDR, URL, "
-            "email, hash, ASN, CVE, discord:<id>, a Discord invite or roblox:<id or name>"
+            "email, hash, ASN, CVE, discord:<id>, a Discord invite, roblox:<id or name>, "
+            "user:<name> or telegram:<name>"
         )
     return {"type": kind, "value": canonical, "label": inspection.get("label", kind)}
 
@@ -234,6 +243,12 @@ def _detect_account(value: str) -> dict[str, str] | None:
     match = _DISCORD_INVITE.fullmatch(value)
     if match:
         return {"type": "discord-invite", "value": match.group(1), "label": "Discord invite"}
+    match = _USERNAME.fullmatch(value)
+    if match:
+        return {"type": "username", "value": match.group(1), "label": "Username"}
+    match = _TELEGRAM.fullmatch(value)
+    if match:
+        return {"type": "telegram", "value": match.group(1).lower(), "label": "Telegram"}
     match = _ROBLOX_PREFIX.fullmatch(value) or _ROBLOX_PROFILE.fullmatch(value)
     if match:
         # Usernames are case-insensitive on Roblox; ids are kept as written.
@@ -613,6 +628,68 @@ def _execute(
                 (run_id,),
             )
             _finish_run(connection, run_id, kind, value, case_id)
+        notify_webhook(database, run_id)
+
+
+WEBHOOK_FETCH: Callable[..., Any] = net.fetch
+
+
+def notify_webhook(database: str, run_id: str) -> bool:
+    """POST a short summary of a finished run to the configured webhook.
+
+    Sent only with network access allowed. Failures are recorded in the
+    activity log and never affect the run.
+    """
+    with _connection(database) as connection:
+        url = setting_value(connection, "intel.webhook_url", "")
+        if not url or not setting_bool(connection, "intel.allow_network", False):
+            return False
+        run = connection.execute("SELECT * FROM intel_runs WHERE id = ?", (run_id,)).fetchone()
+        rows = connection.execute(
+            """SELECT connector_id, COUNT(*) AS findings FROM intel_results
+               WHERE run_id = ? AND status = 'ok' AND (value <> '' OR result_type <> '')
+               GROUP BY connector_id ORDER BY findings DESC""",
+            (run_id,),
+        ).fetchall()
+    if run is None:
+        return False
+    sources = {row["connector_id"]: row["findings"] for row in rows}
+    lines = [f"**GARBAGE** · {run['query_type']} `{run['query_value'][:200]}` → {run['result_count']} findings ({run['status']})"]
+    lines += [f"• {connector}: {count}" for connector, count in list(sources.items())[:15]]
+    payload = {
+        "content": "\n".join(lines)[:1900],
+        "garbage": {
+            "run_id": run_id,
+            "query_type": run["query_type"],
+            "query_value": run["query_value"],
+            "status": run["status"],
+            "result_count": run["result_count"],
+            "sources": sources,
+        },
+    }
+    try:
+        result = WEBHOOK_FETCH(
+            url,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(payload).encode("utf-8"),
+            max_bytes=64 * 1024,
+            timeout=10.0,
+        )
+        delivered = result.status < 400
+        error = "" if delivered else f"HTTP {result.status}"
+    except (NetworkError, NetworkPolicyError) as exc:
+        delivered, error = False, str(exc)
+    if not delivered:
+        with _connection(database) as connection:
+            record_activity(
+                connection,
+                action="intel-webhook",
+                target_type="intel_run",
+                target_id=run_id,
+                summary=f"Webhook delivery failed: {error[:200]}",
+            )
+    return delivered
 
 
 def recover_interrupted_runs(database: str) -> int:

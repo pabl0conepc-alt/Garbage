@@ -350,6 +350,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "intel.allow_network": "false",
     "intel.allow_target_contact": "false",
     "intel.max_workers": "4",
+    "intel.webhook_url": "",
 }
 
 SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
@@ -422,6 +423,13 @@ SETTING_SCHEMA: tuple[dict[str, Any], ...] = (
         "description": "Maximum connectors queried at the same time for one artifact.",
         "type": "integer",
         "options": ["1", "16"],
+    },
+    {
+        "key": "intel.webhook_url",
+        "label": "Webhook for finished queries",
+        "description": "HTTPS URL that receives a summary when a multi-source query finishes (Discord webhooks work as-is). Empty disables it; requires network access.",
+        "type": "url",
+        "options": [""],
     },
 )
 

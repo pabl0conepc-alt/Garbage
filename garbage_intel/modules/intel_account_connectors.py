@@ -1,22 +1,29 @@
-"""Public platform account connectors: Discord and Roblox.
+"""Public platform account connectors: Discord, Roblox, Telegram, usernames
+across public sites and Have I Been Pwned.
 
 Only what each platform publishes about an account is read, through its own
 documented API. The Discord snowflake decode is offline; the invite lookup
 needs no account; the user lookup uses the operator's own bot token, which
 sees the same public profile any Discord user sees. Roblox profile, counts,
 groups, previous usernames and avatar come from its unauthenticated public
-web APIs. Nothing is cross-referenced with breach data, message archives or
-scraped server membership.
+web APIs. Telegram facts come from the public t.me preview page. The
+username check asks each site's public API or profile URL whether the name
+exists. Have I Been Pwned, with the operator's own key, names the breaches an
+address appeared in and never returns leaked data. Nothing is
+cross-referenced with breach dumps, message archives or scraped membership.
 """
 
 from __future__ import annotations
 
+import html
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
 from ..intel import Connector, ConnectorContext, Finding, register_connector
+from ..net import NetworkError, NetworkPolicyError
 from . import intel_open_connectors as shared
 
 _text = shared._text
@@ -281,6 +288,152 @@ def _roblox_user(context: ConnectorContext) -> list[Finding]:
     return findings
 
 
+# ---------------------------------------------------------------------------
+# Username across public sites
+
+# (site, URL to request, profile URL to show, how to read the answer). "status"
+# means 200 = exists and 404 = free; the others read a JSON body.
+USERNAME_SITES: tuple[tuple[str, str, str, str], ...] = (
+    ("GitHub", "https://api.github.com/users/{}", "https://github.com/{}", "status"),
+    ("GitLab", "https://gitlab.com/api/v4/users?username={}", "https://gitlab.com/{}", "json-list"),
+    ("Chess.com", "https://api.chess.com/pub/player/{}", "https://www.chess.com/member/{}", "status"),
+    ("Lichess", "https://lichess.org/api/user/{}", "https://lichess.org/@/{}", "status"),
+    ("Hacker News", "https://hacker-news.firebaseio.com/v0/user/{}.json", "https://news.ycombinator.com/user?id={}", "json-object"),
+    ("DEV Community", "https://dev.to/api/users/by_username?url={}", "https://dev.to/{}", "status"),
+    ("Docker Hub", "https://hub.docker.com/v2/users/{}/", "https://hub.docker.com/u/{}", "status"),
+    ("npm", "https://registry.npmjs.org/-/v1/search?text=maintainer:{}&size=1", "https://www.npmjs.com/~{}", "npm-search"),
+    ("PyPI", "https://pypi.org/user/{}/", "https://pypi.org/user/{}/", "status"),
+    ("Keybase", "https://keybase.io/_/api/1.0/user/lookup.json?usernames={}", "https://keybase.io/{}", "keybase"),
+    ("Codeberg", "https://codeberg.org/api/v1/users/{}", "https://codeberg.org/{}", "status"),
+)
+
+
+def _site_answer(rule: str, status: int, body: bytes) -> bool | None:
+    """True = account exists, False = no account, None = could not tell."""
+    if rule == "status":
+        return True if status == 200 else False if status in (404, 410) else None
+    if status != 200:
+        return False if status == 404 else None
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if rule == "json-list":
+        return bool(data) if isinstance(data, list) else None
+    if rule == "json-object":
+        return isinstance(data, dict)
+    if rule == "npm-search":
+        return bool(data.get("total")) if isinstance(data, dict) else None
+    if rule == "keybase":
+        them = data.get("them") if isinstance(data, dict) else None
+        return bool(them and them[0]) if isinstance(them, list) else None
+    return None
+
+
+def _username_connector(context: ConnectorContext) -> list[Finding]:
+    name = quote(context.query_value, safe="")
+    findings: list[Finding] = []
+    for site, api, profile, rule in USERNAME_SITES:
+        url = api.format(name)
+        try:
+            result = shared.FETCH(
+                url,
+                headers={"Accept": "application/json"},
+                allowed_hosts=(url.split("/")[2],),
+                max_bytes=512 * 1024,
+                timeout=10.0,
+            )
+        except (NetworkError, NetworkPolicyError) as exc:
+            findings.append(Finding("site-unknown", site, {"reason": str(exc)[:200]}, url))
+            continue
+        answer = _site_answer(rule, result.status, result.body)
+        if answer is True:
+            findings.append(Finding("account", site, {"profile_url": profile.format(name)}, result.final_url, result.sha256))
+        elif answer is None:
+            findings.append(Finding("site-unknown", site, {"reason": f"HTTP {result.status}"}, result.final_url))
+    if not any(item.result_type == "account" for item in findings):
+        findings.insert(0, Finding("account", "none found", {"sites_checked": len(USERNAME_SITES)}))
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# Telegram public preview
+
+
+_TG_META = re.compile(r"<meta\s+property=\"og:(title|description|image)\"\s+content=\"([^\"]*)\"", re.IGNORECASE)
+_TG_EXTRA = re.compile(r"<div class=\"tgme_page_extra\">\s*([^<]{1,200})", re.IGNORECASE)
+_TG_TITLE = re.compile(r"<div class=\"tgme_page_title\"", re.IGNORECASE)
+_TG_KIND = re.compile(r"tgme_action_button_new[^>]*>\s*(View in Telegram|Send Message|Join (?:Group|Channel)|View Channel|Open Bot)", re.IGNORECASE)
+
+
+def _telegram_connector(context: ConnectorContext) -> list[Finding]:
+    url = f"https://t.me/{context.query_value}"
+    page = shared.FETCH(url, allowed_hosts=("t.me",), max_bytes=512 * 1024, timeout=15.0)
+    if page.status == 404:
+        return [Finding("account", "not found", {}, url)]
+    if page.status >= 400:
+        raise NetworkError(f"the source answered HTTP {page.status}")
+    text = page.body.decode("utf-8", errors="replace")
+    if not _TG_TITLE.search(text):
+        return [Finding("account", "not found", {"meaning": "t.me shows no public user, bot, group or channel with this name"}, url)]
+    meta = {key.lower(): html.unescape(value) for key, value in _TG_META.findall(text)}
+    source = (page.final_url, page.sha256)
+    extra = _TG_EXTRA.search(text)
+    extra_text = html.unescape(extra.group(1)).strip() if extra else ""
+    lowered = extra_text.lower()
+    kind = (
+        "channel" if "subscriber" in lowered
+        else "group" if "member" in lowered
+        else "bot" if context.query_value.endswith("bot")
+        else "user"
+    )
+    findings = [
+        Finding("telegram-name", _text(meta.get("title"), 200), {"kind": kind, "url": url}, *source),
+    ]
+    if meta.get("description"):
+        findings.append(Finding("description", _text(meta["description"], 1000), {}, *source))
+    if extra_text:
+        digits = re.sub(r"[^0-9]", "", extra_text.split(",")[0])
+        findings.append(
+            Finding("member-count" if kind in ("channel", "group") else "handle", extra_text, {"count": int(digits) if digits else None}, *source)
+        )
+    if meta.get("image") and "telegram.org/img" not in meta["image"]:
+        findings.append(Finding("avatar", _text(meta["image"], 500), {}, *source))
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# Have I Been Pwned
+
+
+def _hibp_connector(context: ConnectorContext) -> list[Finding]:
+    url = f"https://haveibeenpwned.com/api/v3/breachedaccount/{quote(context.query_value, safe='')}?truncateResponse=false"
+    data, result = shared.request_json(url, hosts=("haveibeenpwned.com",), headers={"hibp-api-key": context.api_key})
+    if not isinstance(data, list) or not data:
+        return [Finding("breach", "none", {"meaning": "not in any breach Have I Been Pwned has loaded"}, url)]
+    source = (result.final_url, result.sha256)
+    findings = []
+    for item in data[:200]:
+        if not isinstance(item, dict):
+            continue
+        findings.append(
+            Finding(
+                "breach",
+                _text(item.get("Title") or item.get("Name"), 120),
+                {
+                    "domain": _text(item.get("Domain"), 253),
+                    "breach_date": _text(item.get("BreachDate"), 20),
+                    "accounts": item.get("PwnCount"),
+                    "data_exposed": ", ".join(str(kind) for kind in _list(item.get("DataClasses"), 30)),
+                    "verified": bool(item.get("IsVerified")),
+                    "sensitive": bool(item.get("IsSensitive")),
+                },
+                *source,
+            )
+        )
+    return findings
+
+
 CONNECTORS = (
     Connector("discord-snowflake", "Discord ID decode",
               "Creation time and generator fields encoded in a Discord ID; nothing leaves the machine.",
@@ -297,6 +450,17 @@ CONNECTORS = (
               "Public Roblox profile by ID or username: names, creation date, ban state, description, friend and follower counts, groups and roles, previous usernames and avatar.",
               ("roblox-user",), _roblox_user, network=True,
               rate_per_minute=20, ttl_seconds=3600, source_url="https://create.roblox.com/docs/cloud/legacy"),
+    Connector("username-sites", "Username across sites",
+              "Whether the name is taken on GitHub, GitLab, Chess.com, Lichess, Hacker News, DEV, Docker Hub, npm, PyPI, Keybase and Codeberg, with profile links.",
+              ("username",), _username_connector, network=True, rate_per_minute=6, ttl_seconds=3600),
+    Connector("telegram", "Telegram",
+              "Public t.me preview of a user, bot, group or channel: name, description, member or subscriber count and photo.",
+              ("telegram",), _telegram_connector, network=True, rate_per_minute=20, ttl_seconds=3600,
+              source_url="https://t.me/"),
+    Connector("hibp", "Have I Been Pwned",
+              "Breaches an email address appeared in: breach name, date, size and kinds of data exposed. Needs your own HIBP key; never returns leaked data.",
+              ("email",), _hibp_connector, network=True, requires_key=True, key_id="hibp", rate_per_minute=10,
+              ttl_seconds=86400, source_url="https://haveibeenpwned.com/API/v3"),
 )
 
 for _connector in CONNECTORS:
